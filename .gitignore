@@ -1,0 +1,27 @@
+# Go binary
+testhooks
+hookstest
+
+# Dependencies
+web/node_modules/
+
+# Build output
+web/dist/
+!web/dist/.gitkeep
+web/.svelte-kit/
+dist/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Env
+.env
+.env.local

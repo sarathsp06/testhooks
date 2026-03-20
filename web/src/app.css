@@ -1,0 +1,61 @@
+@import 'tailwindcss';
+
+:root {
+	--bg: #ffffff;
+	--bg-card: #f9fafb;
+	--bg-hover: #f3f4f6;
+	--border: #e5e7eb;
+	--text: #111827;
+	--text-muted: #6b7280;
+	--accent: #3b82f6;
+	--accent-hover: #2563eb;
+	--green: #16a34a;
+	--red: #dc2626;
+	--yellow: #ca8a04;
+	--orange: #ea580c;
+	--purple: #9333ea;
+}
+
+.dark {
+	--bg: #0a0a0a;
+	--bg-card: #141414;
+	--bg-hover: #1a1a1a;
+	--border: #262626;
+	--text: #e5e5e5;
+	--text-muted: #737373;
+	--accent: #3b82f6;
+	--accent-hover: #2563eb;
+	--green: #22c55e;
+	--red: #ef4444;
+	--yellow: #eab308;
+	--orange: #f97316;
+	--purple: #a855f7;
+}
+
+body {
+	background-color: var(--bg);
+	color: var(--text);
+	font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
+}
+
+.font-fira {
+	font-family: 'Fira Code', ui-monospace, monospace;
+}
+
+@keyframes float {
+	0%, 100% { transform: translateY(0); }
+	50% { transform: translateY(-12px); }
+}
+
+@keyframes pulse-slow {
+	0%, 100% { opacity: 0.4; }
+	50% { opacity: 0.7; }
+}
+
+.animate-float {
+	animation: float 6s ease-in-out infinite;
+}
+
+.animate-pulse-slow {
+	animation: pulse-slow 4s ease-in-out infinite;
+}

@@ -1,0 +1,29 @@
+# Build artifacts
+testhooks
+web/dist/
+web/node_modules/
+web/.svelte-kit/
+
+# Git
+.git/
+.gitignore
+
+# Docs
+*.md
+LICENSE
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker (avoid recursive builds)
+Dockerfile
+docker-compose.yml
+.dockerignore
