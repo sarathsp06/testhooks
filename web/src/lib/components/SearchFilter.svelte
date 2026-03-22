@@ -13,7 +13,7 @@
 		onMethodFilterChange: (method: string) => void;
 	} = $props();
 
-	let localQuery = $state(searchQuery);
+	let localQuery = $state('');
 	let showFilters = $state(false);
 
 	const methods = ['', 'GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];

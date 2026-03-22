@@ -6,7 +6,7 @@
  *   - async (default): fire-and-forget, returns status only
  *   - sync: waits for the target's full response (status, headers, body)
  */
-import type { CapturedRequest, ForwardResult, ForwardResponse } from './types';
+import type { CapturedRequest, ForwardResult, ForwardResponse, ForwardResultData } from './types';
 
 /** Headers to strip when forwarding (hop-by-hop / transport-level). */
 const HOP_BY_HOP = new Set([
@@ -65,6 +65,54 @@ export async function forwardRequest(
 			status: null,
 			ok: false,
 			latency: Math.round(performance.now() - start),
+			error: err instanceof Error ? err.message : 'Unknown error'
+		};
+	}
+}
+
+/**
+ * Forward a captured request and capture the full response (body, headers).
+ * Used by browser-mode async forwarding so we can display the forward target's
+ * response in the UI. Returns a ForwardResultData matching the WS message shape.
+ */
+export async function forwardRequestWithResponse(
+	req: CapturedRequest,
+	url: string
+): Promise<ForwardResultData> {
+	const start = performance.now();
+	try {
+		const headers = buildHeaders(req);
+		const hasBody = req.method !== 'GET' && req.method !== 'HEAD' && req.body;
+
+		const res = await fetch(url, {
+			method: req.method,
+			headers,
+			body: hasBody ? req.body : undefined
+		});
+
+		const responseBody = await res.text();
+		const responseHeaders: Record<string, string> = {};
+		res.headers.forEach((value, key) => {
+			responseHeaders[key] = value;
+		});
+
+		return {
+			request_id: req.id,
+			url,
+			status_code: res.status,
+			ok: res.ok,
+			latency_ms: Math.round(performance.now() - start),
+			response_body: responseBody,
+			response_headers: responseHeaders,
+			content_type: res.headers.get('content-type') ?? undefined
+		};
+	} catch (err) {
+		return {
+			request_id: req.id,
+			url,
+			status_code: 0,
+			ok: false,
+			latency_ms: Math.round(performance.now() - start),
 			error: err instanceof Error ? err.message : 'Unknown error'
 		};
 	}

@@ -1,16 +1,20 @@
 <script lang="ts">
-	import type { CapturedRequest, ForwardResult } from '$lib/types';
+	import type { CapturedRequest, CapturedResponse, ForwardResult, ForwardResultData } from '$lib/types';
 	import { methodColor, formatFullTime, formatBytes, tryFormatJSON, copyToClipboard, getWebhookURL } from '$lib/utils';
 	import { forwardRequest } from '$lib/forward';
-	import { Copy, Trash2, Send, ChevronDown, ChevronRight, RotateCcw, Download } from 'lucide-svelte';
+	import { Copy, Trash2, Send, ChevronDown, ChevronRight, RotateCcw, Download, ArrowDownLeft, ArrowUpRight } from 'lucide-svelte';
 
 	let {
 		request,
+		response,
+		forwardResult: fwdTargetResult,
 		forwardUrl,
 		endpointSlug,
 		onDelete
 	}: {
 		request: CapturedRequest;
+		response?: CapturedResponse;
+		forwardResult?: ForwardResultData;
 		forwardUrl?: string;
 		endpointSlug?: string;
 		onDelete: (id: string) => void;
@@ -24,6 +28,8 @@
 	let forwarding = $state(false);
 	let replaying = $state(false);
 	let replayResult = $state<{ ok: boolean; status?: number; error?: string } | null>(null);
+	let showResponse = $state(true);
+	let showForwardTarget = $state(true);
 
 	const isBinary = $derived(request.body_encoding === 'base64');
 
@@ -36,6 +42,44 @@
 	);
 
 	const formattedBody = $derived(tryFormatJSON(bodyString));
+
+	const responseBodyString = $derived(response?.body || '');
+	const formattedResponseBody = $derived(tryFormatJSON(responseBodyString));
+	const responseHeaderEntries = $derived(
+		response?.headers ? Object.entries(response.headers) : []
+	);
+	const responseStatusColor = $derived(
+		response
+			? response.status >= 200 && response.status < 300
+				? 'text-[var(--green)]'
+				: response.status >= 400
+					? 'text-[var(--red)]'
+					: 'text-[var(--yellow)]'
+			: ''
+	);
+	const responseSourceLabel = $derived(
+		response?.source === 'handler'
+			? 'Custom Handler'
+			: response?.source === 'forward_passthrough'
+				? 'Forward Passthrough'
+				: 'Default'
+	);
+
+	// Forward target response derived values
+	const fwdTargetBodyString = $derived(fwdTargetResult?.response_body || '');
+	const formattedFwdTargetBody = $derived(tryFormatJSON(fwdTargetBodyString));
+	const fwdTargetHeaderEntries = $derived(
+		fwdTargetResult?.response_headers ? Object.entries(fwdTargetResult.response_headers) : []
+	);
+	const fwdTargetStatusColor = $derived(
+		fwdTargetResult
+			? fwdTargetResult.status_code >= 200 && fwdTargetResult.status_code < 300
+				? 'text-[var(--green)]'
+				: fwdTargetResult.status_code >= 400
+					? 'text-[var(--red)]'
+					: 'text-[var(--yellow)]'
+			: ''
+	);
 
 	const headerEntries = $derived(
 		request.headers ? Object.entries(request.headers) : []
@@ -233,8 +277,8 @@
 
 	<!-- Headers -->
 	<div class="bg-[var(--bg-card)] border border-[var(--border)] rounded">
-		<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-		<div
+		<!-- svelte-ignore a11y_click_events_have_key_events -->
+		<button
 			class="w-full px-3 py-2 flex items-center justify-between text-xs font-medium text-[var(--text-muted)] hover:text-[var(--text)] transition-colors cursor-pointer select-none"
 			onclick={() => (showHeaders = !showHeaders)}
 		>
@@ -243,13 +287,15 @@
 				Headers
 				<span class="text-[var(--text-muted)]">({headerEntries.length})</span>
 			</div>
-			<button
+			<span
 				onclick={(e: MouseEvent) => { e.stopPropagation(); handleCopy(JSON.stringify(request.headers, null, 2), 'headers'); }}
 				class="p-1 rounded hover:bg-[var(--bg-hover)]"
+				role="button"
+				tabindex="-1"
 			>
 				<Copy class="w-3 h-3" />
-			</button>
-		</div>
+			</span>
+		</button>
 		{#if showHeaders}
 			<div class="px-3 pb-3 max-h-60 overflow-y-auto">
 				<table class="w-full text-xs">
@@ -301,8 +347,8 @@
 	<!-- Body -->
 	{#if bodyString || isBinary}
 		<div class="bg-[var(--bg-card)] border border-[var(--border)] rounded">
-			<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-			<div
+			<!-- svelte-ignore a11y_click_events_have_key_events -->
+			<button
 				class="w-full px-3 py-2 flex items-center justify-between text-xs font-medium text-[var(--text-muted)] hover:text-[var(--text)] transition-colors cursor-pointer select-none"
 				onclick={() => (showBody = !showBody)}
 			>
@@ -317,14 +363,16 @@
 					{/if}
 				</div>
 				{#if !isBinary}
-					<button
+					<span
 						onclick={(e: MouseEvent) => { e.stopPropagation(); handleCopy(bodyString, 'body'); }}
 						class="p-1 rounded hover:bg-[var(--bg-hover)]"
+						role="button"
+						tabindex="-1"
 					>
 						<Copy class="w-3 h-3" />
-					</button>
+					</span>
 				{/if}
-			</div>
+			</button>
 			{#if showBody}
 				<div class="px-3 pb-3">
 					{#if isBinary}
@@ -333,6 +381,144 @@
 						</div>
 					{:else}
 						<pre class="text-xs font-mono text-[var(--text)] bg-[var(--bg)] rounded p-3 overflow-x-auto max-h-96 whitespace-pre-wrap break-all">{formattedBody.formatted}</pre>
+					{/if}
+				</div>
+			{/if}
+		</div>
+	{/if}
+
+	<!-- Response -->
+	{#if response}
+		<div class="bg-[var(--bg-card)] border border-[var(--border)] rounded">
+			<!-- svelte-ignore a11y_click_events_have_key_events -->
+			<button
+				class="w-full px-3 py-2 flex items-center justify-between text-xs font-medium text-[var(--text-muted)] hover:text-[var(--text)] transition-colors cursor-pointer select-none"
+				onclick={() => (showResponse = !showResponse)}
+			>
+				<div class="flex items-center gap-1.5">
+					{#if showResponse}<ChevronDown class="w-3 h-3" />{:else}<ChevronRight class="w-3 h-3" />{/if}
+					<ArrowDownLeft class="w-3 h-3" />
+					Response
+					<span class="font-mono font-bold {responseStatusColor}">{response.status}</span>
+					<span class="px-1 py-0.5 rounded text-[10px] {response.source === 'handler' ? 'bg-purple-500/10 text-purple-400' : response.source === 'forward_passthrough' ? 'bg-blue-500/10 text-blue-400' : 'bg-[var(--border)] text-[var(--text-muted)]'}">{responseSourceLabel}</span>
+				</div>
+				{#if responseBodyString}
+					<span
+						onclick={(e: MouseEvent) => { e.stopPropagation(); handleCopy(responseBodyString, 'response-body'); }}
+						class="p-1 rounded hover:bg-[var(--bg-hover)]"
+						role="button"
+						tabindex="-1"
+					>
+						<Copy class="w-3 h-3" />
+					</span>
+				{/if}
+			</button>
+			{#if showResponse}
+				<div class="px-3 pb-3 flex flex-col gap-2">
+					<!-- Response headers -->
+					{#if responseHeaderEntries.length > 0}
+						<div>
+							<div class="text-[10px] text-[var(--text-muted)] mb-1 uppercase tracking-wide">Headers</div>
+							<div class="max-h-40 overflow-y-auto">
+								<table class="w-full text-xs">
+									<tbody>
+										{#each responseHeaderEntries as [key, value]}
+											<tr class="border-t border-[var(--border)]">
+												<td class="py-0.5 pr-3 text-[var(--text-muted)] font-mono whitespace-nowrap align-top">{key}</td>
+												<td class="py-0.5 text-[var(--text)] font-mono break-all">{value}</td>
+											</tr>
+										{/each}
+									</tbody>
+								</table>
+							</div>
+						</div>
+					{/if}
+
+					<!-- Response body -->
+					{#if responseBodyString}
+						<div>
+							<div class="text-[10px] text-[var(--text-muted)] mb-1 uppercase tracking-wide flex items-center gap-1">
+								Body
+								{#if formattedResponseBody.isJSON}
+									<span class="px-1 py-0.5 rounded bg-blue-500/10 text-blue-400 text-[10px] normal-case">JSON</span>
+								{/if}
+							</div>
+							<pre class="text-xs font-mono text-[var(--text)] bg-[var(--bg)] rounded p-3 overflow-x-auto max-h-64 whitespace-pre-wrap break-all">{formattedResponseBody.formatted}</pre>
+						</div>
+					{/if}
+				</div>
+			{/if}
+		</div>
+	{/if}
+
+	<!-- Forward Target Response -->
+	{#if fwdTargetResult}
+		<div class="bg-[var(--bg-card)] border border-[var(--border)] rounded">
+			<!-- svelte-ignore a11y_click_events_have_key_events -->
+			<button
+				class="w-full px-3 py-2 flex items-center justify-between text-xs font-medium text-[var(--text-muted)] hover:text-[var(--text)] transition-colors cursor-pointer select-none"
+				onclick={() => (showForwardTarget = !showForwardTarget)}
+			>
+				<div class="flex items-center gap-1.5">
+					{#if showForwardTarget}<ChevronDown class="w-3 h-3" />{:else}<ChevronRight class="w-3 h-3" />{/if}
+					<ArrowUpRight class="w-3 h-3" />
+					Forward Target Response
+					<span class="font-mono font-bold {fwdTargetStatusColor}">{fwdTargetResult.status_code}</span>
+					<span class="text-[var(--text-muted)]">{fwdTargetResult.latency_ms}ms</span>
+				</div>
+				{#if fwdTargetBodyString}
+					<span
+						onclick={(e: MouseEvent) => { e.stopPropagation(); handleCopy(fwdTargetBodyString, 'fwd-target-body'); }}
+						class="p-1 rounded hover:bg-[var(--bg-hover)]"
+						role="button"
+						tabindex="-1"
+					>
+						<Copy class="w-3 h-3" />
+					</span>
+				{/if}
+			</button>
+			{#if showForwardTarget}
+				<div class="px-3 pb-3 flex flex-col gap-2">
+					<!-- Forward URL -->
+					<div class="text-xs font-mono text-[var(--text-muted)] truncate">{fwdTargetResult.url}</div>
+
+					<!-- Error -->
+					{#if fwdTargetResult.error}
+						<div class="text-xs text-[var(--red)] bg-red-500/5 border border-red-500/20 rounded px-2 py-1">
+							{fwdTargetResult.error}
+						</div>
+					{/if}
+
+					<!-- Forward target response headers -->
+					{#if fwdTargetHeaderEntries.length > 0}
+						<div>
+							<div class="text-[10px] text-[var(--text-muted)] mb-1 uppercase tracking-wide">Headers</div>
+							<div class="max-h-40 overflow-y-auto">
+								<table class="w-full text-xs">
+									<tbody>
+										{#each fwdTargetHeaderEntries as [key, value]}
+											<tr class="border-t border-[var(--border)]">
+												<td class="py-0.5 pr-3 text-[var(--text-muted)] font-mono whitespace-nowrap align-top">{key}</td>
+												<td class="py-0.5 text-[var(--text)] font-mono break-all">{value}</td>
+											</tr>
+										{/each}
+									</tbody>
+								</table>
+							</div>
+						</div>
+					{/if}
+
+					<!-- Forward target response body -->
+					{#if fwdTargetBodyString}
+						<div>
+							<div class="text-[10px] text-[var(--text-muted)] mb-1 uppercase tracking-wide flex items-center gap-1">
+								Body
+								{#if formattedFwdTargetBody.isJSON}
+									<span class="px-1 py-0.5 rounded bg-blue-500/10 text-blue-400 text-[10px] normal-case">JSON</span>
+								{/if}
+							</div>
+							<pre class="text-xs font-mono text-[var(--text)] bg-[var(--bg)] rounded p-3 overflow-x-auto max-h-64 whitespace-pre-wrap break-all">{formattedFwdTargetBody.formatted}</pre>
+						</div>
 					{/if}
 				</div>
 			{/if}

@@ -170,6 +170,11 @@ func (c *Capture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				data, _ := json.Marshal(req)
 				c.hub.Publish(endpoint.Slug, hub.Message{Type: "request", Data: data}, isBrowserMode)
 				c.writeDefaultResponse(w, isBrowserMode, req.ID)
+				defStatus := http.StatusOK
+				if isBrowserMode {
+					defStatus = http.StatusAccepted
+				}
+				c.publishResponseInfo(slug, req.ID, defStatus, nil, fmt.Sprintf(`{"status":"ok","id":"%s"}`, req.ID), "application/json", "default")
 				return
 			}
 
@@ -228,6 +233,7 @@ func (c *Capture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		data, _ := json.Marshal(req)
 		c.hub.Publish(endpoint.Slug, hub.Message{Type: "request", Data: data}, true)
 		c.writeDefaultResponse(w, true, req.ID)
+		c.publishResponseInfo(slug, req.ID, http.StatusAccepted, nil, fmt.Sprintf(`{"status":"ok","id":"%s"}`, req.ID), "application/json", "default")
 		return
 	}
 
@@ -260,6 +266,9 @@ func (c *Capture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					Int("status", result.StatusCode).Msg("sync forward failed")
 			}
 
+			// Publish forward result to browser for display.
+			c.publishForwardResult(slug, req.ID, result)
+
 			// Build ForwardResponse for the handler (even on failure, so the handler can inspect it).
 			respHeaders := make(map[string]string)
 			for k, v := range result.ResponseHeaders {
@@ -285,6 +294,8 @@ func (c *Capture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					c.log.Warn().Str("url", result.URL).Str("error", result.Error).
 						Int("status", result.StatusCode).Msg("async forward failed")
 				}
+				// Publish forward result to browser for display (arrives after webhook response).
+				c.publishForwardResult(slug, req.ID, result)
 			}()
 		}
 	}
@@ -301,6 +312,20 @@ func (c *Capture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					Dur("duration", handlerDur).Msg("response handler script failed, using default response")
 			} else if output != nil {
 				c.writeCustomResponse(w, output, req.ID, handlerDur)
+				// Publish response_info for the custom handler response.
+				respHeaders := make(map[string]string)
+				for k, v := range output.Headers {
+					respHeaders[k] = v
+				}
+				ct := output.ContentType
+				if ct == "" {
+					ct = "text/plain"
+				}
+				status := output.Status
+				if status == 0 {
+					status = http.StatusOK
+				}
+				c.publishResponseInfo(slug, req.ID, status, respHeaders, output.Body, ct, "handler")
 				return
 			}
 		}
@@ -320,11 +345,13 @@ func (c *Capture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if fwdResponse.Body != "" {
 			w.Write([]byte(fwdResponse.Body))
 		}
+		c.publishResponseInfo(slug, req.ID, status, fwdResponse.Headers, fwdResponse.Body, fwdResponse.ContentType, "forward_passthrough")
 		return
 	}
 
 	// ── STEP 5: Default HTTP Response ──
 	c.writeDefaultResponse(w, false, req.ID)
+	c.publishResponseInfo(slug, req.ID, http.StatusOK, nil, fmt.Sprintf(`{"status":"ok","id":"%s"}`, req.ID), "application/json", "default")
 }
 
 // handleBrowserResponse holds the HTTP connection open, sends a response_needed
@@ -367,8 +394,10 @@ func (c *Capture) handleBrowserResponse(w http.ResponseWriter, r *http.Request, 
 	select {
 	case result := <-respCh:
 		// Browser sent back a response — use it.
+		respHeaders := make(map[string]string)
 		for k, v := range result.Headers {
 			w.Header().Set(k, v)
+			respHeaders[k] = v
 		}
 		ct := result.ContentType
 		if ct == "" && w.Header().Get("Content-Type") == "" {
@@ -376,6 +405,7 @@ func (c *Capture) handleBrowserResponse(w http.ResponseWriter, r *http.Request, 
 		}
 		if ct != "" {
 			w.Header().Set("Content-Type", ct)
+			respHeaders["Content-Type"] = ct
 		}
 		status := result.Status
 		if status == 0 {
@@ -386,11 +416,13 @@ func (c *Capture) handleBrowserResponse(w http.ResponseWriter, r *http.Request, 
 			w.Write([]byte(result.Body))
 		}
 		c.log.Debug().Str("slug", slug).Str("request_id", req.ID).Int("status", status).Msg("browser response applied")
+		c.publishResponseInfo(slug, req.ID, status, respHeaders, result.Body, ct, "handler")
 
 	case <-ctx.Done():
 		// Timeout — browser didn't respond in time. Send default.
 		c.log.Warn().Str("slug", slug).Str("request_id", req.ID).Dur("timeout", c.browserResponseTimeout).Msg("browser response timed out, using default")
 		c.writeDefaultResponse(w, true, req.ID)
+		c.publishResponseInfo(slug, req.ID, http.StatusAccepted, nil, fmt.Sprintf(`{"status":"ok","id":"%s"}`, req.ID), "application/json", "default")
 	}
 }
 
@@ -426,15 +458,85 @@ func (c *Capture) writeCustomResponse(w http.ResponseWriter, output *wasm.Respon
 // writeDefaultResponse sends the standard JSON response to the webhook sender.
 func (c *Capture) writeDefaultResponse(w http.ResponseWriter, isBrowserMode bool, reqID string) {
 	w.Header().Set("Content-Type", "application/json")
+	status := http.StatusOK
 	if isBrowserMode {
-		w.WriteHeader(http.StatusAccepted)
-	} else {
-		w.WriteHeader(http.StatusOK)
+		status = http.StatusAccepted
 	}
-	json.NewEncoder(w).Encode(map[string]string{
-		"status": "ok",
-		"id":     reqID,
-	})
+	w.WriteHeader(status)
+	body := fmt.Sprintf(`{"status":"ok","id":"%s"}`, reqID)
+	w.Write([]byte(body))
+	w.Write([]byte("\n"))
+}
+
+// responseInfoPayload is the JSON shape for a response_info WS message.
+type responseInfoPayload struct {
+	RequestID   string            `json:"request_id"`
+	Status      int               `json:"status"`
+	Headers     map[string]string `json:"headers,omitempty"`
+	Body        string            `json:"body,omitempty"`
+	ContentType string            `json:"content_type,omitempty"`
+	Source      string            `json:"source"` // "default", "handler", "forward_passthrough"
+}
+
+// publishResponseInfo sends a response_info message over the WS hub so the
+// browser can display the HTTP response that was sent back to the webhook caller.
+func (c *Capture) publishResponseInfo(slug string, reqID string, status int, headers map[string]string, body string, contentType string, source string) {
+	payload := responseInfoPayload{
+		RequestID:   reqID,
+		Status:      status,
+		Headers:     headers,
+		Body:        body,
+		ContentType: contentType,
+		Source:      source,
+	}
+	data, err := json.Marshal(payload)
+	if err != nil {
+		c.log.Warn().Err(err).Str("request_id", reqID).Msg("failed to marshal response_info")
+		return
+	}
+	c.hub.Publish(slug, hub.Message{Type: "response_info", Data: data}, false)
+}
+
+// forwardResultPayload is the JSON shape for a forward_result WS message.
+type forwardResultPayload struct {
+	RequestID       string            `json:"request_id"`
+	URL             string            `json:"url"`
+	StatusCode      int               `json:"status_code"`
+	OK              bool              `json:"ok"`
+	LatencyMs       int64             `json:"latency_ms"`
+	Error           string            `json:"error,omitempty"`
+	ResponseBody    string            `json:"response_body,omitempty"`
+	ResponseHeaders map[string]string `json:"response_headers,omitempty"`
+	ContentType     string            `json:"content_type,omitempty"`
+}
+
+// publishForwardResult sends a forward_result message over the WS hub so the
+// browser can display the forward target's response.
+func (c *Capture) publishForwardResult(slug string, reqID string, result forward.Result) {
+	respHeaders := make(map[string]string)
+	for k, v := range result.ResponseHeaders {
+		if len(v) > 0 {
+			respHeaders[k] = v[0]
+		}
+	}
+
+	payload := forwardResultPayload{
+		RequestID:       reqID,
+		URL:             result.URL,
+		StatusCode:      result.StatusCode,
+		OK:              result.OK,
+		LatencyMs:       result.Latency.Milliseconds(),
+		Error:           result.Error,
+		ResponseBody:    string(result.ResponseBody),
+		ResponseHeaders: respHeaders,
+		ContentType:     result.ContentType,
+	}
+	data, err := json.Marshal(payload)
+	if err != nil {
+		c.log.Warn().Err(err).Str("request_id", reqID).Msg("failed to marshal forward_result")
+		return
+	}
+	c.hub.Publish(slug, hub.Message{Type: "forward_result", Data: data}, false)
 }
 
 // GenerateSlug creates a random 8-character hex slug.

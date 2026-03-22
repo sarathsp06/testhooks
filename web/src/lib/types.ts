@@ -48,8 +48,31 @@ export interface PaginatedRequests {
 
 /** WebSocket message from hub (hub/hub.go) */
 export interface WSMessage {
-	type: 'request' | 'response_needed' | 'endpoint_updated' | 'endpoint_deleted';
+	type: 'request' | 'response_needed' | 'response_info' | 'forward_result' | 'endpoint_updated' | 'endpoint_deleted';
 	data: unknown;
+}
+
+/** Data payload for a forward_result message (server/browser reports the forward target's response). */
+export interface ForwardResultData {
+	request_id: string;
+	url: string;
+	status_code: number;
+	ok: boolean;
+	latency_ms: number;
+	error?: string;
+	response_body?: string;
+	response_headers?: Record<string, string>;
+	content_type?: string;
+}
+
+/** Data payload for a response_info message (server tells browser what response was sent). */
+export interface ResponseInfoData {
+	request_id: string;
+	status: number;
+	headers?: Record<string, string>;
+	body?: string;
+	content_type?: string;
+	source: 'default' | 'handler' | 'forward_passthrough';
 }
 
 /** Data payload for a response_needed message from the server. */
@@ -81,6 +104,16 @@ export interface ForwardResponse {
 	headers?: Record<string, string>;
 	body?: string;
 	content_type?: string;
+}
+
+/** HTTP response that was sent back to the webhook caller. */
+export interface CapturedResponse {
+	status: number;
+	headers?: Record<string, string>;
+	body?: string;
+	content_type?: string;
+	/** Where the response came from */
+	source: 'default' | 'handler' | 'forward_passthrough';
 }
 
 export interface TransformResult {

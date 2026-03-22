@@ -637,9 +637,8 @@
 				</div>
 
 				<!-- Advanced Configuration toggle -->
-				<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-				<div
-					class="px-6 py-2.5 border-t border-[var(--border)] flex items-center gap-2 cursor-pointer select-none hover:bg-[var(--bg-hover)] transition-colors"
+				<button
+					class="w-full px-6 py-2.5 border-t border-[var(--border)] flex items-center gap-2 cursor-pointer select-none hover:bg-[var(--bg-hover)] transition-colors"
 					onclick={() => (showAdvanced = !showAdvanced)}
 				>
 					{#if showAdvanced}
@@ -657,7 +656,7 @@
 							].filter(Boolean).join(', ')}
 						</span>
 					{/if}
-				</div>
+				</button>
 
 				{#if showAdvanced}
 					<div class="px-6 py-4 border-t border-[var(--border)] flex flex-col gap-5">
@@ -665,7 +664,7 @@
 						<div>
 							<div class="flex items-center gap-2 mb-2">
 								<Send class="w-3.5 h-3.5 text-[var(--text-muted)]" />
-								<label class="text-xs font-medium text-[var(--text)]">Forward URL</label>
+								<span class="text-xs font-medium text-[var(--text)]">Forward URL</span>
 								<span class="text-[10px] text-[var(--text-muted)]">
 									{newMode === 'browser' ? '(browser-side fetch - localhost works)' : '(server-side HTTP - public URLs only)'}
 								</span>
@@ -715,7 +714,7 @@
 							<div class="flex items-center justify-between mb-2">
 								<div class="flex items-center gap-2">
 									<Code2 class="w-3.5 h-3.5 text-[var(--text-muted)]" />
-									<label class="text-xs font-medium text-[var(--text)]">Transform Script</label>
+									<span class="text-xs font-medium text-[var(--text)]">Transform Script</span>
 								</div>
 								<label class="flex items-center gap-2 cursor-pointer">
 									<span class="text-[10px] text-[var(--text-muted)]">{newTransformEnabled ? 'Enabled' : 'Disabled'}</span>
@@ -768,7 +767,7 @@
 							<div class="flex items-center justify-between mb-2">
 								<div class="flex items-center gap-2">
 									<MessageSquare class="w-3.5 h-3.5 text-[var(--text-muted)]" />
-									<label class="text-xs font-medium text-[var(--text)]">Custom Response</label>
+									<span class="text-xs font-medium text-[var(--text)]">Custom Response</span>
 									<span class="text-[10px] text-[var(--text-muted)]">(what webhook senders receive back)</span>
 								</div>
 								<label class="flex items-center gap-2 cursor-pointer">

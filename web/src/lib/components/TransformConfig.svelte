@@ -93,7 +93,7 @@
 	<!-- Top row: language picker + actions -->
 	<div class="flex items-center justify-between gap-2 flex-wrap">
 		<div class="flex items-center gap-2">
-			<label class="text-xs text-[var(--text-muted)] font-medium">Language</label>
+			<span class="text-xs text-[var(--text-muted)] font-medium">Language</span>
 			<div class="flex items-center border border-[var(--border)] rounded overflow-hidden">
 				{#each SUPPORTED_LANGUAGES as lang}
 					<button

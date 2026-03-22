@@ -1,7 +1,7 @@
 /**
  * Svelte 5 rune-based store for captured requests.
  */
-import type { CapturedRequest } from '$lib/types';
+import type { CapturedRequest, CapturedResponse, ForwardResultData } from '$lib/types';
 import { listRequests, deleteRequest as apiDeleteRequest, deleteAllRequests as apiDeleteAll } from '$lib/api';
 
 let items = $state<CapturedRequest[]>([]);
@@ -9,6 +9,8 @@ let total = $state(0);
 let loading = $state(false);
 let selectedId = $state<string | null>(null);
 let error = $state<string | null>(null);
+let responses = $state<Map<string, CapturedResponse>>(new Map());
+let forwardResults = $state<Map<string, ForwardResultData>>(new Map());
 
 export function getRequestsStore() {
 	return {
@@ -29,6 +31,30 @@ export function getRequestsStore() {
 		},
 		get selected(): CapturedRequest | undefined {
 			return items.find((r) => r.id === selectedId);
+		},
+
+		/** Get the captured HTTP response for a given request ID. */
+		getResponse(requestId: string): CapturedResponse | undefined {
+			return responses.get(requestId);
+		},
+
+		/** Attach a captured HTTP response to a request by ID. */
+		attachResponse(requestId: string, response: CapturedResponse) {
+			const next = new Map(responses);
+			next.set(requestId, response);
+			responses = next;
+		},
+
+		/** Get the forward target's response for a given request ID. */
+		getForwardResult(requestId: string): ForwardResultData | undefined {
+			return forwardResults.get(requestId);
+		},
+
+		/** Attach a forward target response to a request by ID. */
+		attachForwardResult(requestId: string, result: ForwardResultData) {
+			const next = new Map(forwardResults);
+			next.set(requestId, result);
+			forwardResults = next;
 		},
 
 		clearError() {
@@ -65,16 +91,26 @@ export function getRequestsStore() {
 			const backup = items;
 			const backupTotal = total;
 			const backupSelectedId = selectedId;
+			const backupResponses = new Map(responses);
+			const backupForwardResults = new Map(forwardResults);
 			error = null;
 			try {
 				items = items.filter((r) => r.id !== id);
 				total = Math.max(0, total - 1);
 				if (selectedId === id) selectedId = null;
+				const next = new Map(responses);
+				next.delete(id);
+				responses = next;
+				const nextFwd = new Map(forwardResults);
+				nextFwd.delete(id);
+				forwardResults = nextFwd;
 				await apiDeleteRequest(id);
 			} catch (e) {
 				items = backup;
 				total = backupTotal;
 				selectedId = backupSelectedId;
+				responses = backupResponses;
+				forwardResults = backupForwardResults;
 				error = e instanceof Error ? e.message : 'Failed to delete request';
 			}
 		},
@@ -83,16 +119,22 @@ export function getRequestsStore() {
 			const backup = items;
 			const backupTotal = total;
 			const backupSelectedId = selectedId;
+			const backupResponses = new Map(responses);
+			const backupForwardResults = new Map(forwardResults);
 			error = null;
 			try {
 				items = [];
 				total = 0;
 				selectedId = null;
+				responses = new Map();
+				forwardResults = new Map();
 				await apiDeleteAll(endpointId);
 			} catch (e) {
 				items = backup;
 				total = backupTotal;
 				selectedId = backupSelectedId;
+				responses = backupResponses;
+				forwardResults = backupForwardResults;
 				error = e instanceof Error ? e.message : 'Failed to clear requests';
 			}
 		},
@@ -102,6 +144,8 @@ export function getRequestsStore() {
 			total = 0;
 			selectedId = null;
 			error = null;
+			responses = new Map();
+			forwardResults = new Map();
 		}
 	};
 }
