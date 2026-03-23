@@ -55,13 +55,14 @@ type ResponseHandlerOutput struct {
 	ContentType string            `json:"content_type,omitempty"` // Content-Type header shortcut
 }
 
-// Runner manages a pool of QuickJS WASM runtimes and executes JS transforms.
+// Runner manages QuickJS WASM runtimes and executes JS transforms.
+// Each execution creates a fresh runtime to prevent state leakage between
+// user scripts (MED-005).
 type Runner struct {
-	pool     *qjs.Pool
-	poolSize int
-	log      zerolog.Logger
-	timeout  time.Duration
-	ready    bool
+	option  qjs.Option
+	log     zerolog.Logger
+	timeout time.Duration
+	ready   bool
 }
 
 // Config for the WASM runner.
@@ -86,7 +87,8 @@ func DefaultConfig() Config {
 	}
 }
 
-// New creates and initializes the WASM runner with a pool of QuickJS runtimes.
+// New creates and initializes the WASM runner. Each script execution will
+// create a fresh QuickJS runtime to prevent cross-script state leakage.
 func New(_ context.Context, cfg Config, log zerolog.Logger) (*Runner, error) {
 	l := log.With().Str("component", "wasm").Logger()
 
@@ -96,43 +98,25 @@ func New(_ context.Context, cfg Config, log zerolog.Logger) (*Runner, error) {
 		MaxExecutionTime: int(cfg.Timeout.Milliseconds()),
 	}
 
-	pool := qjs.NewPool(cfg.PoolSize, option)
-
 	r := &Runner{
-		pool:     pool,
-		poolSize: cfg.PoolSize,
-		log:      l,
-		timeout:  cfg.Timeout,
-		ready:    true,
+		option:  option,
+		log:     l,
+		timeout: cfg.Timeout,
+		ready:   true,
 	}
 
 	l.Info().
-		Int("pool_size", cfg.PoolSize).
 		Int("memory_limit_mb", cfg.MemoryLimit/(1024*1024)).
 		Dur("timeout", cfg.Timeout).
-		Msg("WASM runner initialized with QuickJS pool")
+		Msg("WASM runner initialized (fresh runtime per execution)")
 
 	return r, nil
 }
 
-// Close shuts down the QuickJS runtime pool by draining all idle runtimes.
-// The context parameter is accepted for interface compatibility but unused.
+// Close shuts down the runner. No pool to drain since runtimes are created
+// fresh per execution.
 func (r *Runner) Close(_ context.Context) error {
-	if r.pool == nil {
-		return nil
-	}
 	r.ready = false
-	// Pool.Get() creates new runtimes on demand, so we can only drain what's
-	// already pooled. We do a non-blocking select via Get(); if nothing is
-	// returned immediately the pool is empty. Since we set ready=false first,
-	// no new Transform calls will occur.
-	for i := 0; i < r.poolSize; i++ {
-		rt, err := r.pool.Get()
-		if err != nil {
-			break
-		}
-		rt.Close()
-	}
 	return nil
 }
 
@@ -155,12 +139,12 @@ func (r *Runner) Transform(ctx context.Context, script string, input TransformIn
 		return nil, fmt.Errorf("marshal input: %w", err)
 	}
 
-	// Get a runtime from the pool.
-	rt, err := r.pool.Get()
+	// Create a fresh runtime for this execution (MED-005: no state leakage).
+	rt, err := qjs.New(r.option)
 	if err != nil {
-		return nil, fmt.Errorf("acquire runtime from pool: %w", err)
+		return nil, fmt.Errorf("create runtime: %w", err)
 	}
-	defer r.pool.Put(rt)
+	defer rt.Close()
 
 	// Build the JS program:
 	// 1. Define the user's transform function(s)
@@ -239,11 +223,12 @@ func (r *Runner) RunResponseHandler(ctx context.Context, script string, input Tr
 		return nil, fmt.Errorf("marshal input: %w", err)
 	}
 
-	rt, err := r.pool.Get()
+	// Create a fresh runtime for this execution (MED-005: no state leakage).
+	rt, err := qjs.New(r.option)
 	if err != nil {
-		return nil, fmt.Errorf("acquire runtime from pool: %w", err)
+		return nil, fmt.Errorf("create runtime: %w", err)
 	}
-	defer r.pool.Put(rt)
+	defer rt.Close()
 
 	// Build the JS program:
 	// 1. Define the user's handler function(s)

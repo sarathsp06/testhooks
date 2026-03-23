@@ -12,13 +12,18 @@ import (
 // API handles REST endpoints for managing endpoints and viewing requests.
 type API struct {
 	db  Store
+	hub interface {
+		RemoveBuffer(slug string)
+	}
 	log zerolog.Logger
 }
 
 // NewAPI creates a new API handler.
-func NewAPI(store Store, log zerolog.Logger) *API {
+// The hub parameter is used to clean up ring buffers when endpoints are deleted.
+func NewAPI(store Store, hub interface{ RemoveBuffer(slug string) }, log zerolog.Logger) *API {
 	return &API{
 		db:  store,
+		hub: hub,
 		log: log.With().Str("component", "api").Logger(),
 	}
 }
@@ -32,6 +37,8 @@ func (a *API) CreateEndpoint(w http.ResponseWriter, r *http.Request) {
 		Mode   string          `json:"mode"`
 		Config json.RawMessage `json:"config,omitempty"`
 	}
+	// MED-002: Limit API request body size to prevent OOM from oversized payloads.
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1 MB
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		// Defaults.
 		body.Name = ""
@@ -102,6 +109,8 @@ func (a *API) UpdateEndpoint(w http.ResponseWriter, r *http.Request) {
 		Mode   *string          `json:"mode"`
 		Config *json.RawMessage `json:"config"`
 	}
+	// MED-002: Limit API request body size to prevent OOM from oversized payloads.
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1 MB
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
 		return
@@ -137,11 +146,25 @@ func (a *API) UpdateEndpoint(w http.ResponseWriter, r *http.Request) {
 // DeleteEndpoint handles DELETE /api/endpoints/{id}.
 func (a *API) DeleteEndpoint(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
+
+	// Look up the endpoint first to get the slug for ring buffer cleanup.
+	ep, err := a.db.GetEndpointByID(r.Context(), id)
+	if err != nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "endpoint not found"})
+		return
+	}
+
 	if err := a.db.DeleteEndpoint(r.Context(), id); err != nil {
 		a.log.Error().Err(err).Msg("failed to delete endpoint")
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
 		return
 	}
+
+	// LOW-003: Clean up ring buffer for the deleted endpoint.
+	if a.hub != nil {
+		a.hub.RemoveBuffer(ep.Slug)
+	}
+
 	w.WriteHeader(http.StatusNoContent)
 }
 

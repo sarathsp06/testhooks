@@ -15,7 +15,7 @@ import (
 
 func newTestAPI(store Store) *API {
 	log := zerolog.New(os.Stderr).Level(zerolog.Disabled)
-	return NewAPI(store, log)
+	return NewAPI(store, nil, log)
 }
 
 // newMux creates an http.ServeMux wired with all API routes for test purposes.

@@ -23,7 +23,7 @@ func setupWSTest(t *testing.T, store *mockStore) (serverURL string, h *hub.Hub, 
 	t.Helper()
 	testHub := hub.New(100)
 	logger := zerolog.Nop()
-	wsHandler := NewWS(store, testHub, logger)
+	wsHandler := NewWS(store, testHub, logger, []string{"*"})
 
 	mux := http.NewServeMux()
 	mux.Handle("GET /ws/{slug}", wsHandler)
@@ -42,7 +42,7 @@ func TestWS_MissingSlug(t *testing.T) {
 	store := newMockStore()
 	logger := zerolog.Nop()
 	testHub := hub.New(100)
-	wsHandler := NewWS(store, testHub, logger)
+	wsHandler := NewWS(store, testHub, logger, []string{"*"})
 
 	// Request without slug — the handler checks PathValue("slug") == ""
 	req := httptest.NewRequest("GET", "/ws/", nil)
@@ -61,7 +61,7 @@ func TestWS_EndpointNotFound(t *testing.T) {
 	store := newMockStore()
 	logger := zerolog.Nop()
 	testHub := hub.New(100)
-	wsHandler := NewWS(store, testHub, logger)
+	wsHandler := NewWS(store, testHub, logger, []string{"*"})
 
 	// Use a mux so PathValue works.
 	mux := http.NewServeMux()
@@ -480,7 +480,7 @@ func TestWS_GetEndpointBySlug_DBError(t *testing.T) {
 
 	logger := zerolog.Nop()
 	testHub := hub.New(100)
-	wsHandler := NewWS(store, testHub, logger)
+	wsHandler := NewWS(store, testHub, logger, []string{"*"})
 
 	mux := http.NewServeMux()
 	mux.Handle("GET /ws/{slug}", wsHandler)

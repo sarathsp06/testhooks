@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -16,6 +17,7 @@ import (
 	"github.com/sarathsp06/testhooks/internal/db"
 	"github.com/sarathsp06/testhooks/internal/forward"
 	"github.com/sarathsp06/testhooks/internal/hub"
+	"github.com/sarathsp06/testhooks/internal/middleware"
 	"github.com/sarathsp06/testhooks/internal/wasm"
 )
 
@@ -27,11 +29,12 @@ type Capture struct {
 	wasmRunner             *wasm.Runner
 	maxBodySize            int64
 	browserResponseTimeout time.Duration
+	trustedProxies         []*net.IPNet
 	log                    zerolog.Logger
 }
 
 // NewCapture creates a new Capture handler.
-func NewCapture(store Store, h *hub.Hub, fwd *forward.Forwarder, wr *wasm.Runner, maxBodySize int64, log zerolog.Logger) *Capture {
+func NewCapture(store Store, h *hub.Hub, fwd *forward.Forwarder, wr *wasm.Runner, maxBodySize int64, trustedProxies []*net.IPNet, log zerolog.Logger) *Capture {
 	return &Capture{
 		db:                     store,
 		hub:                    h,
@@ -39,6 +42,7 @@ func NewCapture(store Store, h *hub.Hub, fwd *forward.Forwarder, wr *wasm.Runner
 		wasmRunner:             wr,
 		maxBodySize:            maxBodySize,
 		browserResponseTimeout: 10 * time.Second,
+		trustedProxies:         trustedProxies,
 		log:                    log.With().Str("component", "capture").Logger(),
 	}
 }
@@ -83,11 +87,8 @@ func (c *Capture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		queryJSON, _ = json.Marshal(r.URL.Query())
 	}
 
-	// Client IP.
-	ip := r.RemoteAddr
-	if fwd := r.Header.Get("X-Forwarded-For"); fwd != "" {
-		ip = strings.Split(fwd, ",")[0]
-	}
+	// Client IP — use trusted-proxy-aware extraction (MED-003).
+	ip := middleware.ClientIP(r.RemoteAddr, r.Header.Get("X-Forwarded-For"), r.Header.Get("X-Real-Ip"), c.trustedProxies)
 
 	req := &db.CapturedRequest{
 		EndpointID:  endpoint.ID,

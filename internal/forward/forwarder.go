@@ -6,8 +6,12 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"net"
 	"net/http"
+	"net/url"
+	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -54,6 +58,8 @@ type Config struct {
 	BaseDelay time.Duration
 	// MaxDelay caps the exponential backoff.
 	MaxDelay time.Duration
+	// DisableSSRFProtection disables the SSRF-safe dialer. For testing only.
+	DisableSSRFProtection bool
 }
 
 // DefaultConfig returns sensible defaults.
@@ -66,13 +72,37 @@ func DefaultConfig() Config {
 	}
 }
 
-// New creates a new Forwarder.
+// New creates a new Forwarder with SSRF protection.
+// The HTTP client uses a custom dialer that blocks connections to private,
+// loopback, link-local, and cloud metadata IP ranges after DNS resolution.
 func New(cfg Config, log zerolog.Logger) *Forwarder {
+	dialer := &net.Dialer{
+		Timeout:   10 * time.Second,
+		KeepAlive: 30 * time.Second,
+	}
+	if !cfg.DisableSSRFProtection {
+		dialer.Control = ssrfSafeControl
+	}
+
+	transport := &http.Transport{
+		DialContext:           dialer.DialContext,
+		MaxIdleConns:          100,
+		MaxIdleConnsPerHost:   10,
+		IdleConnTimeout:       90 * time.Second,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ResponseHeaderTimeout: cfg.Timeout,
+	}
+
 	return &Forwarder{
 		client: &http.Client{
-			Timeout: cfg.Timeout,
+			Timeout:   cfg.Timeout,
+			Transport: transport,
 			// Don't follow redirects — just report the first response.
 			CheckRedirect: func(req *http.Request, via []*http.Request) error {
+				// Also validate the redirect target scheme to prevent redirect-based SSRF.
+				if !isAllowedScheme(req.URL) {
+					return fmt.Errorf("redirect to disallowed scheme: %s", req.URL.Scheme)
+				}
 				return http.ErrUseLastResponse
 			},
 		},
@@ -153,6 +183,13 @@ func (f *Forwarder) forwardWithRetryCapture(ctx context.Context, req Request, ta
 func (f *Forwarder) doForwardCapture(ctx context.Context, req Request, target string) Result {
 	start := time.Now()
 	result := Result{URL: target}
+
+	// Validate target URL scheme (SSRF: only http/https allowed).
+	if err := validateTargetURL(target); err != nil {
+		result.Error = fmt.Sprintf("blocked: %v", err)
+		result.Latency = time.Since(start)
+		return result
+	}
 
 	httpReq, err := http.NewRequestWithContext(ctx, req.Method, target, bytes.NewReader(req.Body))
 	if err != nil {
@@ -250,6 +287,13 @@ func (f *Forwarder) doForward(ctx context.Context, req Request, target string) R
 	start := time.Now()
 	result := Result{URL: target}
 
+	// Validate target URL scheme (SSRF: only http/https allowed).
+	if err := validateTargetURL(target); err != nil {
+		result.Error = fmt.Sprintf("blocked: %v", err)
+		result.Latency = time.Since(start)
+		return result
+	}
+
 	// Build the outbound HTTP request.
 	httpReq, err := http.NewRequestWithContext(ctx, req.Method, target, bytes.NewReader(req.Body))
 	if err != nil {
@@ -333,4 +377,99 @@ func isHopByHop(header string) bool {
 		return true
 	}
 	return false
+}
+
+// isAllowedScheme returns true if the URL scheme is http or https.
+func isAllowedScheme(u *url.URL) bool {
+	s := strings.ToLower(u.Scheme)
+	return s == "http" || s == "https"
+}
+
+// validateTargetURL checks that the target URL uses an allowed scheme.
+// Returns an error if the scheme is not http/https.
+func validateTargetURL(target string) error {
+	u, err := url.Parse(target)
+	if err != nil {
+		return fmt.Errorf("invalid URL: %w", err)
+	}
+	if !isAllowedScheme(u) {
+		return fmt.Errorf("disallowed scheme %q: only http and https are allowed", u.Scheme)
+	}
+	return nil
+}
+
+// ssrfSafeControl is a net.Dialer Control function that blocks connections to
+// private, loopback, link-local, and cloud metadata IP ranges. It inspects the
+// resolved IP address AFTER DNS resolution but BEFORE the connection is established.
+func ssrfSafeControl(network, address string, c syscall.RawConn) error {
+	host, _, err := net.SplitHostPort(address)
+	if err != nil {
+		return fmt.Errorf("ssrf check: invalid address %q: %w", address, err)
+	}
+
+	ip := net.ParseIP(host)
+	if ip == nil {
+		return fmt.Errorf("ssrf check: could not parse IP %q", host)
+	}
+
+	if isBlockedIP(ip) {
+		return fmt.Errorf("ssrf blocked: connection to private/reserved IP %s is not allowed", ip)
+	}
+
+	return nil
+}
+
+// isBlockedIP returns true if the IP is in a range that should not be reachable
+// from server-side forwarding (SSRF prevention).
+func isBlockedIP(ip net.IP) bool {
+	// Loopback (127.0.0.0/8, ::1)
+	if ip.IsLoopback() {
+		return true
+	}
+	// Link-local unicast (169.254.0.0/16, fe80::/10)
+	if ip.IsLinkLocalUnicast() {
+		return true
+	}
+	// Link-local multicast
+	if ip.IsLinkLocalMulticast() {
+		return true
+	}
+	// Unspecified (0.0.0.0, ::)
+	if ip.IsUnspecified() {
+		return true
+	}
+
+	// Private ranges (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, fc00::/7)
+	if ip.IsPrivate() {
+		return true
+	}
+
+	// Cloud metadata service IPs
+	for _, cidr := range blockedCIDRs {
+		if cidr.Contains(ip) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// blockedCIDRs contains additional CIDR ranges to block beyond the standard
+// private/loopback/link-local checks. This covers cloud metadata services and
+// other reserved ranges.
+var blockedCIDRs []*net.IPNet
+
+func init() {
+	cidrs := []string{
+		"169.254.169.254/32", // AWS/GCP/Azure metadata
+		"100.100.100.200/32", // Alibaba Cloud metadata
+		"fd00:ec2::254/128",  // AWS IMDSv2 IPv6
+	}
+	for _, cidr := range cidrs {
+		_, ipNet, err := net.ParseCIDR(cidr)
+		if err != nil {
+			panic("invalid blocked CIDR: " + cidr)
+		}
+		blockedCIDRs = append(blockedCIDRs, ipNet)
+	}
 }

@@ -470,3 +470,39 @@ cd .. && go build -o testhooks ./cmd/testhooks   # embeds web/dist via go:embed
 - [x] Export (JSON, CSV)
 - [x] Additional WASM languages: Lua (wasmoon), Jsonnet (tplfa-jsonnet) — browser-side only
   - *Note: Go via TinyGo and Rust not implemented. Server-side only supports JS.*
+
+---
+
+## Known Issues & Fixes
+
+### Fix: Saving transform config overwrote forward URL (and vice versa)
+
+**Root cause:** `web/src/routes/[slug]/+page.svelte` held a local `endpoint`
+variable assigned once in `init()`. After saving settings from one tab (e.g.
+forwarding), the local variable was never refreshed. When a different tab (e.g.
+transforms) later spread `endpoint.config` into its PATCH payload, it sent the
+**stale** config — missing keys added by the other tab. The backend PATCH handler
+(`internal/handler/api.go`) does a full replacement of the `config` JSONB column,
+so missing keys were deleted.
+
+**Fix:** `saveTransformScript()` now reads from `endpointStore.current` (the
+reactive store that is updated after every successful PATCH) instead of the stale
+local variable.
+
+**Design note:** The backend intentionally replaces the entire `config` JSONB on
+PATCH rather than deep-merging. This is simpler and avoids ambiguity about key
+deletion. The frontend is responsible for sending the complete config. If more
+independent config sections are added in the future, consider either (a) splitting
+config into separate columns/endpoints, or (b) adding server-side JSON merge logic.
+
+### Fix: Incorrect forwarding description in UI
+
+**Root cause:** `ForwardConfig.svelte` tooltip and info box text stated the forward
+target's response is "returned directly to the webhook sender." This was inaccurate
+— in sync mode, the forward response is passed through the custom response handler
+pipeline (if configured) before the final HTTP response is built.
+
+**Fix:** Updated tooltip and info box text to accurately describe the pipeline:
+the forward target's response is available to the custom response handler, which
+can use it to build the final response. Without a handler, the target's response
+is sent back as-is.

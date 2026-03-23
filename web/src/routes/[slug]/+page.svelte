@@ -112,11 +112,30 @@
 						if (fwdUrl) {
 							const fwdMode = ep.config?.forward_mode || 'async';
 							if (fwdMode === 'async') {
-								// Fire-and-forget but capture response for display
+								// Fire-and-forget but capture response for display.
+								// Store a pending placeholder so the UI shows "Forwarding..." immediately.
+								requestsStore.attachForwardResult(req.id, {
+									request_id: req.id,
+									url: fwdUrl,
+									status_code: -1,
+									ok: false,
+									latency_ms: 0,
+									error: '__pending__'
+								});
 								forwardRequestWithResponse(req, fwdUrl).then((fwdResult) => {
 									requestsStore.attachForwardResult(req.id, fwdResult);
 								}).catch((err) => {
-									console.warn('Browser forward error:', err);
+									// Always store a result so the UI shows the error instead of nothing.
+									const message = err instanceof Error ? err.message : 'Unknown forward error';
+									console.warn('Browser forward error:', message);
+									requestsStore.attachForwardResult(req.id, {
+										request_id: req.id,
+										url: fwdUrl,
+										status_code: 0,
+										ok: false,
+										latency_ms: 0,
+										error: message
+									});
 								});
 							} else {
 								// Sync — wait for response and capture it for display
@@ -324,7 +343,11 @@
 	}
 
 	function saveTransformScript() {
-		if (!endpoint) return;
+		// Use endpointStore.current (reactive) instead of the local `endpoint`
+		// variable, which is only assigned once in init() and becomes stale
+		// when other config fields (e.g. forward_url) are saved from Settings.
+		const ep = endpointStore.current;
+		if (!ep) return;
 		const scriptToSave = transformEnabled ? transformScript : '';
 		const langToSave = transformEnabled ? transformLanguage : undefined;
 
@@ -337,7 +360,7 @@
 
 		endpointStore.update({
 			config: {
-				...endpoint.config,
+				...ep.config,
 				wasm_script: scriptToSave || undefined,
 				transform_language: langToSave,
 				custom_response: customResponseConfig

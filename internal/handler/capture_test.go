@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -15,7 +16,7 @@ import (
 func newTestCapture(store Store) (*Capture, *hub.Hub) {
 	log := zerolog.New(os.Stderr).Level(zerolog.Disabled)
 	h := hub.New(100)
-	c := NewCapture(store, h, nil, nil, 512*1024, log)
+	c := NewCapture(store, h, nil, nil, 512*1024, nil, log)
 	return c, h
 }
 
@@ -213,7 +214,11 @@ func TestCapture_DBInsertError(t *testing.T) {
 func TestCapture_ClientIP_XForwardedFor(t *testing.T) {
 	store := newMockStore()
 	store.seedEndpoint("ep-1", "abc123", "Test", "server", nil)
-	capture, _ := newTestCapture(store)
+	// Create capture with trusted proxies matching httptest's RemoteAddr (192.0.2.1).
+	_, trustedNet, _ := net.ParseCIDR("192.0.2.0/24")
+	log := zerolog.New(os.Stderr).Level(zerolog.Disabled)
+	h := hub.New(100)
+	capture := NewCapture(store, h, nil, nil, 512*1024, []*net.IPNet{trustedNet}, log)
 	mux := captureMux(capture)
 
 	req := httptest.NewRequest("POST", "/h/abc123", strings.NewReader("data"))
@@ -225,11 +230,13 @@ func TestCapture_ClientIP_XForwardedFor(t *testing.T) {
 		t.Fatalf("status = %d, want 200", w.Code)
 	}
 
+	// With trusted proxies, ClientIP walks backwards through XFF and returns
+	// the rightmost non-trusted IP. 5.6.7.8 is not in trusted proxies, so it's returned.
 	store.mu.Lock()
 	defer store.mu.Unlock()
 	for _, r := range store.requests {
-		if r.IP != "1.2.3.4" {
-			t.Errorf("ip = %q, want '1.2.3.4'", r.IP)
+		if r.IP != "5.6.7.8" {
+			t.Errorf("ip = %q, want '5.6.7.8' (rightmost non-trusted from XFF)", r.IP)
 		}
 	}
 }

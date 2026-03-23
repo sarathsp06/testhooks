@@ -14,17 +14,21 @@ import (
 
 // WS handles WebSocket connections for live-streaming captured requests.
 type WS struct {
-	db  Store
-	hub *hub.Hub
-	log zerolog.Logger
+	db             Store
+	hub            *hub.Hub
+	log            zerolog.Logger
+	allowedOrigins []string
 }
 
 // NewWS creates a new WebSocket handler.
-func NewWS(store Store, h *hub.Hub, log zerolog.Logger) *WS {
+// allowedOrigins controls the Origin header check on WebSocket upgrade.
+// Pass []string{"*"} to accept any origin (dev mode only).
+func NewWS(store Store, h *hub.Hub, log zerolog.Logger, allowedOrigins []string) *WS {
 	return &WS{
-		db:  store,
-		hub: h,
-		log: log.With().Str("component", "ws").Logger(),
+		db:             store,
+		hub:            h,
+		log:            log.With().Str("component", "ws").Logger(),
+		allowedOrigins: allowedOrigins,
 	}
 }
 
@@ -50,13 +54,17 @@ func (ws *WS) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
-		InsecureSkipVerify: true, // Accept any origin (for dev; tighten in prod).
+		OriginPatterns: ws.allowedOrigins,
 	})
 	if err != nil {
 		ws.log.Error().Err(err).Msg("websocket accept failed")
 		return
 	}
 	defer conn.CloseNow()
+
+	// MED-004: Set a read limit to prevent oversized messages from consuming memory.
+	// 1MB is generous for control messages (response_result payloads).
+	conn.SetReadLimit(1 << 20) // 1 MB
 
 	ws.log.Info().Str("slug", slug).Msg("client connected")
 

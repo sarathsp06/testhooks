@@ -66,6 +66,7 @@
 	);
 
 	// Forward target response derived values
+	const fwdTargetPending = $derived(fwdTargetResult?.error === '__pending__');
 	const fwdTargetBodyString = $derived(fwdTargetResult?.response_body || '');
 	const formattedFwdTargetBody = $derived(tryFormatJSON(fwdTargetBodyString));
 	const fwdTargetHeaderEntries = $derived(
@@ -73,11 +74,13 @@
 	);
 	const fwdTargetStatusColor = $derived(
 		fwdTargetResult
-			? fwdTargetResult.status_code >= 200 && fwdTargetResult.status_code < 300
-				? 'text-[var(--green)]'
-				: fwdTargetResult.status_code >= 400
-					? 'text-[var(--red)]'
-					: 'text-[var(--yellow)]'
+			? fwdTargetPending
+				? 'text-[var(--text-muted)]'
+				: fwdTargetResult.status_code >= 200 && fwdTargetResult.status_code < 300
+					? 'text-[var(--green)]'
+					: fwdTargetResult.status_code >= 400
+						? 'text-[var(--red)]'
+						: 'text-[var(--yellow)]'
 			: ''
 	);
 
@@ -463,10 +466,14 @@
 					{#if showForwardTarget}<ChevronDown class="w-3 h-3" />{:else}<ChevronRight class="w-3 h-3" />{/if}
 					<ArrowUpRight class="w-3 h-3" />
 					Forward Target Response
-					<span class="font-mono font-bold {fwdTargetStatusColor}">{fwdTargetResult.status_code}</span>
-					<span class="text-[var(--text-muted)]">{fwdTargetResult.latency_ms}ms</span>
+					{#if fwdTargetPending}
+						<span class="text-[var(--text-muted)] animate-pulse">Forwarding...</span>
+					{:else}
+						<span class="font-mono font-bold {fwdTargetStatusColor}">{fwdTargetResult.status_code}</span>
+						<span class="text-[var(--text-muted)]">{fwdTargetResult.latency_ms}ms</span>
+					{/if}
 				</div>
-				{#if fwdTargetBodyString}
+				{#if fwdTargetBodyString && !fwdTargetPending}
 					<span
 						onclick={(e: MouseEvent) => { e.stopPropagation(); handleCopy(fwdTargetBodyString, 'fwd-target-body'); }}
 						class="p-1 rounded hover:bg-[var(--bg-hover)]"
@@ -479,46 +486,54 @@
 			</button>
 			{#if showForwardTarget}
 				<div class="px-3 pb-3 flex flex-col gap-2">
-					<!-- Forward URL -->
-					<div class="text-xs font-mono text-[var(--text-muted)] truncate">{fwdTargetResult.url}</div>
-
-					<!-- Error -->
-					{#if fwdTargetResult.error}
-						<div class="text-xs text-[var(--red)] bg-red-500/5 border border-red-500/20 rounded px-2 py-1">
-							{fwdTargetResult.error}
+					{#if fwdTargetPending}
+						<!-- Pending state -->
+						<div class="text-xs text-[var(--text-muted)] flex items-center gap-2">
+							<span class="w-3 h-3 border-2 border-[var(--text-muted)] border-t-transparent rounded-full animate-spin"></span>
+							Forwarding to <span class="font-mono">{fwdTargetResult.url}</span>...
 						</div>
-					{/if}
+					{:else}
+						<!-- Forward URL -->
+						<div class="text-xs font-mono text-[var(--text-muted)] truncate">{fwdTargetResult.url}</div>
 
-					<!-- Forward target response headers -->
-					{#if fwdTargetHeaderEntries.length > 0}
-						<div>
-							<div class="text-[10px] text-[var(--text-muted)] mb-1 uppercase tracking-wide">Headers</div>
-							<div class="max-h-40 overflow-y-auto">
-								<table class="w-full text-xs">
-									<tbody>
-										{#each fwdTargetHeaderEntries as [key, value]}
-											<tr class="border-t border-[var(--border)]">
-												<td class="py-0.5 pr-3 text-[var(--text-muted)] font-mono whitespace-nowrap align-top">{key}</td>
-												<td class="py-0.5 text-[var(--text)] font-mono break-all">{value}</td>
-											</tr>
-										{/each}
-									</tbody>
-								</table>
+						<!-- Error -->
+						{#if fwdTargetResult.error}
+							<div class="text-xs text-[var(--red)] bg-red-500/5 border border-red-500/20 rounded px-2 py-1">
+								{fwdTargetResult.error}
 							</div>
-						</div>
-					{/if}
+						{/if}
 
-					<!-- Forward target response body -->
-					{#if fwdTargetBodyString}
-						<div>
-							<div class="text-[10px] text-[var(--text-muted)] mb-1 uppercase tracking-wide flex items-center gap-1">
-								Body
-								{#if formattedFwdTargetBody.isJSON}
-									<span class="px-1 py-0.5 rounded bg-blue-500/10 text-blue-400 text-[10px] normal-case">JSON</span>
-								{/if}
+						<!-- Forward target response headers -->
+						{#if fwdTargetHeaderEntries.length > 0}
+							<div>
+								<div class="text-[10px] text-[var(--text-muted)] mb-1 uppercase tracking-wide">Headers</div>
+								<div class="max-h-40 overflow-y-auto">
+									<table class="w-full text-xs">
+										<tbody>
+											{#each fwdTargetHeaderEntries as [key, value]}
+												<tr class="border-t border-[var(--border)]">
+													<td class="py-0.5 pr-3 text-[var(--text-muted)] font-mono whitespace-nowrap align-top">{key}</td>
+													<td class="py-0.5 text-[var(--text)] font-mono break-all">{value}</td>
+												</tr>
+											{/each}
+										</tbody>
+									</table>
+								</div>
 							</div>
-							<pre class="text-xs font-mono text-[var(--text)] bg-[var(--bg)] rounded p-3 overflow-x-auto max-h-64 whitespace-pre-wrap break-all">{formattedFwdTargetBody.formatted}</pre>
-						</div>
+						{/if}
+
+						<!-- Forward target response body -->
+						{#if fwdTargetBodyString}
+							<div>
+								<div class="text-[10px] text-[var(--text-muted)] mb-1 uppercase tracking-wide flex items-center gap-1">
+									Body
+									{#if formattedFwdTargetBody.isJSON}
+										<span class="px-1 py-0.5 rounded bg-blue-500/10 text-blue-400 text-[10px] normal-case">JSON</span>
+									{/if}
+								</div>
+								<pre class="text-xs font-mono text-[var(--text)] bg-[var(--bg)] rounded p-3 overflow-x-auto max-h-64 whitespace-pre-wrap break-all">{formattedFwdTargetBody.formatted}</pre>
+							</div>
+						{/if}
 					{/if}
 				</div>
 			{/if}

@@ -19,24 +19,28 @@ type bucket struct {
 // a token-bucket algorithm. Tokens refill at `rate` per second up to `burst`.
 // Stale entries are cleaned up periodically.
 type RateLimiter struct {
-	rate    float64 // tokens per second
-	burst   float64 // max tokens (bucket capacity)
-	mu      sync.Mutex
-	clients map[string]*bucket
-	log     zerolog.Logger
-	done    chan struct{}
+	rate           float64 // tokens per second
+	burst          float64 // max tokens (bucket capacity)
+	mu             sync.Mutex
+	clients        map[string]*bucket
+	trustedProxies []*net.IPNet
+	log            zerolog.Logger
+	done           chan struct{}
 }
 
 // NewRateLimiter creates a rate limiter. `rps` is the sustained requests/sec
-// per IP, `burst` is the maximum burst size. A background goroutine prunes
-// stale entries every 5 minutes.
-func NewRateLimiter(rps float64, burst int, log zerolog.Logger) *RateLimiter {
+// per IP, `burst` is the maximum burst size. trustedProxies controls which
+// peers are allowed to set X-Forwarded-For/X-Real-IP headers for client IP
+// extraction (pass nil to always use RemoteAddr). A background goroutine
+// prunes stale entries every 5 minutes.
+func NewRateLimiter(rps float64, burst int, trustedProxies []*net.IPNet, log zerolog.Logger) *RateLimiter {
 	rl := &RateLimiter{
-		rate:    rps,
-		burst:   float64(burst),
-		clients: make(map[string]*bucket),
-		log:     log,
-		done:    make(chan struct{}),
+		rate:           rps,
+		burst:          float64(burst),
+		clients:        make(map[string]*bucket),
+		trustedProxies: trustedProxies,
+		log:            log,
+		done:           make(chan struct{}),
 	}
 	go rl.cleanup()
 	return rl
@@ -46,7 +50,7 @@ func NewRateLimiter(rps float64, burst int, log zerolog.Logger) *RateLimiter {
 // to the next handler.
 func (rl *RateLimiter) Wrap(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ip := clientIP(r)
+		ip := ClientIP(r.RemoteAddr, r.Header.Get("X-Forwarded-For"), r.Header.Get("X-Real-Ip"), rl.trustedProxies)
 		if !rl.allow(ip) {
 			rl.log.Warn().Str("ip", ip).Msg("rate limited")
 			w.Header().Set("Retry-After", "1")
@@ -115,32 +119,4 @@ func (rl *RateLimiter) cleanup() {
 			rl.mu.Unlock()
 		}
 	}
-}
-
-// clientIP extracts the client IP from the request. It checks X-Forwarded-For
-// and X-Real-IP headers first (for reverse proxies), then falls back to
-// RemoteAddr.
-func clientIP(r *http.Request) string {
-	// Check X-Forwarded-For (first IP in the chain).
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		// X-Forwarded-For can be "client, proxy1, proxy2"
-		for i := 0; i < len(xff); i++ {
-			if xff[i] == ',' {
-				return xff[:i]
-			}
-		}
-		return xff
-	}
-
-	// Check X-Real-IP.
-	if xri := r.Header.Get("X-Real-Ip"); xri != "" {
-		return xri
-	}
-
-	// Fall back to RemoteAddr (strip port).
-	ip, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return r.RemoteAddr
-	}
-	return ip
 }

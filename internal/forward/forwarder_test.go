@@ -13,6 +13,7 @@ import (
 )
 
 func newTestForwarder(cfg Config) *Forwarder {
+	cfg.DisableSSRFProtection = true
 	log := zerolog.Nop()
 	return New(cfg, log)
 }

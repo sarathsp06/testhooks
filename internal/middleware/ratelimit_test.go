@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -93,52 +94,65 @@ func TestWrap_Returns429(t *testing.T) {
 	}
 }
 
-func TestClientIP_XForwardedFor(t *testing.T) {
-	req := httptest.NewRequest("GET", "/", nil)
-	req.Header.Set("X-Forwarded-For", "10.0.0.1, 10.0.0.2, 10.0.0.3")
+// parseCIDR is a test helper.
+func parseCIDR(cidr string) *net.IPNet {
+	_, n, _ := net.ParseCIDR(cidr)
+	return n
+}
 
-	ip := clientIP(req)
-	if ip != "10.0.0.1" {
-		t.Errorf("clientIP = %q, want %q", ip, "10.0.0.1")
+func TestClientIP_XForwardedFor_Trusted(t *testing.T) {
+	// Peer is a trusted proxy — X-Forwarded-For should be used.
+	trusted := []*net.IPNet{parseCIDR("192.0.2.0/24")}
+	ip := ClientIP("192.0.2.1:1234", "10.0.0.1, 10.0.0.2, 10.0.0.3", "", trusted)
+	if ip != "10.0.0.3" {
+		t.Errorf("ClientIP = %q, want %q", ip, "10.0.0.3")
 	}
 }
 
-func TestClientIP_XForwardedFor_Single(t *testing.T) {
-	req := httptest.NewRequest("GET", "/", nil)
-	req.Header.Set("X-Forwarded-For", "10.0.0.1")
-
-	ip := clientIP(req)
+func TestClientIP_XForwardedFor_Single_Trusted(t *testing.T) {
+	trusted := []*net.IPNet{parseCIDR("192.0.2.0/24")}
+	ip := ClientIP("192.0.2.1:1234", "10.0.0.1", "", trusted)
 	if ip != "10.0.0.1" {
-		t.Errorf("clientIP = %q, want %q", ip, "10.0.0.1")
+		t.Errorf("ClientIP = %q, want %q", ip, "10.0.0.1")
 	}
 }
 
-func TestClientIP_XRealIP(t *testing.T) {
-	req := httptest.NewRequest("GET", "/", nil)
-	req.Header.Set("X-Real-Ip", "192.168.1.1")
-
-	ip := clientIP(req)
+func TestClientIP_XRealIP_Trusted(t *testing.T) {
+	trusted := []*net.IPNet{parseCIDR("192.0.2.0/24")}
+	ip := ClientIP("192.0.2.1:1234", "", "192.168.1.1", trusted)
 	if ip != "192.168.1.1" {
-		t.Errorf("clientIP = %q, want %q", ip, "192.168.1.1")
+		t.Errorf("ClientIP = %q, want %q", ip, "192.168.1.1")
 	}
 }
 
 func TestClientIP_RemoteAddr(t *testing.T) {
-	req := httptest.NewRequest("GET", "/", nil)
-	req.RemoteAddr = "172.16.0.1:54321"
-
-	ip := clientIP(req)
+	// No trusted proxies — always use RemoteAddr.
+	ip := ClientIP("172.16.0.1:54321", "", "", nil)
 	if ip != "172.16.0.1" {
-		t.Errorf("clientIP = %q, want %q", ip, "172.16.0.1")
+		t.Errorf("ClientIP = %q, want %q", ip, "172.16.0.1")
 	}
 }
 
 func TestClientIP_RemoteAddr_NoPort(t *testing.T) {
-	req := httptest.NewRequest("GET", "/", nil)
-	req.RemoteAddr = "172.16.0.1"
-
-	ip := clientIP(req)
+	ip := ClientIP("172.16.0.1", "", "", nil)
 	if ip != "172.16.0.1" {
-		t.Errorf("clientIP = %q, want %q", ip, "172.16.0.1")
+		t.Errorf("ClientIP = %q, want %q", ip, "172.16.0.1")
+	}
+}
+
+func TestClientIP_UntrustedProxy_IgnoresHeaders(t *testing.T) {
+	// Peer is NOT in trusted proxies — headers should be ignored.
+	trusted := []*net.IPNet{parseCIDR("10.0.0.0/8")}
+	ip := ClientIP("192.168.1.1:1234", "1.2.3.4", "5.6.7.8", trusted)
+	if ip != "192.168.1.1" {
+		t.Errorf("ClientIP = %q, want %q (should ignore headers from untrusted peer)", ip, "192.168.1.1")
+	}
+}
+
+func TestClientIP_NoTrustedProxies_IgnoresHeaders(t *testing.T) {
+	// No trusted proxies configured — headers should always be ignored.
+	ip := ClientIP("192.168.1.1:1234", "1.2.3.4", "5.6.7.8", nil)
+	if ip != "192.168.1.1" {
+		t.Errorf("ClientIP = %q, want %q (should ignore headers when no proxies configured)", ip, "192.168.1.1")
 	}
 }

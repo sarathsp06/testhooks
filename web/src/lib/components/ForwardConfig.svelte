@@ -201,22 +201,22 @@
 							Sync
 						</button>
 					</div>
-					<Tooltip text={forwardMode === 'async'
-						? 'Async: fire-and-forget. The webhook sender gets an immediate response without waiting for the forward target.'
-						: 'Sync: wait for the forward target to respond. If no custom response handler is set, the target\'s response is returned directly to the webhook sender. If a handler exists, it receives both the request and the forward response.'} />
+				<Tooltip text={forwardMode === 'async'
+					? 'Async: fire-and-forget. The webhook sender gets an immediate response without waiting for the forward target.'
+					: 'Sync: wait for the forward target to respond. The forward target\'s response is passed to your custom response handler (if configured), which can use it to build the final HTTP response. Without a handler, the target\'s response is sent back to the webhook sender as-is.'} />
 				</div>
 
 				{#if forwardMode === 'sync'}
 					<div class="flex items-start gap-2 text-[10px] text-[var(--text-muted)] bg-[var(--bg)] rounded px-3 py-2 border border-[var(--border)]">
 						<Info class="w-3 h-3 flex-shrink-0 mt-0.5" />
-						<p>
-							<strong class="text-[var(--text)]">Sync mode</strong> — The webhook response is blocked until the forward target replies.
-							{#if endpoint.config?.custom_response?.enabled}
-								Your custom response handler will receive the forward target's response as <code class="text-[10px]">req.forward_response</code>.
-							{:else}
-								The forward target's response will be returned directly to the webhook sender.
-							{/if}
-						</p>
+					<p>
+						<strong class="text-[var(--text)]">Sync mode</strong> — The webhook response is blocked until the forward target replies.
+						{#if endpoint.config?.custom_response?.enabled}
+							Your custom response handler will receive the forward target's response as <code class="text-[10px]">req.forward_response</code> and can use it to build the final HTTP response.
+						{:else}
+							The forward target's response is sent back to the webhook sender as-is. Enable a custom response handler (in the Transform tab) to process it first.
+						{/if}
+					</p>
 					</div>
 				{/if}
 			{:else}
