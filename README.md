@@ -1,13 +1,22 @@
-[# Testhooks](https://testhooks.sarathsadasivan.com/)
+<p align="center">
+  <a href="https://testhooks.sarathsadasivan.com/">
+    <img src=".github/logo.svg" alt="Testhooks" width="700" />
+  </a>
+</p>
 
-A lightweight, self-hostable [webhook.site](https://webhook.site) replacement. 
+<p align="center">
+  <strong>A lightweight, self-hostable <a href="https://webhook.site">webhook.site</a> replacement.</strong><br/>
+  Ships as a single binary with the SPA embedded — just point it at Postgres and go.
+</p>
 
-Capture, inspect, transform, and forward webhooks in real time.
-Ships as a **single binary** with the SPA embedded — just point it at a PostgreSQL database and go.
-
-```
-webhook sender ──► https://hooks.example.com/h/a1b2c3d4 ──► your browser (live)
-```
+<p align="center">
+  <a href="#quick-start">Quick Start</a> &middot;
+  <a href="#features">Features</a> &middot;
+  <a href="#how-it-works">How It Works</a> &middot;
+  <a href="#api">API</a> &middot;
+  <a href="#configuration">Configuration</a> &middot;
+  <a href="https://testhooks.sarathsadasivan.com/">Live Demo</a>
+</p>
 
 ---
 
@@ -23,26 +32,49 @@ webhook sender ──► https://hooks.example.com/h/a1b2c3d4 ──► your bro
 
 ## Features
 
-- **Unique webhook URLs** — each endpoint gets a short URL (`/h/a1b2c3d4`)
-- **Real-time streaming** — requests pushed to the browser instantly via WebSocket
-- **Two endpoint modes** — Server mode (persistent, always-on) or Browser mode (zero storage, privacy-first)
-- **Browser-side forwarding** — forward to `localhost` or any URL via `fetch()`
-- **Server-side forwarding** — reliable forwarding from Go to public URLs
-- **WASM transforms** — JavaScript on the server (QuickJS), JS + Lua + Jsonnet in the browser
-- **Custom responses** — script-based HTTP response control per endpoint
-- **Code editor** — CodeMirror 6 built in for writing transform scripts
-- **Export** — download captured requests as JSON or CSV
-- **Copy as cURL** — replay requests from the UI
-- **Dark mode** — system / light / dark theme toggle
-- **Rate limiting** — per-IP token-bucket middleware
+|  |  |
+|---|---|
+| **Unique webhook URLs** | Each endpoint gets a short URL (`/h/a1b2c3d4`) |
+| **Real-time streaming** | Requests pushed to the browser instantly via WebSocket |
+| **Two endpoint modes** | Server mode (persistent, always-on) or Browser mode (zero storage, privacy-first) |
+| **Browser-side forwarding** | Forward to `localhost` or any URL via `fetch()` |
+| **Server-side forwarding** | Reliable forwarding from Go to public URLs |
+| **WASM transforms** | JavaScript on the server (QuickJS), JS + Lua + Jsonnet in the browser |
+| **Custom responses** | Script-based HTTP response control per endpoint |
+| **Code editor** | CodeMirror 6 built in for writing transform scripts |
+| **Export** | Download captured requests as JSON or CSV |
+| **Copy as cURL** | Replay requests from the UI |
+| **Dark mode** | System / light / dark theme toggle |
+| **Rate limiting** | Per-IP token-bucket middleware |
+
+---
+
+## How It Works
+
+```
+                                    ┌──────────────────────────────────────────┐
+                                    │            Browser (Svelte 5)            │
+                                    │                                          │
+                                    │  inspect ─► transform (WASM) ─► forward  │
+                                    │                                 fetch()  │
+                                    └──────────┬───────────────────┬───────────┘
+                                               │ WebSocket         │
+                                               │                   ▼
+  webhook sender ──► POST /h/:slug ──► Go Server ──► Postgres    localhost
+                                          │
+                                          ▼ (optional)
+                                       Redis Pub/Sub
+```
+
+**Server mode** — The Go server stores every request in Postgres, runs WASM transforms via QuickJS, and forwards to configured URLs. The browser is just a viewer. Works headlessly, always on.
+
+**Browser mode** — The server acts as a thin relay: receives the webhook, streams it over WebSocket, and discards it immediately. All transforms run in-browser via WASM. Forward to `localhost` with `fetch()`. Nothing written to disk.
 
 ---
 
 ## Quick Start
 
-### Option 1: Docker Compose (easiest)
-
-The fastest way to get running. This starts the app and a PostgreSQL instance together.
+### Docker Compose (easiest)
 
 ```bash
 git clone https://github.com/yourusername/testhooks.git
@@ -52,9 +84,7 @@ docker compose up --build
 
 Open **http://localhost:8080** and start sending webhooks.
 
-### Option 2: Docker image + existing Postgres
-
-If you already have a PostgreSQL database, run just the app container:
+### Docker image + existing Postgres
 
 ```bash
 docker build -t testhooks .
@@ -63,35 +93,22 @@ docker run -p 8080:8080 \
   testhooks
 ```
 
-### Option 3: Pre-built binary
-
-Download (or build) the binary and run it directly. No containers needed.
+### Pre-built binary
 
 ```bash
-# Build for your platform
 make build
-
-# Or cross-compile for all platforms
-make build-all    # outputs to dist/
-
-# Run it
 DATABASE_URL="postgres://user:pass@localhost:5432/testhooks?sslmode=disable" ./testhooks
 ```
 
-The binary includes the SPA — there are no static files to serve separately.
+The binary includes the SPA — there are no static files to serve separately. Cross-compile for all platforms with `make build-all`.
 
-### Option 4: From source (development)
+### From source
 
 **Prerequisites:** Go 1.22+, Node 20+, PostgreSQL 15+
 
 ```bash
-# Install frontend dependencies and build the SPA
 cd web && npm ci && cd ..
-
-# Full production build (SPA + Go binary)
 make build
-
-# Run
 ./testhooks
 ```
 
@@ -104,16 +121,10 @@ make build
 make dev
 ```
 
-This starts:
-- **Go** on http://localhost:8080 (API + WebSocket + reverse proxy to Vite)
-- **Vite** on http://localhost:5173 (SPA with hot module replacement)
-
-Open http://localhost:8080 for the full experience. The Go server proxies non-API requests to Vite in dev mode.
-
-You can also run them separately:
+This starts **Go** on `:8080` (API + WebSocket + reverse proxy to Vite) and **Vite** on `:5173` (SPA with HMR). Open http://localhost:8080 for the full experience.
 
 ```bash
-make dev-api   # Go backend only (proxies / to Vite on :5173)
+make dev-api   # Go backend only
 make dev-web   # Vite dev server only
 ```
 
@@ -123,41 +134,20 @@ make dev-web   # Vite dev server only
 
 All configuration is via environment variables. Copy `.env.example` to `.env` to get started.
 
-**`LISTEN`** (default: `:8080`)
-The address the HTTP server binds to.
-
-**`PORT`** (default: *unset*)
-When set, overrides `LISTEN` with `:<PORT>`. This follows the standard PaaS convention used by Heroku, Railway, Render, etc.
-
-**`DATABASE_URL`** (default: `postgres://testhooks:testhooks@localhost:5432/testhooks?sslmode=disable`)
-PostgreSQL connection string. The server runs migrations automatically on startup.
-
-**`DEV`** (default: `false`)
-Enable development mode. When true, the Go server proxies SPA requests to the Vite dev server instead of serving the embedded static files.
-
-**`VITE_URL`** (default: `http://localhost:5173`)
-URL of the Vite dev server. Only used when `DEV=true`.
-
-**`MAX_BODY_SIZE`** (default: `524288` / 512 KB)
-Maximum request body size in bytes for captured webhooks. Larger payloads are truncated.
-
-**`MAX_ENDPOINT_STORAGE_BYTES`** (default: `10485760` / 10 MB)
-Total body storage budget per endpoint. When exceeded, the oldest requests are pruned automatically by the background cleaner.
-
-**`MAX_REQUESTS_PER_ENDPOINT`** (default: `500`)
-Maximum number of stored requests per endpoint. Oldest are pruned when this limit is exceeded.
-
-**`PRUNE_INTERVAL_SECONDS`** (default: `60`)
-How often the background pruner runs to enforce storage budgets.
-
-**`RING_BUFFER_SIZE`** (default: `100`)
-Per-endpoint in-memory ring buffer for browser-mode endpoints. Covers brief disconnects (page reloads, network blips) without writing anything to disk.
-
-**`RATE_LIMIT_RPS`** (default: `20`)
-Sustained requests per second allowed per IP on capture endpoints. Set to `0` to disable.
-
-**`RATE_LIMIT_BURST`** (default: `40`)
-Maximum burst size per IP for rate limiting.
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `LISTEN` | `:8080` | Address the HTTP server binds to |
+| `PORT` | *unset* | Overrides `LISTEN` with `:<PORT>` (PaaS convention) |
+| `DATABASE_URL` | `postgres://testhooks:testhooks@localhost:5432/testhooks?sslmode=disable` | PostgreSQL connection string. Migrations run automatically |
+| `DEV` | `false` | Proxy SPA requests to the Vite dev server |
+| `VITE_URL` | `http://localhost:5173` | Vite dev server URL (only when `DEV=true`) |
+| `MAX_BODY_SIZE` | `524288` (512 KB) | Max request body size for captured webhooks |
+| `MAX_ENDPOINT_STORAGE_BYTES` | `10485760` (10 MB) | Total body storage budget per endpoint |
+| `MAX_REQUESTS_PER_ENDPOINT` | `500` | Max stored requests per endpoint |
+| `PRUNE_INTERVAL_SECONDS` | `60` | How often the background pruner runs |
+| `RING_BUFFER_SIZE` | `100` | Per-endpoint in-memory ring buffer for browser-mode |
+| `RATE_LIMIT_RPS` | `20` | Sustained requests/sec per IP on capture endpoints (`0` to disable) |
+| `RATE_LIMIT_BURST` | `40` | Max burst size per IP |
 
 ---
 
@@ -182,12 +172,14 @@ Maximum burst size per IP for rate limiting.
 
 ## Tech Stack
 
-- **Backend** — Go (stdlib `net/http`, single binary)
-- **Frontend** — Svelte 5 (SvelteKit SPA mode, `adapter-static`)
-- **Database** — PostgreSQL (JSONB for request payloads)
-- **Real-time** — WebSockets (`nhooyr.io/websocket`)
-- **WASM (server)** — QuickJS (`fastschema/qjs` pool)
-- **WASM (browser)** — QuickJS + Lua (wasmoon) + Jsonnet (tplfa-jsonnet)
+| Layer | Technology | Notes |
+|-------|-----------|-------|
+| Backend | **Go** | stdlib `net/http`, single binary, `go:embed` for SPA |
+| Frontend | **Svelte 5** | SvelteKit SPA mode, `adapter-static` |
+| Database | **PostgreSQL** | JSONB for request payloads |
+| Real-time | **WebSockets** | `nhooyr.io/websocket` |
+| WASM (server) | **QuickJS** | `fastschema/qjs` pool for server-side JS transforms |
+| WASM (browser) | **QuickJS + Lua + Jsonnet** | `quickjs-emscripten`, `wasmoon`, `tplfa-jsonnet` |
 
 ---
 

@@ -1,0 +1,134 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 280" fill="none">
+  <defs>
+    <!-- Gradient for the hook -->
+    <linearGradient id="hookGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00ADD8"/>
+      <stop offset="100%" stop-color="#0086A8"/>
+    </linearGradient>
+    <!-- Gradient for signal dots -->
+    <linearGradient id="dotGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#F97316"/>
+      <stop offset="100%" stop-color="#FB923C"/>
+    </linearGradient>
+    <!-- Tunnel glow -->
+    <radialGradient id="tunnelGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#00ADD8" stop-opacity="0.15"/>
+      <stop offset="100%" stop-color="#00ADD8" stop-opacity="0"/>
+    </radialGradient>
+    <!-- Subtle background gradient -->
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0d1117"/>
+      <stop offset="100%" stop-color="#161b22"/>
+    </linearGradient>
+    <!-- Dot pulse animation -->
+    <style>
+      @keyframes flowDot1 { 0%,100% { opacity: 0.3; } 50% { opacity: 1; } }
+      @keyframes flowDot2 { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+      @keyframes flowDot3 { 0%,100% { opacity: 0.5; } 33% { opacity: 1; } 66% { opacity: 0.3; } }
+      .dot1 { animation: flowDot1 2s ease-in-out infinite; }
+      .dot2 { animation: flowDot2 2s ease-in-out infinite; }
+      .dot3 { animation: flowDot3 2s ease-in-out infinite; }
+    </style>
+  </defs>
+
+  <!-- Background -->
+  <rect width="800" height="280" rx="16" fill="url(#bgGrad)"/>
+  <rect width="800" height="280" rx="16" fill="none" stroke="#30363d" stroke-width="1"/>
+
+  <!-- === LOGOMARK (left area, centered at ~140, 108) === -->
+  <g transform="translate(80, 48)">
+    <!-- Tunnel glow behind the hook -->
+    <ellipse cx="60" cy="60" rx="55" ry="55" fill="url(#tunnelGlow)"/>
+
+    <!-- The Hook — a thick stylized fishhook / webhook shape -->
+    <!-- Main hook path: starts as a horizontal "tunnel" entrance, curves down and around into a hook barb -->
+    <path d="M 8 38
+             L 48 38
+             C 80 38, 105 50, 105 78
+             C 105 108, 82 120, 60 120
+             C 40 120, 26 108, 26 92
+             C 26 78, 36 70, 48 70
+             C 58 70, 64 78, 64 86
+             C 64 92, 60 96, 54 96"
+          stroke="url(#hookGrad)" stroke-width="7" stroke-linecap="round" fill="none"/>
+
+    <!-- Arrow tip on the hook's barb -->
+    <path d="M 58 88 L 54 96 L 48 90" stroke="url(#hookGrad)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+
+    <!-- Signal/data dots flowing INTO the tunnel entrance -->
+    <circle cx="-18" cy="38" r="3.5" fill="#F97316" class="dot1"/>
+    <circle cx="-34" cy="38" r="2.8" fill="#F97316" class="dot2" opacity="0.6"/>
+    <circle cx="-48" cy="38" r="2"   fill="#F97316" class="dot3" opacity="0.3"/>
+
+    <!-- Tunnel entrance highlight (horizontal lines) -->
+    <line x1="2" y1="30" x2="2" y2="46" stroke="#00ADD8" stroke-width="2.5" stroke-linecap="round" opacity="0.5"/>
+
+    <!-- Small broadcast/signal arcs on right of hook (data going out) -->
+    <path d="M 76 120 Q 88 130, 78 142" stroke="#F97316" stroke-width="2" stroke-linecap="round" fill="none" opacity="0.5" class="dot1"/>
+    <path d="M 82 116 Q 98 130, 84 148" stroke="#F97316" stroke-width="1.5" stroke-linecap="round" fill="none" opacity="0.3" class="dot2"/>
+  </g>
+
+  <!-- === WORDMARK === -->
+  <g transform="translate(230, 78)">
+    <!-- "TEST" in lighter weight -->
+    <text font-family="'SF Mono', 'Fira Code', 'JetBrains Mono', 'Cascadia Code', Consolas, monospace"
+          font-size="52" font-weight="400" fill="#8b949e" letter-spacing="3">
+      TEST
+    </text>
+    <!-- "HOOKS" in bold -->
+    <text x="152" font-family="'SF Mono', 'Fira Code', 'JetBrains Mono', 'Cascadia Code', Consolas, monospace"
+          font-size="52" font-weight="700" fill="#e6edf3" letter-spacing="3">
+      HOOKS
+    </text>
+  </g>
+
+  <!-- Tagline -->
+  <text x="234" y="152"
+        font-family="'Inter', 'SF Pro', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif"
+        font-size="15" fill="#8b949e" letter-spacing="0.5">
+    Capture, inspect, transform, and forward webhooks in real time
+  </text>
+
+  <!-- Feature pills -->
+  <g transform="translate(230, 174)">
+    <!-- Pill: Go -->
+    <rect x="0" y="0" width="50" height="24" rx="12" fill="#00ADD8" fill-opacity="0.12" stroke="#00ADD8" stroke-opacity="0.3" stroke-width="1"/>
+    <text x="25" y="16" text-anchor="middle"
+          font-family="'Inter', -apple-system, sans-serif" font-size="11" font-weight="600" fill="#00ADD8">Go</text>
+
+    <!-- Pill: Svelte -->
+    <rect x="62" y="0" width="66" height="24" rx="12" fill="#FF3E00" fill-opacity="0.12" stroke="#FF3E00" stroke-opacity="0.3" stroke-width="1"/>
+    <text x="95" y="16" text-anchor="middle"
+          font-family="'Inter', -apple-system, sans-serif" font-size="11" font-weight="600" fill="#FF3E00">Svelte 5</text>
+
+    <!-- Pill: WebSocket -->
+    <rect x="140" y="0" width="86" height="24" rx="12" fill="#8B5CF6" fill-opacity="0.12" stroke="#8B5CF6" stroke-opacity="0.3" stroke-width="1"/>
+    <text x="183" y="16" text-anchor="middle"
+          font-family="'Inter', -apple-system, sans-serif" font-size="11" font-weight="600" fill="#8B5CF6">WebSocket</text>
+
+    <!-- Pill: WASM -->
+    <rect x="238" y="0" width="64" height="24" rx="12" fill="#F97316" fill-opacity="0.12" stroke="#F97316" stroke-opacity="0.3" stroke-width="1"/>
+    <text x="270" y="16" text-anchor="middle"
+          font-family="'Inter', -apple-system, sans-serif" font-size="11" font-weight="600" fill="#F97316">WASM</text>
+
+    <!-- Pill: Postgres -->
+    <rect x="314" y="0" width="82" height="24" rx="12" fill="#336791" fill-opacity="0.12" stroke="#336791" stroke-opacity="0.3" stroke-width="1"/>
+    <text x="355" y="16" text-anchor="middle"
+          font-family="'Inter', -apple-system, sans-serif" font-size="11" font-weight="600" fill="#336791">Postgres</text>
+  </g>
+
+  <!-- Architecture mini-diagram -->
+  <g transform="translate(232, 218)">
+    <text font-family="'SF Mono', 'Fira Code', Consolas, monospace" font-size="12" fill="#484f58">
+      <tspan>webhook</tspan>
+      <tspan dx="4" fill="#6e7681">──►</tspan>
+      <tspan dx="4" fill="#00ADD8">/h/:slug</tspan>
+      <tspan dx="4" fill="#6e7681">──►</tspan>
+      <tspan dx="4" fill="#8B5CF6">WS</tspan>
+      <tspan dx="4" fill="#6e7681">──►</tspan>
+      <tspan dx="4" fill="#e6edf3">browser</tspan>
+      <tspan dx="4" fill="#6e7681">──►</tspan>
+      <tspan dx="4" fill="#F97316">localhost</tspan>
+    </text>
+  </g>
+</svg>

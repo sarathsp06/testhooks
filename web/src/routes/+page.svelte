@@ -223,21 +223,23 @@
 		<div class="max-w-[1200px] mx-auto px-6 relative z-10">
 			<div class="flex flex-col items-center text-center gap-8">
 				<!-- Badge -->
-				<div class="inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm bg-purple-50 dark:bg-purple-500/10 border border-purple-200/60 dark:border-purple-500/20">
-					<Unplug class="w-4 h-4 text-[var(--purple)]" />
-					<span class="text-[var(--purple)] font-medium">ngrok Alternative &middot; Self-hostable</span>
+				<div class="inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm bg-blue-50 dark:bg-blue-500/10 border border-blue-200/60 dark:border-blue-500/20">
+					<Zap class="w-4 h-4 text-[var(--accent)]" />
+					<span class="text-[var(--accent)] font-medium">Self-hostable Webhook Inspector</span>
 				</div>
 
 				<!-- Heading -->
 				<h1 class="text-4xl md:text-5xl lg:text-6xl font-bold leading-tight font-fira">
-					Webhooks to<br />
-					<span class="bg-gradient-to-r from-[var(--accent)] to-purple-500 bg-clip-text text-transparent">Localhost</span> — No Tunnel
+					Capture, Inspect,<br />
+					<span class="bg-gradient-to-r from-[var(--accent)] to-purple-500 bg-clip-text text-transparent">Transform & Forward</span>
 				</h1>
 
 				<!-- Subtitle -->
 				<p class="text-lg md:text-xl leading-relaxed max-w-2xl text-[var(--text-muted)]">
-					Point any webhook at Testhooks and it lands on <code class="text-[var(--purple)] bg-purple-500/5 px-1.5 py-0.5 rounded text-base">localhost</code> via your browser.
-					No CLI, no daemon, no port forwarding. Also captures, inspects, transforms &amp; forwards — a webhook.site replacement you own.
+					A lightweight webhook.site replacement you own. Get a URL, see every request live,
+					run transforms in WASM, and forward anywhere — including
+					<code class="text-[var(--purple)] bg-purple-500/5 px-1.5 py-0.5 rounded text-base">localhost</code>.
+					Browser mode replaces ngrok with zero setup.
 				</p>
 
 				<!-- CTA buttons -->
@@ -962,10 +964,10 @@
 	<section class="py-20 bg-gradient-to-b from-[var(--bg-card)] to-blue-50/30 dark:to-blue-950/10">
 		<div class="max-w-3xl mx-auto px-6 text-center">
 			<h2 class="text-3xl md:text-4xl font-bold font-fira mb-6">
-				Ready to <span class="bg-gradient-to-r from-[var(--accent)] to-purple-500 bg-clip-text text-transparent">Ditch Your Tunnel</span>?
+				Ready to <span class="bg-gradient-to-r from-[var(--accent)] to-purple-500 bg-clip-text text-transparent">Own Your Webhooks</span>?
 			</h2>
 			<p class="text-lg mb-8 text-[var(--text-muted)]">
-				Open source, self-hostable, no sign-up required. Webhooks to localhost in one browser tab.
+				Open source, self-hostable, no sign-up required. One binary, one database — and browser mode reaches localhost too.
 			</p>
 			<div class="flex flex-col sm:flex-row items-center justify-center gap-4">
 				<button
