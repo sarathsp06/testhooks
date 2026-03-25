@@ -208,45 +208,94 @@
 		}
 	];
 
-	const techStack = ['Go', 'Svelte 5', 'PostgreSQL', 'WebSockets', 'QuickJS WASM'];
+	const techStack = [
+		{ name: 'Go', color: '#00ADD8' },
+		{ name: 'Svelte 5', color: '#FF3E00' },
+		{ name: 'WebSocket', color: '#8B5CF6' },
+		{ name: 'WASM', color: '#F97316' },
+		{ name: 'Postgres', color: '#336791' }
+	];
 </script>
 
 <div class="min-h-screen">
 	<!-- ===== HERO SECTION ===== -->
 	<section class="relative min-h-[85vh] flex items-center justify-center overflow-hidden">
-		<!-- Gradient background -->
-		<div class="absolute inset-0 bg-gradient-to-br from-blue-50/60 via-[var(--bg)] to-purple-50/40 dark:from-blue-950/20 dark:via-[var(--bg)] dark:to-purple-950/15"></div>
-		<!-- Floating orbs -->
-		<div class="absolute top-1/4 left-1/4 w-96 h-96 rounded-full blur-[80px] bg-blue-200/40 dark:bg-blue-800/15 animate-pulse-slow"></div>
-		<div class="absolute bottom-1/4 right-1/4 w-64 h-64 rounded-full blur-[60px] bg-purple-200/30 dark:bg-purple-800/10 animate-pulse-slow" style="animation-delay: 1.5s;"></div>
+		<!-- Dark gradient background matching logo aesthetic -->
+		<div class="absolute inset-0 bg-gradient-to-br from-[#0d1117] via-[#0d1117] to-[#161b22]"></div>
+		<!-- Subtle glow behind hero -->
+		<div class="absolute top-1/3 left-1/2 -translate-x-1/2 w-[500px] h-[500px] rounded-full blur-[120px] bg-[#00ADD8]/8"></div>
 
 		<div class="max-w-[1200px] mx-auto px-6 relative z-10">
 			<div class="flex flex-col items-center text-center gap-8">
 				<!-- Badge -->
-				<div class="inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm bg-blue-50 dark:bg-blue-500/10 border border-blue-200/60 dark:border-blue-500/20">
-					<Zap class="w-4 h-4 text-[var(--accent)]" />
-					<span class="text-[var(--accent)] font-medium">Self-hostable Webhook Inspector</span>
+				<div class="inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm bg-[#00ADD8]/10 border border-[#00ADD8]/20">
+					<Zap class="w-4 h-4 text-[#00ADD8]" />
+					<span class="text-[#00ADD8] font-medium">Self-hostable Webhook Inspector</span>
 				</div>
 
-				<!-- Heading -->
-				<h1 class="text-4xl md:text-5xl lg:text-6xl font-bold leading-tight font-fira">
-					Capture, Inspect,<br />
-					<span class="bg-gradient-to-r from-[var(--accent)] to-purple-500 bg-clip-text text-transparent">Transform & Forward</span>
+				<!-- Hook Logomark -->
+				<div class="relative">
+					<!-- Tunnel glow -->
+					<div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-32 h-32 rounded-full bg-[#00ADD8]/10 blur-2xl"></div>
+					<svg class="w-28 h-28 relative" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+						<defs>
+							<linearGradient id="heroHookGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+								<stop offset="0%" stop-color="#00ADD8"/>
+								<stop offset="100%" stop-color="#0086A8"/>
+							</linearGradient>
+							<style>
+								@keyframes heroFlowDot1 { 0%,100% { opacity: 0.3; } 50% { opacity: 1; } }
+								@keyframes heroFlowDot2 { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+								@keyframes heroFlowDot3 { 0%,100% { opacity: 0.5; } 33% { opacity: 1; } 66% { opacity: 0.3; } }
+								.hero-dot1 { animation: heroFlowDot1 2s ease-in-out infinite; }
+								.hero-dot2 { animation: heroFlowDot2 2s ease-in-out infinite; }
+								.hero-dot3 { animation: heroFlowDot3 2s ease-in-out infinite; }
+							</style>
+						</defs>
+						<!-- The Hook -->
+						<path d="M 8 38
+							 L 48 38
+							 C 80 38, 105 50, 105 78
+							 C 105 108, 82 120, 60 120
+							 C 40 120, 26 108, 26 92
+							 C 26 78, 36 70, 48 70
+							 C 58 70, 64 78, 64 86
+							 C 64 92, 60 96, 54 96"
+							stroke="url(#heroHookGrad)" stroke-width="7" stroke-linecap="round" fill="none"/>
+						<!-- Arrow tip -->
+						<path d="M 58 88 L 54 96 L 48 90" stroke="url(#heroHookGrad)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+						<!-- Signal dots -->
+						<circle cx="-18" cy="38" r="3.5" fill="#F97316" class="hero-dot1"/>
+						<circle cx="-34" cy="38" r="2.8" fill="#F97316" class="hero-dot2" opacity="0.6"/>
+						<circle cx="-48" cy="38" r="2"   fill="#F97316" class="hero-dot3" opacity="0.3"/>
+						<!-- Tunnel entrance -->
+						<line x1="2" y1="30" x2="2" y2="46" stroke="#00ADD8" stroke-width="2.5" stroke-linecap="round" opacity="0.5"/>
+						<!-- Broadcast arcs -->
+						<path d="M 76 120 Q 88 130, 78 142" stroke="#F97316" stroke-width="2" stroke-linecap="round" fill="none" opacity="0.5" class="hero-dot1"/>
+						<path d="M 82 116 Q 98 130, 84 148" stroke="#F97316" stroke-width="1.5" stroke-linecap="round" fill="none" opacity="0.3" class="hero-dot2"/>
+					</svg>
+				</div>
+
+				<!-- Wordmark — "TEST" muted + "HOOKS" bold, matching logo -->
+				<h1 class="font-fira tracking-wider">
+					<span class="text-4xl md:text-5xl lg:text-6xl font-normal text-[#8b949e]">TEST</span>
+					<span class="text-4xl md:text-5xl lg:text-6xl font-bold text-[#e6edf3]">HOOKS</span>
 				</h1>
 
-				<!-- Subtitle -->
-				<p class="text-lg md:text-xl leading-relaxed max-w-2xl text-[var(--text-muted)]">
-					A lightweight webhook.site replacement you own. Get a URL, see every request live,
-					run transforms in WASM, and forward anywhere — including
-					<code class="text-[var(--purple)] bg-purple-500/5 px-1.5 py-0.5 rounded text-base">localhost</code>.
-					Browser mode replaces ngrok with zero setup.
+				<!-- Tagline — matching logo exactly -->
+				<p class="text-base md:text-lg leading-relaxed max-w-2xl text-[#8b949e]">
+					Capture, inspect, transform, and forward webhooks in real time.
+					<br />
+					<span class="text-sm text-[#8b949e]/70">
+						A lightweight <a href="https://webhook.site" target="_blank" class="underline underline-offset-2 hover:text-[#00ADD8] transition-colors">webhook.site</a> replacement you own. Browser mode replaces ngrok with zero setup.
+					</span>
 				</p>
 
 				<!-- CTA buttons -->
 				<div class="flex flex-col sm:flex-row gap-4">
 					<button
 						onclick={scrollToCreate}
-						class="inline-flex items-center justify-center gap-2 px-7 py-3 text-base font-medium rounded-xl bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)] transition-all shadow-lg shadow-blue-500/20"
+						class="inline-flex items-center justify-center gap-2 px-7 py-3 text-base font-medium rounded-xl bg-[#00ADD8] text-white hover:bg-[#0086A8] transition-all shadow-lg shadow-[#00ADD8]/20"
 					>
 						<Webhook class="w-5 h-5" />
 						Create Endpoint
@@ -254,23 +303,38 @@
 					<a
 						href="https://github.com/sarathsp06/testhooks"
 						target="_blank"
-						class="inline-flex items-center justify-center gap-2 px-7 py-3 text-base font-medium rounded-xl border border-[var(--border)] text-[var(--text)] hover:bg-[var(--bg-hover)] transition-all"
+						class="inline-flex items-center justify-center gap-2 px-7 py-3 text-base font-medium rounded-xl border border-[#30363d] text-[#e6edf3] hover:bg-[#161b22] transition-all"
 					>
 						<GitBranch class="w-5 h-5" />
 						View on GitHub
 					</a>
 				</div>
 
-				<!-- Tech stack chips -->
-				<div class="pt-6 border-t border-[var(--border)] w-full max-w-md">
-					<p class="text-xs uppercase tracking-widest mb-3 text-[var(--text-muted)]">Built with</p>
-					<div class="flex flex-wrap justify-center gap-2">
-						{#each techStack as tech}
-							<span class="px-3 py-1 text-xs font-fira rounded-md bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-muted)]">
-								{tech}
-							</span>
-						{/each}
+				<!-- Architecture mini-diagram — matching logo -->
+				<div class="pt-6 border-t border-[#30363d] w-full max-w-2xl">
+					<div class="flex items-center justify-center gap-1 font-fira text-xs md:text-sm flex-wrap">
+						<span class="text-[#484f58]">webhook</span>
+						<span class="text-[#6e7681]">--&gt;</span>
+						<span class="text-[#00ADD8]">/h/:slug</span>
+						<span class="text-[#6e7681]">--&gt;</span>
+						<span class="text-[#8B5CF6]">WS</span>
+						<span class="text-[#6e7681]">--&gt;</span>
+						<span class="text-[#e6edf3]">browser</span>
+						<span class="text-[#6e7681]">--&gt;</span>
+						<span class="text-[#F97316]">localhost</span>
 					</div>
+				</div>
+
+				<!-- Tech stack pills — matching logo colors -->
+				<div class="flex flex-wrap justify-center gap-2">
+					{#each techStack as tech}
+						<span
+							class="px-3 py-1.5 text-xs font-semibold rounded-full border"
+							style="color: {tech.color}; background-color: {tech.color}12; border-color: {tech.color}4D;"
+						>
+							{tech.name}
+						</span>
+					{/each}
 				</div>
 			</div>
 		</div>
@@ -997,7 +1061,7 @@
 			<div class="flex flex-col md:flex-row items-center justify-between gap-4">
 				<div class="flex items-center gap-2">
 					<Webhook class="w-4 h-4 text-[var(--text-muted)]" />
-					<span class="font-fira font-semibold text-sm text-[var(--text)]">Testhooks</span>
+					<span class="font-fira text-sm"><span class="font-normal text-[var(--text-muted)]">TEST</span><span class="font-bold text-[var(--text)]">HOOKS</span></span>
 				</div>
 				<p class="text-xs text-[var(--text-muted)]">Self-hostable webhook inspector. Open source.</p>
 				<a

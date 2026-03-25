@@ -77,26 +77,17 @@
 ### Docker Compose (easiest)
 
 ```bash
-git clone https://github.com/yourusername/testhooks.git
+git clone https://github.com/sarathsp06/testhooks.git
 cd testhooks
 docker compose up --build
 ```
 
 Open **http://localhost:8080** and start sending webhooks.
 
-### Docker image + existing Postgres
-
-```bash
-docker build -t testhooks .
-docker run -p 8080:8080 \
-  -e DATABASE_URL="postgres://user:pass@your-db-host:5432/testhooks?sslmode=disable" \
-  testhooks
-```
-
 ### Pre-built binary
 
 ```bash
-make build
+make build-all
 DATABASE_URL="postgres://user:pass@localhost:5432/testhooks?sslmode=disable" ./testhooks
 ```
 
