@@ -62,14 +62,21 @@ func ClientIP(remoteAddr string, xForwardedFor string, xRealIP string, trustedPr
 }
 
 // parseIP extracts the IP portion from a host:port string.
+// M-08: Normalizes IPv6 addresses via net.ParseIP().String() for consistent representation.
 func parseIP(remoteAddr string) string {
 	ip, _, err := net.SplitHostPort(remoteAddr)
 	if err != nil {
 		// May already be a bare IP.
-		if net.ParseIP(remoteAddr) != nil {
-			return remoteAddr
+		parsed := net.ParseIP(remoteAddr)
+		if parsed != nil {
+			return parsed.String() // M-08: normalized form
 		}
 		return ""
+	}
+	// M-08: Normalize the extracted IP (handles IPv6 shorthand, zone IDs, etc.)
+	parsed := net.ParseIP(ip)
+	if parsed != nil {
+		return parsed.String()
 	}
 	return ip
 }

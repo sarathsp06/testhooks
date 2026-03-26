@@ -7,6 +7,7 @@
  * - Browser → Server: response_result (for browser-mode custom responses)
  */
 import type { WSMessage } from './types';
+import { getAuthToken } from './api';
 
 export type WSStatus = 'connecting' | 'connected' | 'disconnected';
 export type MessageHandler = (msg: WSMessage) => void;
@@ -42,7 +43,12 @@ export function createWSClient(slug: string): WSClient {
 		const url = `${protocol}//${window.location.host}/ws/${slug}`;
 
 		setStatus('connecting');
-		ws = new WebSocket(url);
+
+		// Auth: send token via Sec-WebSocket-Protocol subprotocol.
+		// The server expects "auth.<token>" as a subprotocol.
+		const token = getAuthToken();
+		const protocols = token ? [`auth.${token}`] : undefined;
+		ws = new WebSocket(url, protocols);
 
 		ws.onopen = () => {
 			setStatus('connected');

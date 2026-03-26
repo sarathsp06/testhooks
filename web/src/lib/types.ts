@@ -5,6 +5,7 @@ export interface Endpoint {
 	slug: string;
 	name: string;
 	mode: 'server' | 'browser';
+	client_id?: string;
 	created_at: string;
 	config: EndpointConfig;
 }
@@ -15,6 +16,7 @@ export interface EndpointConfig {
 	wasm_script?: string;
 	transform_language?: 'javascript' | 'lua' | 'jsonnet';
 	custom_response?: CustomResponse;
+	persist_requests?: boolean;
 	[key: string]: unknown;
 }
 

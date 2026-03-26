@@ -14,6 +14,8 @@ func TestLoad_Defaults(t *testing.T) {
 		t.Setenv(e, "")
 		os.Unsetenv(e)
 	}
+	// H-01: Set a non-default DATABASE_URL to avoid log.Fatal on default credentials.
+	t.Setenv("DATABASE_URL", "postgres://user:pass@localhost:5432/testdb?sslmode=disable")
 
 	cfg, err := Load()
 	if err != nil {
@@ -52,6 +54,7 @@ func TestLoad_Defaults(t *testing.T) {
 func TestLoad_PortOverridesListen(t *testing.T) {
 	t.Setenv("PORT", "3000")
 	t.Setenv("LISTEN", ":9090")
+	t.Setenv("DATABASE_URL", "postgres://user:pass@localhost:5432/testdb?sslmode=disable")
 
 	cfg, err := Load()
 	if err != nil {
@@ -100,6 +103,7 @@ func TestLoad_PortZeroDoesNotOverride(t *testing.T) {
 	// PORT=0 should not override LISTEN.
 	t.Setenv("PORT", "0")
 	t.Setenv("LISTEN", ":9090")
+	t.Setenv("DATABASE_URL", "postgres://user:pass@localhost:5432/testdb?sslmode=disable")
 
 	cfg, err := Load()
 	if err != nil {

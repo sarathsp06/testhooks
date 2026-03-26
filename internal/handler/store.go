@@ -11,10 +11,10 @@ import (
 // Defined here so handlers can be tested with mock implementations.
 type Store interface {
 	// Endpoint operations
-	CreateEndpoint(ctx context.Context, slug, name, mode string, config json.RawMessage) (*db.Endpoint, error)
+	CreateEndpoint(ctx context.Context, slug, name, mode, clientID string, config json.RawMessage) (*db.Endpoint, error)
 	GetEndpointBySlug(ctx context.Context, slug string) (*db.Endpoint, error)
 	GetEndpointByID(ctx context.Context, id string) (*db.Endpoint, error)
-	ListEndpoints(ctx context.Context) ([]db.Endpoint, error)
+	ListEndpoints(ctx context.Context, clientID string, limit, offset int) ([]db.Endpoint, error)
 	UpdateEndpoint(ctx context.Context, id, name, mode string, config json.RawMessage) (*db.Endpoint, error)
 	DeleteEndpoint(ctx context.Context, id string) error
 

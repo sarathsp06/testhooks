@@ -128,10 +128,15 @@ func TestAPI_ListEndpoints(t *testing.T) {
 		t.Fatalf("status = %d, want 200", w.Code)
 	}
 
-	var endpoints []db.Endpoint
-	json.NewDecoder(w.Body).Decode(&endpoints)
-	if len(endpoints) != 2 {
-		t.Errorf("got %d endpoints, want 2", len(endpoints))
+	// H-03: Response is now paginated: {"endpoints":[...], "limit":50, "offset":0}
+	var resp struct {
+		Endpoints []db.Endpoint `json:"endpoints"`
+		Limit     int           `json:"limit"`
+		Offset    int           `json:"offset"`
+	}
+	json.NewDecoder(w.Body).Decode(&resp)
+	if len(resp.Endpoints) != 2 {
+		t.Errorf("got %d endpoints, want 2", len(resp.Endpoints))
 	}
 }
 
@@ -147,10 +152,21 @@ func TestAPI_ListEndpoints_Empty(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200", w.Code)
 	}
-	// Should return empty array, not null.
-	body := strings.TrimSpace(w.Body.String())
-	if body != "[]" {
-		t.Errorf("body = %q, want '[]'", body)
+	// H-03: Should return paginated response with empty endpoints array.
+	var resp struct {
+		Endpoints []db.Endpoint `json:"endpoints"`
+		Limit     int           `json:"limit"`
+		Offset    int           `json:"offset"`
+	}
+	json.NewDecoder(w.Body).Decode(&resp)
+	if len(resp.Endpoints) != 0 {
+		t.Errorf("got %d endpoints, want 0", len(resp.Endpoints))
+	}
+	if resp.Limit != 50 {
+		t.Errorf("limit = %d, want 50", resp.Limit)
+	}
+	if resp.Offset != 0 {
+		t.Errorf("offset = %d, want 0", resp.Offset)
 	}
 }
 

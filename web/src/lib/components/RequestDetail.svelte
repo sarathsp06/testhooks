@@ -154,18 +154,24 @@
 		URL.revokeObjectURL(url);
 	}
 
+	// M-11: Shell-escape a string for safe embedding in single-quoted cURL arguments.
+	// Replaces single quotes with the standard shell escape sequence: end quote, escaped quote, re-open quote.
+	function shellEscape(s: string): string {
+		return s.replace(/'/g, "'\\''");
+	}
+
 	function generateCurl(): string {
-		let cmd = `curl -X ${request.method}`;
+		let cmd = `curl -X ${shellEscape(request.method)}`;
 		if (request.headers) {
 			for (const [key, values] of Object.entries(request.headers)) {
 				const k = key.toLowerCase();
 				if (k === 'host' || k === 'content-length') continue;
 				const val = Array.isArray(values) ? values[0] : values;
-				cmd += ` \\\n  -H '${key}: ${val}'`;
+				cmd += ` \\\n  -H '${shellEscape(key)}: ${shellEscape(String(val))}'`;
 			}
 		}
 		if (bodyString) {
-			cmd += ` \\\n  -d '${bodyString.replace(/'/g, "'\\''")}'`;
+			cmd += ` \\\n  -d '${shellEscape(bodyString)}'`;
 		}
 		let targetUrl = endpointSlug ? getWebhookURL(endpointSlug) + request.path : request.path;
 		if (request.query && Object.keys(request.query).length > 0) {
@@ -178,7 +184,7 @@
 			}
 			targetUrl += '?' + params.toString();
 		}
-		cmd += ` \\\n  '${targetUrl}'`;
+		cmd += ` \\\n  '${shellEscape(targetUrl)}'`;
 		return cmd;
 	}
 </script>

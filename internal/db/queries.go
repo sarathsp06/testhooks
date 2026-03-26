@@ -17,6 +17,7 @@ type Endpoint struct {
 	Slug      string          `json:"slug"`
 	Name      string          `json:"name"`
 	Mode      string          `json:"mode"`
+	ClientID  string          `json:"client_id,omitempty"`
 	CreatedAt time.Time       `json:"created_at"`
 	Config    json.RawMessage `json:"config"`
 }
@@ -112,17 +113,17 @@ func (r *CapturedRequest) MarshalJSON() ([]byte, error) {
 // --- Endpoint queries ---
 
 // CreateEndpoint inserts a new endpoint.
-func (p *Pool) CreateEndpoint(ctx context.Context, slug, name, mode string, config json.RawMessage) (*Endpoint, error) {
+func (p *Pool) CreateEndpoint(ctx context.Context, slug, name, mode, clientID string, config json.RawMessage) (*Endpoint, error) {
 	if config == nil {
 		config = json.RawMessage(`{}`)
 	}
 	e := &Endpoint{}
 	err := p.QueryRow(ctx,
-		`INSERT INTO endpoints (slug, name, mode, config)
-		 VALUES ($1, $2, $3, $4)
-		 RETURNING id, slug, name, mode, created_at, config`,
-		slug, name, mode, config,
-	).Scan(&e.ID, &e.Slug, &e.Name, &e.Mode, &e.CreatedAt, &e.Config)
+		`INSERT INTO endpoints (slug, name, mode, client_id, config)
+		 VALUES ($1, $2, $3, $4, $5)
+		 RETURNING id, slug, name, mode, COALESCE(client_id, ''), created_at, config`,
+		slug, name, mode, nilIfEmpty(clientID), config,
+	).Scan(&e.ID, &e.Slug, &e.Name, &e.Mode, &e.ClientID, &e.CreatedAt, &e.Config)
 	if err != nil {
 		return nil, err
 	}
@@ -133,9 +134,9 @@ func (p *Pool) CreateEndpoint(ctx context.Context, slug, name, mode string, conf
 func (p *Pool) GetEndpointBySlug(ctx context.Context, slug string) (*Endpoint, error) {
 	e := &Endpoint{}
 	err := p.QueryRow(ctx,
-		`SELECT id, slug, name, mode, created_at, config
+		`SELECT id, slug, name, mode, COALESCE(client_id, ''), created_at, config
 		 FROM endpoints WHERE slug = $1`, slug,
-	).Scan(&e.ID, &e.Slug, &e.Name, &e.Mode, &e.CreatedAt, &e.Config)
+	).Scan(&e.ID, &e.Slug, &e.Name, &e.Mode, &e.ClientID, &e.CreatedAt, &e.Config)
 	if err != nil {
 		return nil, err
 	}
@@ -146,20 +147,40 @@ func (p *Pool) GetEndpointBySlug(ctx context.Context, slug string) (*Endpoint, e
 func (p *Pool) GetEndpointByID(ctx context.Context, id string) (*Endpoint, error) {
 	e := &Endpoint{}
 	err := p.QueryRow(ctx,
-		`SELECT id, slug, name, mode, created_at, config
+		`SELECT id, slug, name, mode, COALESCE(client_id, ''), created_at, config
 		 FROM endpoints WHERE id = $1`, id,
-	).Scan(&e.ID, &e.Slug, &e.Name, &e.Mode, &e.CreatedAt, &e.Config)
+	).Scan(&e.ID, &e.Slug, &e.Name, &e.Mode, &e.ClientID, &e.CreatedAt, &e.Config)
 	if err != nil {
 		return nil, err
 	}
 	return e, nil
 }
 
-// ListEndpoints returns all endpoints, ordered by creation date descending.
-func (p *Pool) ListEndpoints(ctx context.Context) ([]Endpoint, error) {
-	rows, err := p.Query(ctx,
-		`SELECT id, slug, name, mode, created_at, config
-		 FROM endpoints ORDER BY created_at DESC`)
+// ListEndpoints returns endpoints paginated, ordered by creation date descending.
+// H-03: Added LIMIT/OFFSET to prevent unbounded result sets.
+// When clientID is non-empty, only endpoints matching that client_id are returned.
+func (p *Pool) ListEndpoints(ctx context.Context, clientID string, limit, offset int) ([]Endpoint, error) {
+	if limit <= 0 || limit > 200 {
+		limit = 50
+	}
+	if offset < 0 {
+		offset = 0
+	}
+
+	var rows pgx.Rows
+	var err error
+	if clientID != "" {
+		rows, err = p.Query(ctx,
+			`SELECT id, slug, name, mode, COALESCE(client_id, ''), created_at, config
+			 FROM endpoints WHERE client_id = $1
+			 ORDER BY created_at DESC
+			 LIMIT $2 OFFSET $3`, clientID, limit, offset)
+	} else {
+		rows, err = p.Query(ctx,
+			`SELECT id, slug, name, mode, COALESCE(client_id, ''), created_at, config
+			 FROM endpoints ORDER BY created_at DESC
+			 LIMIT $1 OFFSET $2`, limit, offset)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -168,7 +189,7 @@ func (p *Pool) ListEndpoints(ctx context.Context) ([]Endpoint, error) {
 	var endpoints []Endpoint
 	for rows.Next() {
 		var e Endpoint
-		if err := rows.Scan(&e.ID, &e.Slug, &e.Name, &e.Mode, &e.CreatedAt, &e.Config); err != nil {
+		if err := rows.Scan(&e.ID, &e.Slug, &e.Name, &e.Mode, &e.ClientID, &e.CreatedAt, &e.Config); err != nil {
 			return nil, err
 		}
 		endpoints = append(endpoints, e)
@@ -182,9 +203,9 @@ func (p *Pool) UpdateEndpoint(ctx context.Context, id, name, mode string, config
 	err := p.QueryRow(ctx,
 		`UPDATE endpoints SET name = $2, mode = $3, config = $4
 		 WHERE id = $1
-		 RETURNING id, slug, name, mode, created_at, config`,
+		 RETURNING id, slug, name, mode, COALESCE(client_id, ''), created_at, config`,
 		id, name, mode, config,
-	).Scan(&e.ID, &e.Slug, &e.Name, &e.Mode, &e.CreatedAt, &e.Config)
+	).Scan(&e.ID, &e.Slug, &e.Name, &e.Mode, &e.ClientID, &e.CreatedAt, &e.Config)
 	if err != nil {
 		return nil, err
 	}
@@ -303,3 +324,12 @@ func (p *Pool) CountRequests(ctx context.Context, endpointID string) (int, error
 
 // Ensure pgx import is used.
 var _ pgx.Rows = nil
+
+// nilIfEmpty returns nil if s is empty, otherwise returns &s.
+// Used to store empty strings as SQL NULL for optional columns like client_id.
+func nilIfEmpty(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
+}

@@ -21,7 +21,7 @@ import (
 // Returns the server URL (ws://...) and a cleanup function.
 func setupWSTest(t *testing.T, store *mockStore) (serverURL string, h *hub.Hub, cleanup func()) {
 	t.Helper()
-	testHub := hub.New(100)
+	testHub := hub.New(100, 300, 50)
 	logger := zerolog.Nop()
 	wsHandler := NewWS(store, testHub, logger, []string{"*"})
 
@@ -41,7 +41,7 @@ func setupWSTest(t *testing.T, store *mockStore) (serverURL string, h *hub.Hub, 
 func TestWS_MissingSlug(t *testing.T) {
 	store := newMockStore()
 	logger := zerolog.Nop()
-	testHub := hub.New(100)
+	testHub := hub.New(100, 300, 50)
 	wsHandler := NewWS(store, testHub, logger, []string{"*"})
 
 	// Request without slug — the handler checks PathValue("slug") == ""
@@ -60,7 +60,7 @@ func TestWS_MissingSlug(t *testing.T) {
 func TestWS_EndpointNotFound(t *testing.T) {
 	store := newMockStore()
 	logger := zerolog.Nop()
-	testHub := hub.New(100)
+	testHub := hub.New(100, 300, 50)
 	wsHandler := NewWS(store, testHub, logger, []string{"*"})
 
 	// Use a mux so PathValue works.
@@ -194,7 +194,7 @@ func TestWS_ResponseResult_DeliveredToHub(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 
 	// Set up a pending response in the hub (simulating a capture handler waiting).
-	respCh, respCleanup := testHub.WaitForResponse("req-123")
+	respCh, respCleanup := testHub.WaitForResponse("resp-slug", "req-123")
 	defer respCleanup()
 
 	// Send a response_result message from the "browser" (our WS client).
@@ -479,7 +479,7 @@ func TestWS_GetEndpointBySlug_DBError(t *testing.T) {
 	store.getEndpointBySlugErr = fmt.Errorf("db connection lost")
 
 	logger := zerolog.Nop()
-	testHub := hub.New(100)
+	testHub := hub.New(100, 300, 50)
 	wsHandler := NewWS(store, testHub, logger, []string{"*"})
 
 	mux := http.NewServeMux()

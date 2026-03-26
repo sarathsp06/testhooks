@@ -18,6 +18,13 @@ func SecurityHeaders(next http.Handler) http.Handler {
 		// Control referrer information sent with requests.
 		h.Set("Referrer-Policy", "strict-origin-when-cross-origin")
 
+		// HSTS — instruct browsers to always use HTTPS for this domain.
+		// max-age=63072000 = 2 years. includeSubDomains ensures all subdomains are covered.
+		h.Set("Strict-Transport-Security", "max-age=63072000; includeSubDomains")
+
+		// L-02: Permissions-Policy — restrict access to browser features/APIs.
+		h.Set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=()")
+
 		// Content Security Policy — restrictive but allows the SPA to function:
 		// - default-src 'self': only load resources from same origin
 		// - script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval': SvelteKit emits an inline

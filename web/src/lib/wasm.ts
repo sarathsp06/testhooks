@@ -60,6 +60,8 @@ function isJSReady(): boolean {
 
 async function runJS(script: string, request: CapturedRequest): Promise<TransformResult> {
 	const start = performance.now();
+	// M-12: Execution timeout for browser-side WASM (5 seconds).
+	const TIMEOUT_MS = 5000;
 
 	if (!quickJSModule) {
 		return { data: {}, ok: false, error: 'QuickJS WASM not initialized.', duration: 0 };
@@ -67,6 +69,9 @@ async function runJS(script: string, request: CapturedRequest): Promise<Transfor
 
 	const vm = quickJSModule.newContext();
 	try {
+		// M-12: Set interrupt handler to enforce execution timeout.
+		const deadline = Date.now() + TIMEOUT_MS;
+		vm.runtime.setInterruptHandler(() => Date.now() > deadline);
 		const input: TransformInput = {
 			method: request.method,
 			path: request.path,
@@ -221,6 +226,8 @@ function json.encode(val) return _json_encode(val) end
 		});
 
 		// Execute: load helpers + user script + call transform
+		// M-12: Wrap execution with a timeout to prevent runaway Lua scripts.
+		const TIMEOUT_MS = 5000;
 		const code = `
 ${jsonLib}
 
@@ -236,7 +243,13 @@ else
 end
 `;
 
-		const resultStr = await engine.doString(code);
+		// M-12: Timeout for Lua execution.
+		const resultStr = await Promise.race([
+			engine.doString(code),
+			new Promise<never>((_, reject) =>
+				setTimeout(() => reject(new Error('Lua execution timed out (5s limit)')), TIMEOUT_MS)
+			)
+		]);
 
 		try {
 			const parsed = typeof resultStr === 'string' ? JSON.parse(resultStr) : resultStr;
@@ -367,7 +380,14 @@ async function runJsonnet(script: string, request: CapturedRequest): Promise<Tra
 			req: JSON.stringify(input)
 		};
 
-		const resultStr = await jsonnetInstance.evaluate(script, extrStrs);
+		// M-12: Timeout for Jsonnet execution.
+		const TIMEOUT_MS = 5000;
+		const resultStr = await Promise.race([
+			jsonnetInstance.evaluate(script, extrStrs),
+			new Promise<never>((_, reject) =>
+				setTimeout(() => reject(new Error('Jsonnet execution timed out (5s limit)')), TIMEOUT_MS)
+			)
+		]);
 
 		try {
 			const parsed = JSON.parse(resultStr);
@@ -812,6 +832,10 @@ async function runResponseHandlerJS(
 
 	const vm = quickJSModule.newContext();
 	try {
+		// M-12: Set interrupt handler to enforce execution timeout (5s).
+		const TIMEOUT_MS = 5000;
+		const deadline = Date.now() + TIMEOUT_MS;
+		vm.runtime.setInterruptHandler(() => Date.now() > deadline);
 		const code = `
 ${script}
 
@@ -901,7 +925,14 @@ else
 end
 `;
 
-		const resultStr = await engine.doString(code);
+		// M-12: Timeout for Lua handler execution.
+		const TIMEOUT_MS = 5000;
+		const resultStr = await Promise.race([
+			engine.doString(code),
+			new Promise<never>((_, reject) =>
+				setTimeout(() => reject(new Error('Lua handler execution timed out (5s limit)')), TIMEOUT_MS)
+			)
+		]);
 
 		try {
 			const parsed = typeof resultStr === 'string' ? JSON.parse(resultStr) : resultStr;
@@ -936,7 +967,14 @@ async function runResponseHandlerJsonnet(
 			req: JSON.stringify(input)
 		};
 
-		const resultStr = await jsonnetInstance.evaluate(script, extrStrs);
+		// M-12: Timeout for Jsonnet handler execution.
+		const TIMEOUT_MS = 5000;
+		const resultStr = await Promise.race([
+			jsonnetInstance.evaluate(script, extrStrs),
+			new Promise<never>((_, reject) =>
+				setTimeout(() => reject(new Error('Jsonnet handler execution timed out (5s limit)')), TIMEOUT_MS)
+			)
+		]);
 
 		try {
 			const parsed = JSON.parse(resultStr);

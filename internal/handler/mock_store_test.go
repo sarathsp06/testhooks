@@ -45,7 +45,7 @@ func newMockStore() *mockStore {
 	}
 }
 
-func (m *mockStore) CreateEndpoint(_ context.Context, slug, name, mode string, config json.RawMessage) (*db.Endpoint, error) {
+func (m *mockStore) CreateEndpoint(_ context.Context, slug, name, mode, clientID string, config json.RawMessage) (*db.Endpoint, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.createEndpointErr != nil {
@@ -60,6 +60,7 @@ func (m *mockStore) CreateEndpoint(_ context.Context, slug, name, mode string, c
 		Slug:      slug,
 		Name:      name,
 		Mode:      mode,
+		ClientID:  clientID,
 		CreatedAt: time.Now(),
 		Config:    config,
 	}
@@ -94,7 +95,7 @@ func (m *mockStore) GetEndpointByID(_ context.Context, id string) (*db.Endpoint,
 	return ep, nil
 }
 
-func (m *mockStore) ListEndpoints(_ context.Context) ([]db.Endpoint, error) {
+func (m *mockStore) ListEndpoints(_ context.Context, clientID string, limit, offset int) ([]db.Endpoint, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.listEndpointsErr != nil {
@@ -102,7 +103,19 @@ func (m *mockStore) ListEndpoints(_ context.Context) ([]db.Endpoint, error) {
 	}
 	var result []db.Endpoint
 	for _, ep := range m.endpoints {
+		// Filter by client_id when provided.
+		if clientID != "" && ep.ClientID != clientID {
+			continue
+		}
 		result = append(result, *ep)
+	}
+	// Apply offset/limit.
+	if offset >= len(result) {
+		return nil, nil
+	}
+	result = result[offset:]
+	if limit > 0 && limit < len(result) {
+		result = result[:limit]
 	}
 	return result, nil
 }

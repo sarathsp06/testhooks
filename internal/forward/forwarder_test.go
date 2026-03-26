@@ -240,19 +240,20 @@ func TestBackoff(t *testing.T) {
 		MaxDelay:  5 * time.Second,
 	})
 
+	// Backoff now includes ±25% jitter, so check within range.
 	d1 := fwd.backoff(1)
-	if d1 != 100*time.Millisecond {
-		t.Errorf("backoff(1) = %v, want 100ms", d1)
+	if d1 < 75*time.Millisecond || d1 > 125*time.Millisecond {
+		t.Errorf("backoff(1) = %v, want ~100ms (75ms-125ms with jitter)", d1)
 	}
 
 	d2 := fwd.backoff(2)
-	if d2 != 200*time.Millisecond {
-		t.Errorf("backoff(2) = %v, want 200ms", d2)
+	if d2 < 150*time.Millisecond || d2 > 250*time.Millisecond {
+		t.Errorf("backoff(2) = %v, want ~200ms (150ms-250ms with jitter)", d2)
 	}
 
 	d3 := fwd.backoff(3)
-	if d3 != 400*time.Millisecond {
-		t.Errorf("backoff(3) = %v, want 400ms", d3)
+	if d3 < 300*time.Millisecond || d3 > 500*time.Millisecond {
+		t.Errorf("backoff(3) = %v, want ~400ms (300ms-500ms with jitter)", d3)
 	}
 }
 

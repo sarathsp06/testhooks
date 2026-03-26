@@ -51,6 +51,11 @@ func (a *API) CreateEndpoint(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "mode must be 'server' or 'browser'"})
 		return
 	}
+	// L-08: Validate endpoint name length.
+	if len(body.Name) > 255 {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "name must be at most 255 characters"})
+		return
+	}
 
 	// Normalise nil/empty config to NULL.
 	var cfg json.RawMessage
@@ -58,8 +63,11 @@ func (a *API) CreateEndpoint(w http.ResponseWriter, r *http.Request) {
 		cfg = body.Config
 	}
 
+	// Extract client identity for UX convenience (not access control).
+	clientID := r.Header.Get("X-Client-ID")
+
 	slug := GenerateSlug()
-	ep, err := a.db.CreateEndpoint(r.Context(), slug, body.Name, body.Mode, cfg)
+	ep, err := a.db.CreateEndpoint(r.Context(), slug, body.Name, body.Mode, clientID, cfg)
 	if err != nil {
 		a.log.Error().Err(err).Msg("failed to create endpoint")
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
@@ -69,8 +77,25 @@ func (a *API) CreateEndpoint(w http.ResponseWriter, r *http.Request) {
 }
 
 // ListEndpoints handles GET /api/endpoints.
+// H-03: Paginated to prevent unbounded result sets.
+// Filters by X-Client-ID header when present for UX convenience.
 func (a *API) ListEndpoints(w http.ResponseWriter, r *http.Request) {
-	endpoints, err := a.db.ListEndpoints(r.Context())
+	limit := 50
+	offset := 0
+	if v := r.URL.Query().Get("limit"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 && n <= 200 {
+			limit = n
+		}
+	}
+	if v := r.URL.Query().Get("offset"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
+			offset = n
+		}
+	}
+
+	clientID := r.Header.Get("X-Client-ID")
+
+	endpoints, err := a.db.ListEndpoints(r.Context(), clientID, limit, offset)
 	if err != nil {
 		a.log.Error().Err(err).Msg("failed to list endpoints")
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
@@ -79,13 +104,28 @@ func (a *API) ListEndpoints(w http.ResponseWriter, r *http.Request) {
 	if endpoints == nil {
 		endpoints = []db.Endpoint{}
 	}
-	writeJSON(w, http.StatusOK, endpoints)
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"endpoints": endpoints,
+		"limit":     limit,
+		"offset":    offset,
+	})
 }
 
 // GetEndpoint handles GET /api/endpoints/{id}.
 func (a *API) GetEndpoint(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	ep, err := a.db.GetEndpointByID(r.Context(), id)
+	if err != nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "endpoint not found"})
+		return
+	}
+	writeJSON(w, http.StatusOK, ep)
+}
+
+// GetEndpointBySlug handles GET /api/endpoints/by-slug/{slug}.
+func (a *API) GetEndpointBySlug(w http.ResponseWriter, r *http.Request) {
+	slug := r.PathValue("slug")
+	ep, err := a.db.GetEndpointBySlug(r.Context(), slug)
 	if err != nil {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "endpoint not found"})
 		return
@@ -121,6 +161,11 @@ func (a *API) UpdateEndpoint(w http.ResponseWriter, r *http.Request) {
 	config := existing.Config
 
 	if body.Name != nil {
+		// L-08: Validate endpoint name length.
+		if len(*body.Name) > 255 {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "name must be at most 255 characters"})
+			return
+		}
 		name = *body.Name
 	}
 	if body.Mode != nil {

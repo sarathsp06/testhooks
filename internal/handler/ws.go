@@ -69,7 +69,13 @@ func (ws *WS) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ws.log.Info().Str("slug", slug).Msg("client connected")
 
 	// Subscribe to hub for this slug.
+	// M-09: Subscribe returns nil, nil when subscriber limit is reached.
 	ch, cleanup := ws.hub.Subscribe(slug, 100)
+	if ch == nil {
+		ws.log.Warn().Str("slug", slug).Msg("subscriber limit reached for slug")
+		conn.Close(websocket.StatusTryAgainLater, "too many connections for this endpoint")
+		return
+	}
 	defer cleanup()
 
 	// Use a dedicated context that we cancel when the connection is done.
@@ -100,7 +106,7 @@ func (ws *WS) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					ws.log.Warn().Str("slug", slug).Msg("response_result missing request_id")
 					continue
 				}
-				delivered := ws.hub.DeliverResponse(result.RequestID, result)
+				delivered := ws.hub.DeliverResponse(slug, result.RequestID, result)
 				if !delivered {
 					ws.log.Debug().Str("slug", slug).Str("request_id", result.RequestID).Msg("response_result: no waiting handler (timed out?)")
 				} else {

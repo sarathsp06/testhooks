@@ -30,6 +30,12 @@ type EndpointConfig struct {
 	// In the new pipeline, the handler receives the post-transform request plus an
 	// optional forward_response object (when sync forwarding is configured).
 	CustomResponse *CustomResponseConfig `json:"custom_response,omitempty"`
+
+	// PersistRequests enables server-side storage of captured requests for browser-mode
+	// endpoints. When true and mode=browser, the server writes requests to Postgres
+	// in addition to relaying them over WebSocket. Processing (transforms, forwarding)
+	// still happens in the browser only. Has no effect in server mode (always persisted).
+	PersistRequests bool `json:"persist_requests,omitempty"`
 }
 
 // CustomResponseConfig allows users to define a programmable response handler.

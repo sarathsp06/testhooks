@@ -179,32 +179,38 @@
 		{
 			icon: Globe,
 			title: 'Localhost Friendly',
-			description: 'Browser mode forwards via fetch() — reach localhost, Docker, anything your machine can see. No CLI, no daemon.'
+			description: 'Browser mode forwards via fetch() — reach localhost, Docker, anything your machine can see. No CLI, no daemon.',
+			color: '#16a34a'
 		},
 		{
 			icon: Shield,
 			title: 'Privacy-first Mode',
-			description: 'Browser mode: zero server storage. Payloads never touch disk. GDPR-friendly, ideal for sensitive data.'
+			description: 'Browser mode: zero server storage. Payloads never touch disk. GDPR-friendly, ideal for sensitive data.',
+			color: '#8B5CF6'
 		},
 		{
 			icon: Zap,
 			title: 'Real-time Streaming',
-			description: 'WebSocket-powered live view. See every request the instant it arrives — headers, body, timing.'
+			description: 'WebSocket-powered live view. See every request the instant it arrives — headers, body, timing.',
+			color: '#00ADD8'
 		},
 		{
 			icon: Code2,
 			title: 'Script Transforms',
-			description: 'JavaScript, Lua, or Jsonnet scripts transform payloads before forwarding. Runs in WASM — sandboxed and fast.'
+			description: 'JavaScript, Lua, or Jsonnet scripts transform payloads before forwarding. Runs in WASM — sandboxed and fast.',
+			color: '#F97316'
 		},
 		{
 			icon: Send,
 			title: 'Smart Forwarding',
-			description: 'Forward to any URL with sync or async mode. Sync mode captures the response for your handler scripts.'
+			description: 'Forward to any URL with sync or async mode. Sync mode captures the response for your handler scripts.',
+			color: '#3b82f6'
 		},
 		{
 			icon: Eye,
 			title: 'Full Inspection',
-			description: 'Headers, query params, body with JSON/XML syntax highlighting. Copy as cURL, replay, export as JSON/CSV.'
+			description: 'Headers, query params, body with JSON/XML syntax highlighting. Copy as cURL, replay, export as JSON/CSV.',
+			color: '#336791'
 		}
 	];
 
@@ -219,25 +225,23 @@
 
 <div class="min-h-screen">
 	<!-- ===== HERO SECTION ===== -->
-	<section class="relative min-h-[85vh] flex items-center justify-center overflow-hidden">
-		<!-- Dark gradient background matching logo aesthetic -->
-		<div class="absolute inset-0 bg-gradient-to-br from-[#0d1117] via-[#0d1117] to-[#161b22]"></div>
-		<!-- Subtle glow behind hero -->
-		<div class="absolute top-1/3 left-1/2 -translate-x-1/2 w-[500px] h-[500px] rounded-full blur-[120px] bg-[#00ADD8]/8"></div>
+	<section class="relative min-h-[85vh] flex items-center justify-center overflow-hidden bg-[var(--bg)]">
+		<!-- Radial glow -->
+		<div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full blur-[140px] bg-[#00ADD8]/[0.07] dark:bg-[#00ADD8]/[0.05] pointer-events-none"></div>
+		<div class="absolute bottom-0 right-1/4 w-[400px] h-[400px] rounded-full blur-[100px] bg-[var(--purple)]/[0.04] pointer-events-none"></div>
 
 		<div class="max-w-[1200px] mx-auto px-6 relative z-10">
-			<div class="flex flex-col items-center text-center gap-8">
+			<div class="flex flex-col items-center text-center gap-6">
 				<!-- Badge -->
-				<div class="inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm bg-[#00ADD8]/10 border border-[#00ADD8]/20">
+				<div class="inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm bg-[#00ADD8]/[0.08] dark:bg-[#00ADD8]/[0.1] border border-[#00ADD8]/20">
 					<Zap class="w-4 h-4 text-[#00ADD8]" />
 					<span class="text-[#00ADD8] font-medium">Self-hostable Webhook Inspector</span>
 				</div>
 
-				<!-- Hook Logomark -->
-				<div class="relative">
-					<!-- Tunnel glow -->
-					<div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-32 h-32 rounded-full bg-[#00ADD8]/10 blur-2xl"></div>
-					<svg class="w-28 h-28 relative" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+				<!-- Hook logomark — fixed viewBox to include signal dots + broadcast arcs -->
+				<div class="relative my-2">
+					<div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-40 h-40 rounded-full bg-[#00ADD8]/[0.06] blur-3xl pointer-events-none"></div>
+					<svg class="w-32 h-32 md:w-36 md:h-36 relative" viewBox="-55 20 170 140" fill="none" xmlns="http://www.w3.org/2000/svg">
 						<defs>
 							<linearGradient id="heroHookGrad" x1="0%" y1="0%" x2="100%" y2="100%">
 								<stop offset="0%" stop-color="#00ADD8"/>
@@ -253,18 +257,11 @@
 							</style>
 						</defs>
 						<!-- The Hook -->
-						<path d="M 8 38
-							 L 48 38
-							 C 80 38, 105 50, 105 78
-							 C 105 108, 82 120, 60 120
-							 C 40 120, 26 108, 26 92
-							 C 26 78, 36 70, 48 70
-							 C 58 70, 64 78, 64 86
-							 C 64 92, 60 96, 54 96"
+						<path d="M 8 38 L 48 38 C 80 38, 105 50, 105 78 C 105 108, 82 120, 60 120 C 40 120, 26 108, 26 92 C 26 78, 36 70, 48 70 C 58 70, 64 78, 64 86 C 64 92, 60 96, 54 96"
 							stroke="url(#heroHookGrad)" stroke-width="7" stroke-linecap="round" fill="none"/>
 						<!-- Arrow tip -->
 						<path d="M 58 88 L 54 96 L 48 90" stroke="url(#heroHookGrad)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-						<!-- Signal dots -->
+						<!-- Signal dots flowing into tunnel -->
 						<circle cx="-18" cy="38" r="3.5" fill="#F97316" class="hero-dot1"/>
 						<circle cx="-34" cy="38" r="2.8" fill="#F97316" class="hero-dot2" opacity="0.6"/>
 						<circle cx="-48" cy="38" r="2"   fill="#F97316" class="hero-dot3" opacity="0.3"/>
@@ -276,26 +273,24 @@
 					</svg>
 				</div>
 
-				<!-- Wordmark — "TEST" muted + "HOOKS" bold, matching logo -->
-				<h1 class="font-fira tracking-wider">
-					<span class="text-4xl md:text-5xl lg:text-6xl font-normal text-[#8b949e]">TEST</span>
-					<span class="text-4xl md:text-5xl lg:text-6xl font-bold text-[#e6edf3]">HOOKS</span>
+				<!-- Wordmark -->
+				<h1 class="font-fira tracking-wider leading-none">
+					<span class="text-4xl md:text-5xl lg:text-6xl font-normal text-[var(--text-muted)]">TEST</span><span class="text-4xl md:text-5xl lg:text-6xl font-bold text-[var(--text)]">HOOKS</span>
 				</h1>
 
-				<!-- Tagline — matching logo exactly -->
-				<p class="text-base md:text-lg leading-relaxed max-w-2xl text-[#8b949e]">
+				<!-- Tagline -->
+				<p class="text-lg md:text-xl leading-relaxed max-w-2xl text-[var(--text-muted)]">
 					Capture, inspect, transform, and forward webhooks in real time.
-					<br />
-					<span class="text-sm text-[#8b949e]/70">
-						A lightweight <a href="https://webhook.site" target="_blank" class="underline underline-offset-2 hover:text-[#00ADD8] transition-colors">webhook.site</a> replacement you own. Browser mode replaces ngrok with zero setup.
-					</span>
+				</p>
+				<p class="text-sm max-w-xl text-[var(--text-muted)]/70 -mt-3">
+					A lightweight 				<a href="https://webhook.site" target="_blank" rel="noopener noreferrer" class="underline underline-offset-2 decoration-[var(--border)] hover:text-[#00ADD8] transition-colors">webhook.site</a> replacement you own. Browser mode replaces ngrok — zero setup.
 				</p>
 
 				<!-- CTA buttons -->
-				<div class="flex flex-col sm:flex-row gap-4">
+				<div class="flex flex-col sm:flex-row gap-4 mt-2">
 					<button
 						onclick={scrollToCreate}
-						class="inline-flex items-center justify-center gap-2 px-7 py-3 text-base font-medium rounded-xl bg-[#00ADD8] text-white hover:bg-[#0086A8] transition-all shadow-lg shadow-[#00ADD8]/20"
+						class="inline-flex items-center justify-center gap-2 px-7 py-3 text-base font-medium rounded-xl bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)] transition-all shadow-lg shadow-[var(--accent)]/20"
 					>
 						<Webhook class="w-5 h-5" />
 						Create Endpoint
@@ -303,34 +298,43 @@
 					<a
 						href="https://github.com/sarathsp06/testhooks"
 						target="_blank"
-						class="inline-flex items-center justify-center gap-2 px-7 py-3 text-base font-medium rounded-xl border border-[#30363d] text-[#e6edf3] hover:bg-[#161b22] transition-all"
+						rel="noopener noreferrer"
+						class="inline-flex items-center justify-center gap-2 px-7 py-3 text-base font-medium rounded-xl border border-[var(--border)] text-[var(--text)] hover:bg-[var(--bg-hover)] transition-all"
 					>
 						<GitBranch class="w-5 h-5" />
 						View on GitHub
 					</a>
 				</div>
 
-				<!-- Architecture mini-diagram — matching logo -->
-				<div class="pt-6 border-t border-[#30363d] w-full max-w-2xl">
-					<div class="flex items-center justify-center gap-1 font-fira text-xs md:text-sm flex-wrap">
-						<span class="text-[#484f58]">webhook</span>
-						<span class="text-[#6e7681]">--&gt;</span>
-						<span class="text-[#00ADD8]">/h/:slug</span>
-						<span class="text-[#6e7681]">--&gt;</span>
-						<span class="text-[#8B5CF6]">WS</span>
-						<span class="text-[#6e7681]">--&gt;</span>
-						<span class="text-[#e6edf3]">browser</span>
-						<span class="text-[#6e7681]">--&gt;</span>
-						<span class="text-[#F97316]">localhost</span>
+				<!-- Architecture flow — terminal style card -->
+				<div class="mt-6 w-full max-w-2xl">
+					<div class="rounded-xl border border-[var(--border)] bg-[var(--bg-card)] px-5 py-4 shadow-sm">
+						<div class="flex items-center gap-1.5 mb-3">
+							<div class="w-2.5 h-2.5 rounded-full bg-[var(--red)]/60"></div>
+							<div class="w-2.5 h-2.5 rounded-full bg-[var(--yellow)]/60"></div>
+							<div class="w-2.5 h-2.5 rounded-full bg-[var(--green)]/60"></div>
+							<span class="ml-2 text-[10px] font-fira text-[var(--text-muted)]/60 uppercase tracking-wider">request flow</span>
+						</div>
+						<div class="flex items-center justify-center gap-1.5 md:gap-2 font-fira text-xs md:text-sm flex-wrap">
+							<span class="text-[var(--text-muted)]">webhook</span>
+							<span class="text-[var(--text-muted)]/40">──►</span>
+							<span class="text-[#00ADD8] font-semibold">/h/:slug</span>
+							<span class="text-[var(--text-muted)]/40">──►</span>
+							<span class="text-[#8B5CF6] font-semibold">WS</span>
+							<span class="text-[var(--text-muted)]/40">──►</span>
+							<span class="text-[var(--text)] font-semibold">browser</span>
+							<span class="text-[var(--text-muted)]/40">──►</span>
+							<span class="text-[#F97316] font-semibold">localhost</span>
+						</div>
 					</div>
 				</div>
 
-				<!-- Tech stack pills — matching logo colors -->
-				<div class="flex flex-wrap justify-center gap-2">
+				<!-- Tech stack pills -->
+				<div class="flex flex-wrap justify-center gap-2 mt-2">
 					{#each techStack as tech}
 						<span
-							class="px-3 py-1.5 text-xs font-semibold rounded-full border"
-							style="color: {tech.color}; background-color: {tech.color}12; border-color: {tech.color}4D;"
+							class="px-3 py-1.5 text-[11px] font-semibold font-fira rounded-full border"
+							style="color: {tech.color}; background-color: {tech.color}0D; border-color: {tech.color}30;"
 						>
 							{tech.name}
 						</span>
@@ -462,9 +466,9 @@
 
 			<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
 				{#each features as feature}
-					<div class="group p-8 rounded-xl border border-[var(--border)] bg-[var(--bg)] transition-all duration-300 hover:border-blue-300/60 dark:hover:border-blue-500/30 hover:shadow-lg hover:shadow-blue-500/5 hover:-translate-y-1">
-						<div class="w-12 h-12 flex items-center justify-center rounded-xl mb-6 bg-blue-50 dark:bg-blue-500/10">
-							<feature.icon class="w-5 h-5 text-[var(--accent)]" />
+					<div class="group p-8 rounded-xl border border-[var(--border)] bg-[var(--bg)] transition-all duration-300 hover:shadow-lg hover:-translate-y-1">
+						<div class="w-12 h-12 flex items-center justify-center rounded-xl mb-6" style="background-color: {feature.color}0D;">
+							<feature.icon class="w-5 h-5" style="color: {feature.color};" />
 						</div>
 						<h3 class="text-xl font-semibold mb-3 font-fira text-[var(--text)]">{feature.title}</h3>
 						<p class="leading-relaxed text-[var(--text-muted)] text-[0.9375rem]">{feature.description}</p>
@@ -1044,6 +1048,7 @@
 				<a
 					href="https://github.com/sarathsp06/testhooks"
 					target="_blank"
+					rel="noopener noreferrer"
 					class="inline-flex items-center gap-2 px-7 py-3 text-base font-medium rounded-xl border border-[var(--border)] text-[var(--text)] hover:bg-[var(--bg-hover)] transition-all"
 				>
 					<svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
@@ -1064,11 +1069,12 @@
 					<span class="font-fira text-sm"><span class="font-normal text-[var(--text-muted)]">TEST</span><span class="font-bold text-[var(--text)]">HOOKS</span></span>
 				</div>
 				<p class="text-xs text-[var(--text-muted)]">Self-hostable webhook inspector. Open source.</p>
-				<a
-					href="https://github.com/sarathsp06/testhooks"
-					target="_blank"
-					class="text-xs text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors"
-				>
+			<a
+				href="https://github.com/sarathsp06/testhooks"
+				target="_blank"
+				rel="noopener noreferrer"
+				class="text-xs text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors"
+			>
 					GitHub
 				</a>
 			</div>

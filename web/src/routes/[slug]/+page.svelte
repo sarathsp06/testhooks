@@ -2,7 +2,7 @@
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
 	import { onMount, onDestroy } from 'svelte';
-	import { listEndpoints, deleteEndpoint } from '$lib/api';
+	import { getEndpointBySlug, deleteEndpoint } from '$lib/api';
 	import { createWSClient, type WSStatus } from '$lib/ws';
 	import { getEndpointStore } from '$lib/stores/endpoint.svelte';
 	import { getRequestsStore } from '$lib/stores/requests.svelte';
@@ -50,8 +50,7 @@
 	async function init(s: string) {
 		initError = null;
 		try {
-			const all = await listEndpoints();
-			const ep = all.find((e) => e.slug === s);
+			const ep = await getEndpointBySlug(s);
 			if (!ep) {
 				endpointStore.clear();
 				return;
@@ -68,7 +67,7 @@
 			customResponseScript = (cr?.script as string) ?? '';
 			customResponseLanguage = ((cr?.language as string) || 'javascript') as TransformLanguage;
 
-			if (ep.mode === 'server') {
+			if (ep.mode === 'server' || ep.config?.persist_requests) {
 				await requestsStore.load(ep.id);
 			}
 

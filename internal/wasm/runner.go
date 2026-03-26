@@ -10,6 +10,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sync/atomic"
 	"time"
 
 	"github.com/fastschema/qjs"
@@ -59,10 +60,11 @@ type ResponseHandlerOutput struct {
 // Each execution creates a fresh runtime to prevent state leakage between
 // user scripts (MED-005).
 type Runner struct {
-	option  qjs.Option
-	log     zerolog.Logger
-	timeout time.Duration
-	ready   bool
+	option        qjs.Option
+	log           zerolog.Logger
+	timeout       time.Duration
+	ready         atomic.Bool // L-09: atomic for concurrent access
+	maxOutputSize int         // M-07: max WASM output size in bytes
 }
 
 // Config for the WASM runner.
@@ -99,11 +101,12 @@ func New(_ context.Context, cfg Config, log zerolog.Logger) (*Runner, error) {
 	}
 
 	r := &Runner{
-		option:  option,
-		log:     l,
-		timeout: cfg.Timeout,
-		ready:   true,
+		option:        option,
+		log:           l,
+		timeout:       cfg.Timeout,
+		maxOutputSize: 1024 * 1024, // M-07: 1MB default
 	}
+	r.ready.Store(true)
 
 	l.Info().
 		Int("memory_limit_mb", cfg.MemoryLimit/(1024*1024)).
@@ -116,13 +119,13 @@ func New(_ context.Context, cfg Config, log zerolog.Logger) (*Runner, error) {
 // Close shuts down the runner. No pool to drain since runtimes are created
 // fresh per execution.
 func (r *Runner) Close(_ context.Context) error {
-	r.ready = false
+	r.ready.Store(false)
 	return nil
 }
 
 // Ready returns true if the WASM runner is initialized and ready to execute scripts.
 func (r *Runner) Ready() bool {
-	return r.ready
+	return r.ready.Load()
 }
 
 // Transform executes a user-provided JS script against the given input.
@@ -130,7 +133,7 @@ func (r *Runner) Ready() bool {
 //
 // Returns the transform output, or an error if the script fails.
 func (r *Runner) Transform(ctx context.Context, script string, input TransformInput) (*TransformOutput, error) {
-	if !r.ready {
+	if !r.ready.Load() {
 		return nil, fmt.Errorf("wasm runner not ready")
 	}
 
@@ -171,6 +174,11 @@ JSON.stringify(__result);
 
 	resultJSON := val.String()
 
+	// M-07: Check output size limit to prevent OOM from malicious scripts.
+	if len(resultJSON) > r.maxOutputSize {
+		return nil, fmt.Errorf("transform output too large: %d bytes (limit %d)", len(resultJSON), r.maxOutputSize)
+	}
+
 	var result TransformOutput
 	if err := json.Unmarshal([]byte(resultJSON), &result); err != nil {
 		return nil, fmt.Errorf("unmarshal output: %w (raw: %s)", err, resultJSON)
@@ -203,7 +211,7 @@ type HandlerInput struct {
 //
 // If the script doesn't define handler(), returns nil (fall through to default response).
 func (r *Runner) RunResponseHandler(ctx context.Context, script string, input TransformInput, fwdResp *ForwardResponse) (*ResponseHandlerOutput, error) {
-	if !r.ready {
+	if !r.ready.Load() {
 		return nil, fmt.Errorf("wasm runner not ready")
 	}
 
@@ -257,6 +265,11 @@ JSON.stringify(__result);
 	resultJSON := val.String()
 	if resultJSON == "null" {
 		return nil, nil
+	}
+
+	// M-07: Check output size limit to prevent OOM from malicious scripts.
+	if len(resultJSON) > r.maxOutputSize {
+		return nil, fmt.Errorf("handler output too large: %d bytes (limit %d)", len(resultJSON), r.maxOutputSize)
 	}
 
 	var result ResponseHandlerOutput

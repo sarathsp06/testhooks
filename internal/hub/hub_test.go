@@ -11,7 +11,7 @@ func makeMsg(typ, data string) Message {
 }
 
 func TestSubscribeAndPublish(t *testing.T) {
-	h := New(100)
+	h := New(100, 300, 50)
 
 	ch, cleanup := h.Subscribe("test-slug", 0)
 	defer cleanup()
@@ -30,7 +30,7 @@ func TestSubscribeAndPublish(t *testing.T) {
 }
 
 func TestPublishToMultipleSubscribers(t *testing.T) {
-	h := New(100)
+	h := New(100, 300, 50)
 
 	ch1, cleanup1 := h.Subscribe("slug", 0)
 	defer cleanup1()
@@ -53,7 +53,7 @@ func TestPublishToMultipleSubscribers(t *testing.T) {
 }
 
 func TestPublishToWrongSlug(t *testing.T) {
-	h := New(100)
+	h := New(100, 300, 50)
 
 	ch, cleanup := h.Subscribe("slug-a", 0)
 	defer cleanup()
@@ -70,7 +70,7 @@ func TestPublishToWrongSlug(t *testing.T) {
 }
 
 func TestCleanupUnsubscribes(t *testing.T) {
-	h := New(100)
+	h := New(100, 300, 50)
 
 	ch, cleanup := h.Subscribe("slug", 0)
 	cleanup()
@@ -87,7 +87,7 @@ func TestCleanupUnsubscribes(t *testing.T) {
 }
 
 func TestHasSubscribers(t *testing.T) {
-	h := New(100)
+	h := New(100, 300, 50)
 
 	if h.HasSubscribers("slug") {
 		t.Error("HasSubscribers = true with no subscribers")
@@ -136,7 +136,7 @@ func TestRingBuffer_Wrap(t *testing.T) {
 }
 
 func TestPublishWithBuffer(t *testing.T) {
-	h := New(100)
+	h := New(100, 300, 50)
 
 	// Publish with buffer before any subscriber.
 	msg1 := makeMsg("request", `{"id":"r1"}`)
@@ -164,7 +164,7 @@ func TestPublishWithBuffer(t *testing.T) {
 }
 
 func TestRemoveBuffer(t *testing.T) {
-	h := New(100)
+	h := New(100, 300, 50)
 
 	// Publish with buffer.
 	h.Publish("slug", makeMsg("request", `{"id":"r1"}`), true)
@@ -183,9 +183,9 @@ func TestRemoveBuffer(t *testing.T) {
 }
 
 func TestWaitForResponse_DeliverSuccess(t *testing.T) {
-	h := New(100)
+	h := New(100, 300, 50)
 
-	ch, cleanup := h.WaitForResponse("req-123")
+	ch, cleanup := h.WaitForResponse("test-slug", "req-123")
 	defer cleanup()
 
 	result := ResponseResult{
@@ -194,7 +194,7 @@ func TestWaitForResponse_DeliverSuccess(t *testing.T) {
 		Body:      "created",
 	}
 
-	delivered := h.DeliverResponse("req-123", result)
+	delivered := h.DeliverResponse("test-slug", "req-123", result)
 	if !delivered {
 		t.Fatal("DeliverResponse returned false")
 	}
@@ -213,24 +213,24 @@ func TestWaitForResponse_DeliverSuccess(t *testing.T) {
 }
 
 func TestWaitForResponse_DeliverToUnknownRequest(t *testing.T) {
-	h := New(100)
+	h := New(100, 300, 50)
 
 	result := ResponseResult{RequestID: "unknown"}
-	delivered := h.DeliverResponse("unknown", result)
+	delivered := h.DeliverResponse("test-slug", "unknown", result)
 	if delivered {
 		t.Error("DeliverResponse returned true for unknown request")
 	}
 }
 
 func TestWaitForResponse_Cleanup(t *testing.T) {
-	h := New(100)
+	h := New(100, 300, 50)
 
-	_, cleanup := h.WaitForResponse("req-456")
+	_, cleanup := h.WaitForResponse("test-slug", "req-456")
 	cleanup()
 
 	// After cleanup, delivering should fail.
 	result := ResponseResult{RequestID: "req-456"}
-	delivered := h.DeliverResponse("req-456", result)
+	delivered := h.DeliverResponse("test-slug", "req-456", result)
 	if delivered {
 		t.Error("DeliverResponse returned true after cleanup")
 	}

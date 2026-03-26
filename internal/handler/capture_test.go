@@ -15,7 +15,7 @@ import (
 
 func newTestCapture(store Store) (*Capture, *hub.Hub) {
 	log := zerolog.New(os.Stderr).Level(zerolog.Disabled)
-	h := hub.New(100)
+	h := hub.New(100, 300, 50)
 	c := NewCapture(store, h, nil, nil, 512*1024, nil, log)
 	return c, h
 }
@@ -217,7 +217,7 @@ func TestCapture_ClientIP_XForwardedFor(t *testing.T) {
 	// Create capture with trusted proxies matching httptest's RemoteAddr (192.0.2.1).
 	_, trustedNet, _ := net.ParseCIDR("192.0.2.0/24")
 	log := zerolog.New(os.Stderr).Level(zerolog.Disabled)
-	h := hub.New(100)
+	h := hub.New(100, 300, 50)
 	capture := NewCapture(store, h, nil, nil, 512*1024, []*net.IPNet{trustedNet}, log)
 	mux := captureMux(capture)
 

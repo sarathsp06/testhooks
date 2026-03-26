@@ -1,373 +1,264 @@
-# Security Best Practices Report — Testhooks
+# Testhooks — Security & Licensing Audit Report
 
-**Date:** 2026-03-22  
-**Scope:** Go backend + Svelte 5 SPA frontend  
-**Auditor:** Automated security review  
-**Status:** READ-ONLY AUDIT — no code changes made
+**Date:** March 26, 2026
+**Scope:** Full codebase — Go backend, Svelte 5 frontend, Docker deployment, dependencies, licensing
+**Methodology:** Manual code audit against Go backend security best practices (OWASP, Go security spec) and JavaScript frontend security best practices (OWASP DOM XSS prevention, CSP, third-party controls)
 
 ---
 
 ## Executive Summary
 
-Testhooks is a self-hostable webhook capture tool with a Go backend (single binary) and a Svelte 5 SPA frontend. The application is designed to be anonymous (no auth) and accepts arbitrary HTTP requests from the public internet, which creates an inherently large attack surface.
+Testhooks is a well-engineered webhook capture tool with several security strengths: parameterized SQL queries (no injection), robust SSRF protection on server-side forwarding, WASM-sandboxed user script execution, a minimal `scratch` Docker image, and proper HTTP server timeouts. All dependency licenses are permissive and compatible.
 
-The codebase demonstrates several good security practices: parameterized SQL queries, body size limits on the capture path, sandboxed WASM execution with resource limits, and proper use of `crypto/rand`. However, there are significant gaps in HTTP server hardening, SSRF protection, WebSocket security, CORS configuration, and security headers.
-
-**Finding Summary:**
-
-| Severity | Count |
-|----------|-------|
-| Critical | 0     |
-| High     | 3     |
-| Medium   | 5     |
-| Low      | 3     |
-| Info     | 3     |
-| **Total** | **14** |
+However, the **intentional lack of authentication** is the dominant security concern — every endpoint, request, and configuration is accessible to any anonymous user. Beyond that design choice, the audit identified **5 High**, **12 Medium**, and **14 Low/Informational** findings across the stack. The most actionable fixes are: adding a `.dockerignore`, hardening CSP (removing `unsafe-inline`), limiting WebSocket connections, bounding the endpoint listing API, and sanitizing user-script response headers.
 
 ---
 
-## Findings
+## Findings by Severity
 
-### HIGH-001: No SSRF Protection in Server-Side Forwarding
+### CRITICAL (1)
 
-| Field | Value |
-|-------|-------|
-| **Severity** | HIGH |
-| **Location** | `internal/forward/forwarder.go:157-189` |
-| **Category** | GO-SSRF-001 |
-
-**Description:** The server-side forwarding feature forwards webhook payloads to user-configured URLs via HTTP. There is no validation of the target URL — no scheme restriction, no blocking of private/internal IP ranges (`127.0.0.0/8`, `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `169.254.169.254`), and no DNS rebinding protection.
-
-**Evidence:** The forward URL comes from `endpoint.config` (user-controlled data stored in Postgres). The HTTP client at line 157 issues a request to whatever URL is provided with no pre-flight validation.
-
-**Impact:** An attacker can create an endpoint with a forward URL pointing to internal services, cloud metadata endpoints (`http://169.254.169.254/latest/meta-data/`), or other private network resources. This could expose AWS/GCP credentials, internal APIs, or Postgres on `localhost:5432`.
-
-**Recommendation:**
-1. Resolve the target URL's IP address before connecting and reject private/loopback/link-local ranges.
-2. Restrict schemes to `http` and `https` only (block `file://`, `gopher://`, etc.).
-3. Use a custom `net.Dialer` with a `Control` function to block connections to private IPs after DNS resolution (prevents DNS rebinding).
-4. Consider a configurable allowlist/denylist for forward targets.
-
-**Mitigation already in place:** Redirects are disabled (`CheckRedirect` returns `http.ErrUseLastResponse`), response body is capped at 1MB, and timeout is 10s. These limit the blast radius but do not prevent the initial SSRF.
+#### C-01: No Authentication — Full Anonymous Access to All Data
+- **Location:** `internal/handler/api.go` (entire file)
+- **Evidence:** All REST endpoints (`GET/POST/PATCH/DELETE /api/endpoints/*`, `/api/requests/*`) and WebSocket (`/ws/:slug`) require no authentication.
+- **Impact:** Anyone can: list all endpoints (enumeration), read all captured webhook payloads (data breach — payloads often contain API keys, tokens, and secrets), delete any endpoint/request (DoS), modify any endpoint config including forward URLs (redirect webhooks to attacker servers) and inject malicious WASM scripts.
+- **Status:** By design ("Auth: Skipped by design"). Acceptable for personal/localhost use. **Unacceptable for any internet-facing deployment.**
+- **Fix:** If the app will be public-facing, implement at minimum API key or bearer token authentication scoped per endpoint. Short-term: restrict `ListEndpoints` to return only the caller's endpoints; require a secret token (generated at creation) for mutation operations.
 
 ---
 
-### HIGH-002: WebSocket Accepts Connections Without Origin Validation
+### HIGH (5)
 
-| Field | Value |
-|-------|-------|
-| **Severity** | HIGH |
-| **Location** | `internal/handler/ws.go:53` |
-| **Category** | WebSocket Security |
+#### H-01: Default Database URL Has Embedded Credentials
+- **Location:** `internal/config/config.go:23`
+- **Evidence:** `envDefault:"postgres://testhooks:testhooks@localhost:5432/testhooks?sslmode=disable"`
+- **Impact:** If `DATABASE_URL` is not set in production, the app uses well-known credentials. The current code only warns (`log.Warn`) instead of failing.
+- **Fix:** Change `log.Warn()` at `config.go:104` to `log.Fatal()` when the default DB URL is used in non-dev mode. Also: default `sslmode` should be `require` for production.
 
-**Description:** The WebSocket upgrade uses `websocket.AcceptOptions{InsecureSkipVerify: true}`, which disables origin checking entirely. Any website can open a WebSocket connection to a Testhooks endpoint and receive live webhook data.
+#### H-02: User Scripts Can Override Security Response Headers
+- **Location:** `internal/handler/capture.go:432-434` (server-mode custom response), `capture.go:399-401` (browser-mode response)
+- **Evidence:**
+  ```go
+  for k, v := range output.Headers {
+      w.Header().Set(k, v)
+  }
+  ```
+- **Impact:** A WASM script or browser-mode WebSocket client can set `Set-Cookie` (session fixation), `Content-Security-Policy` (weaken XSS defense), `Location` (open redirect), or `X-Frame-Options` (enable clickjacking). The security middleware runs *before* the handler, so `w.Header().Set()` in the handler overwrites security headers.
+- **Fix:** Blocklist security-sensitive headers from user-script output: `Set-Cookie`, `Content-Security-Policy`, `X-Frame-Options`, `X-Content-Type-Options`, `Strict-Transport-Security`, `Access-Control-*`, `Referrer-Policy`.
 
-**Evidence:**
-```go
-conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
-    InsecureSkipVerify: true,
-})
-```
+#### H-03: `ListEndpoints` Has No Pagination — Unbounded Query
+- **Location:** `internal/db/queries.go:159-162`, `internal/handler/api.go:72-83`
+- **Evidence:** `SELECT ... FROM endpoints ORDER BY created_at DESC` — no `LIMIT` clause.
+- **Impact:** An attacker creates thousands of endpoints, then calls `GET /api/endpoints` to force the server to serialize a massive JSON response, consuming memory and CPU (DoS). The DB query also scans the full table.
+- **Fix:** Add pagination (limit/offset) to `ListEndpoints`, matching the existing `ListRequests` pattern (max 200 per page).
 
-**Impact:** Cross-site WebSocket hijacking (CSWSH). A malicious page visited by a user can connect to `wss://hooks.example.com/ws/<slug>` and exfiltrate webhook payloads streamed over WebSocket. Since there is no auth, knowing (or brute-forcing) a slug is sufficient.
+#### H-04: Ring Buffers in Hub Never Auto-Cleaned
+- **Location:** `internal/hub/hub.go:148-151`
+- **Evidence:** Ring buffers are created per browser-mode slug on first `Publish(useBuffer=true)` but are only removed by explicit `RemoveBuffer(slug)` call. No TTL sweep exists.
+- **Impact:** Abandoned browser-mode endpoints accumulate ring buffers indefinitely. Each buffer holds up to 100 messages × 512 KB = ~50 MB. Thousands of abandoned slugs = multi-GB memory leak, leading to OOM.
+- **Fix:** Add a TTL-based sweep (e.g., remove buffers with no subscribers and no writes for >1 hour). Tie buffer lifecycle to endpoint deletion.
 
-**Recommendation:**
-1. Remove `InsecureSkipVerify: true` and let the library validate the `Origin` header against the server's host.
-2. Alternatively, set `OriginPatterns` to explicitly allow your SPA's origin(s).
-
-**Note:** Since endpoints are anonymous and slugs are public, the practical impact depends on slug secrecy. But defense-in-depth still warrants origin validation.
-
----
-
-### HIGH-003: Missing HTTP Server Timeouts (`ReadTimeout`, `WriteTimeout`)
-
-| Field | Value |
-|-------|-------|
-| **Severity** | HIGH |
-| **Location** | `cmd/testhooks/main.go:135-140` |
-| **Category** | GO-HTTP-001 |
-
-**Description:** The HTTP server sets `ReadHeaderTimeout: 10s` and `IdleTimeout: 120s`, but omits `ReadTimeout`, `WriteTimeout`, and `MaxHeaderBytes`. Without `ReadTimeout`, a client can keep a connection open indefinitely by sending a body very slowly (slowloris-style attack). Without `WriteTimeout`, a slow-reading client can hold server goroutines open indefinitely.
-
-**Evidence:**
-```go
-srv := &http.Server{
-    Addr:              cfg.Listen,
-    Handler:           mux,
-    ReadHeaderTimeout: 10 * time.Second,
-    IdleTimeout:       120 * time.Second,
-}
-```
-
-**Impact:** Denial of service. An attacker can exhaust server goroutines/file descriptors by opening many slow connections.
-
-**Recommendation:**
-1. Add `ReadTimeout: 30 * time.Second` (or appropriate value).
-2. Add `WriteTimeout: 30 * time.Second`.
-3. Add `MaxHeaderBytes: 1 << 20` (1MB) to limit header size.
-4. Note: `WriteTimeout` applies to the entire response lifecycle including WebSocket connections. For endpoints that serve both WebSocket and regular HTTP, consider using `http.TimeoutHandler` as middleware for non-WS routes, or set a longer `WriteTimeout` and enforce tighter timeouts at the handler level.
+#### H-05: Missing `.dockerignore`
+- **Location:** Project root (file absent)
+- **Evidence:** `COPY . .` in `Dockerfile` stage 2 sends the entire directory to the Docker build context, including `.env`, `.git/`, `web/node_modules/`, IDE files.
+- **Impact:** If a `.env` file with real credentials exists locally, it's copied into the build layer. Even in multi-stage builds, the build context is visible in intermediate layers if pushed to a registry.
+- **Fix:** Create `.dockerignore`:
+  ```
+  .env
+  .env.*
+  .git
+  web/node_modules
+  web/dist
+  *.md
+  .idea
+  .vscode
+  ```
 
 ---
 
-### MED-001: Wildcard CORS Configuration
+### MEDIUM (12)
 
-| Field | Value |
-|-------|-------|
-| **Severity** | MEDIUM |
-| **Location** | `cmd/testhooks/main.go:125-132` |
-| **Category** | CORS |
+#### M-01: CSP `script-src 'unsafe-inline'` Weakens XSS Protection
+- **Location:** `internal/middleware/security.go:33`
+- **Evidence:** `script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'`
+- **Impact:** `unsafe-inline` largely defeats CSP's XSS protection — any HTML injection that reaches the browser can execute inline scripts.
+- **Fix:** Use nonce-based CSP (`'nonce-<random>'`) or hash-based CSP for the SvelteKit bootstrap script. Remove `unsafe-inline`.
 
-**Description:** CORS is configured with `AllowedOrigins: []string{"*"}` and `AllowedHeaders: []string{"*"}`, which allows any origin to make credentialed cross-origin requests to the API.
+#### M-02: CORS Default `AllowedOrigins: *` + `AllowedHeaders: *`
+- **Location:** `internal/config/config.go:57`, `cmd/testhooks/main.go:136`
+- **Evidence:** Default CORS is `*` (all origins), `AllowedHeaders: ["*"]` (all headers).
+- **Impact:** Any website can make full cross-origin API calls to create/delete endpoints and requests. Combined with no auth (C-01), this means drive-by CSRF-like attacks from any page.
+- **Fix:** Default to a restrictive origin list (e.g., `["http://localhost:5173"]` for dev). In production, require explicit `ALLOWED_ORIGINS` configuration. Restrict `AllowedHeaders` to `["Content-Type"]`.
 
-**Evidence:**
-```go
-c := cors.New(cors.Options{
-    AllowedOrigins: []string{"*"},
-    AllowedMethods: []string{"GET", "POST", "PATCH", "DELETE", "OPTIONS"},
-    AllowedHeaders: []string{"*"},
-})
-```
+#### M-03: No Rate Limiting on WebSocket Connections
+- **Location:** `cmd/testhooks/main.go:100` (rate limiter only wraps `/h/{slug}`), `internal/handler/ws.go:56`
+- **Impact:** An attacker can open thousands of WebSocket connections, exhausting file descriptors and memory (each connection = goroutine + 64-message channel buffer).
+- **Fix:** Add per-IP connection limits for WebSocket. Apply the existing rate limiter to `/ws/{slug}` as well, or add a separate connection counter.
 
-**Impact:** While the application currently has no auth (so no cookies/sessions to steal), this weakens defense-in-depth. If auth is ever added, this configuration would allow any origin to make authenticated API calls. Combined with CSWSH (HIGH-002), this broadens the attack surface.
+#### M-04: Cross-Slug Response Delivery via WebSocket
+- **Location:** `internal/handler/ws.go:103`, `internal/hub/hub.go:197`
+- **Evidence:** `DeliverResponse(requestID, result)` is not scoped to the slug the WebSocket client subscribed to.
+- **Impact:** A WebSocket client on `/ws/slug-A` can deliver a forged response for any request ID (e.g., a request on `/ws/slug-B`), if they know the UUID. UUIDs are hard to guess but are visible in API responses and WebSocket messages.
+- **Fix:** Scope `DeliverResponse` to verify the request ID belongs to the subscribing slug.
 
-**Recommendation:**
-1. In production, set `AllowedOrigins` to the actual SPA origin(s).
-2. In dev mode, use `*` only if `--dev` flag is set.
-3. Restrict `AllowedHeaders` to the specific headers needed (`Content-Type`, `Authorization` if auth is added).
+#### M-05: No WriteTimeout on Non-WebSocket HTTP Routes
+- **Location:** `cmd/testhooks/main.go:143-144`
+- **Evidence:** `WriteTimeout` is intentionally omitted (would kill WebSocket). No per-route `http.TimeoutHandler` is applied to `/api/*`.
+- **Impact:** A slow-read client can hold a goroutine indefinitely on REST API responses.
+- **Fix:** Wrap `/api/*` handlers with `http.TimeoutHandler(handler, 30*time.Second, "timeout")`.
 
----
+#### M-06: Unbounded Response Body Drain in Async Forward Path
+- **Location:** `internal/forward/forwarder.go:332`
+- **Evidence:** `io.Copy(io.Discard, resp.Body)` — no `LimitReader`.
+- **Impact:** A malicious forward target can send an infinite response, tying up the goroutine indefinitely.
+- **Fix:** `io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<20))` (match the 1 MB limit in `doForwardCapture`).
 
-### MED-002: API Request Body Size Not Limited
+#### M-07: No Output Size Limit on QuickJS WASM Results
+- **Location:** `internal/wasm/runner.go:172, 257`
+- **Evidence:** `resultJSON := val.String()` — no size check.
+- **Impact:** A malicious script can return `"x".repeat(60_000_000)` (~60 MB string within the 64 MB QuickJS memory limit), which is then copied into Go's heap.
+- **Fix:** Check `len(resultJSON)` before unmarshalling; reject if > 1 MB.
 
-| Field | Value |
-|-------|-------|
-| **Severity** | MEDIUM |
-| **Location** | `internal/handler/api.go:35, 105` |
-| **Category** | GO-HTTP-002 |
+#### M-08: IPv6 Rate Limit Bypass via Non-Canonical Representation
+- **Location:** `internal/middleware/clientip.go:45`
+- **Evidence:** IPs extracted from `X-Forwarded-For` are returned as raw strings without `net.ParseIP().String()` normalization.
+- **Impact:** The same IPv6 client can get multiple rate limit buckets if the trusted proxy forwards different representations of the same address.
+- **Fix:** Normalize via `net.ParseIP(ip).String()` before returning from `ClientIP()`.
 
-**Description:** The capture handler (`capture.go:70`) correctly uses `io.LimitReader` to cap request bodies. However, the API handlers for creating and updating endpoints (`api.go:35`, `api.go:105`) decode JSON from `r.Body` without using `http.MaxBytesReader`, allowing arbitrarily large JSON payloads to be sent to these endpoints.
+#### M-09: No Subscriber Limit Per Slug in Hub
+- **Location:** `internal/hub/hub.go:107-111`
+- **Impact:** Unlimited WebSocket connections per slug, each allocating a goroutine and 64-message buffered channel. Memory exhaustion vector.
+- **Fix:** Enforce a max subscriber count per slug (e.g., 50). Reject new subscribers when the limit is reached.
 
-**Evidence:**
-```go
-// api.go:35 — CreateEndpoint
-json.NewDecoder(r.Body).Decode(&body)
+#### M-10: `pending` Map Entries Can Leak
+- **Location:** `internal/hub/hub.go:182-193`
+- **Impact:** If the cleanup function from `WaitForResponse` is not called (e.g., goroutine panic), the `pending` map entry and channel leak forever.
+- **Fix:** Add a TTL-based sweep for stale `pending` entries (e.g., older than `browserResponseTimeout`).
 
-// api.go:105 — UpdateEndpoint
-json.NewDecoder(r.Body).Decode(&body)
-```
+#### M-11: Shell Injection in cURL Copy Feature (Header Values)
+- **Location:** `web/src/lib/components/RequestDetail.svelte:164`
+- **Evidence:** Header keys/values interpolated into shell command string without escaping:
+  ```ts
+  cmd += ` \\\n  -H '${key}: ${val}'`;
+  ```
+- **Impact:** A webhook sender crafts a header like `X-Evil: '; rm -rf / #`. When a user copies the cURL and pastes into a terminal, arbitrary commands execute.
+- **Fix:** Apply the same `replace(/'/g, "'\\''")` escaping used for the body (line 168) to header keys and values.
 
-**Impact:** Memory exhaustion. An attacker can send a multi-gigabyte JSON payload to `/api/endpoints` and force the server to allocate large amounts of memory before parsing fails.
-
-**Recommendation:**
-```go
-r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB limit for API payloads
-```
-
----
-
-### MED-003: IP Spoofing via Trusted Proxy Headers
-
-| Field | Value |
-|-------|-------|
-| **Severity** | MEDIUM |
-| **Location** | `internal/handler/capture.go:88-89`, `internal/middleware/ratelimit.go:125-138` |
-| **Category** | Input Validation |
-
-**Description:** Both the capture handler and the rate limiter extract client IPs from `X-Forwarded-For` and `X-Real-IP` headers without verifying the request came from a trusted proxy. Any client can set these headers to spoof their IP address.
-
-**Evidence:**
-```go
-// capture.go:88-89
-if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-    ip = strings.TrimSpace(strings.Split(xff, ",")[0])
-}
-
-// ratelimit.go:125-138
-func getClientIP(r *http.Request) string {
-    if xff := r.Header.Get("X-Forwarded-For"); xff != "" { ... }
-    if xri := r.Header.Get("X-Real-IP"); xri != "" { ... }
-}
-```
-
-**Impact:**
-1. **Rate limit bypass:** Attacker can rotate `X-Forwarded-For` values to bypass per-IP rate limiting entirely.
-2. **IP logging inaccuracy:** Captured request metadata shows fake IPs.
-
-**Recommendation:**
-1. Add a `TRUSTED_PROXIES` config option (list of CIDR ranges).
-2. Only honor `X-Forwarded-For` / `X-Real-IP` when `r.RemoteAddr` matches a trusted proxy.
-3. Parse `X-Forwarded-For` correctly — use the rightmost untrusted IP, not the leftmost (which is most easily spoofed).
+#### M-12: No Execution Timeout on Browser-Side WASM Transforms
+- **Location:** `web/src/lib/wasm.ts:61-128` (JS), `wasm.ts:239` (Lua), `wasm.ts:370` (Jsonnet)
+- **Impact:** A user script with `while(true){}` hangs the browser tab indefinitely.
+- **Fix:** Use QuickJS's `setInterruptHandler()` with a 5-second deadline. Wrap Lua/Jsonnet in `Promise.race()` with a timeout.
 
 ---
 
-### MED-004: No WebSocket Message Size Limit
+### LOW / INFORMATIONAL (14)
 
-| Field | Value |
-|-------|-------|
-| **Severity** | MEDIUM |
-| **Location** | `internal/handler/ws.go:79` |
-| **Category** | WebSocket Security |
-
-**Description:** The WebSocket read loop uses `wsjson.Read` without explicitly setting `conn.SetReadLimit()`. While `nhooyr.io/websocket` has a default read limit (32768 bytes), this is not explicitly configured and may not be appropriate for all message types.
-
-**Impact:** A malicious WebSocket client could send large messages to consume server memory. The browser-mode custom response path (`response_result` messages) receives arbitrary body content from the browser and delivers it to waiting handlers.
-
-**Recommendation:**
-1. Explicitly set `conn.SetReadLimit(maxBytes)` after accepting the connection.
-2. A reasonable limit for `response_result` messages would be 1-2MB.
-
----
-
-### MED-005: QuickJS Runtime Pool Reuse Without State Reset
-
-| Field | Value |
-|-------|-------|
-| **Severity** | MEDIUM |
-| **Location** | `internal/wasm/runner.go:163` |
-| **Category** | Sandbox Isolation |
-
-**Description:** The server-side QuickJS runtime pool reuses `qjs.Runtime` objects across different script executions via `sync.Pool`. When a runtime is returned to the pool (`pool.Put(rt)` at line 163), any global state set by the previous script may persist.
-
-**Impact:** Cross-endpoint data leakage. If endpoint A's transform script sets a global variable, endpoint B's transform may be able to read it when it gets the same pooled runtime. This could leak sensitive webhook data between endpoints.
-
-**Recommendation:**
-1. Create a fresh `qjs.Runtime` for each execution instead of pooling (the overhead of QuickJS startup is low).
-2. Alternatively, explicitly reset globals between uses — but this is fragile and hard to guarantee.
-3. At minimum, document this behavior as a known limitation.
+| ID | Finding | Location | Note |
+|---|---|---|---|
+| L-01 | CSP `connect-src` allows all origins | `security.go:35` | Trade-off for browser-side forwarding |
+| L-02 | Missing `Permissions-Policy` header | `security.go` | Add `camera=(), microphone=(), geolocation=()` |
+| L-03 | Dev reverse proxy if `DEV=true` in prod | `main.go:119` | Requires explicit misconfiguration |
+| L-04 | No validation on `MaxBodySize`/`RingBufferSize` | `config.go:32,45` | Zero/negative values cause unexpected behavior |
+| L-05 | Silent body truncation (no 413) on capture | `capture.go:74` | `LimitReader` truncates silently |
+| L-06 | JSON built via `fmt.Sprintf` | `capture.go:467` | Fragile; use `json.Marshal` |
+| L-07 | No slug format validation | `capture.go:55` | Enforce `^[0-9a-f]{1,12}$` |
+| L-08 | No input length validation on endpoint name | `api.go:35` | ~1 MB name could pass |
+| L-09 | `r.ready` bool not thread-safe | `wasm/runner.go:119` | Use `atomic.Bool` |
+| L-10 | Unbounded rate limit client map | `ratelimit.go:79` | Add hard cap on map size |
+| L-11 | `Close()` panics on double call | `ratelimit.go:66` | Use `sync.Once` |
+| L-12 | Pruning queries are full table scans | `queries.go:266-293` | Process per-endpoint with batching |
+| L-13 | `target="_blank"` without `rel="noopener"` | `routes/+page.svelte:286,300,1049` | Modern browsers auto-apply, best practice gap |
+| L-14 | LICENSE appendix not customized | `LICENSE` | Fill in `[yyyy]` and `[name of copyright owner]` |
 
 ---
 
-### LOW-001: No Content-Security-Policy Header
+## Licensing Compliance
 
-| Field | Value |
-|-------|-------|
-| **Severity** | LOW |
-| **Location** | `cmd/testhooks/main.go` (missing), `web/src/app.html` (missing) |
-| **Category** | CSP Headers |
+### Project License
+- **Apache License 2.0** — valid, permissive.
+- **Issue:** Appendix placeholders (`[yyyy]`, `[name of copyright owner]`) not filled in. Cosmetic but should be fixed.
 
-**Description:** No Content-Security-Policy (CSP) header is set anywhere — not in the Go server's middleware, not in the SPA's HTML, and no SvelteKit `hooks.server.ts` file exists. The application also lacks `X-Content-Type-Options`, `X-Frame-Options`, and `Strict-Transport-Security` headers.
+### Dependency License Compatibility
 
-**Impact:** Without CSP, any XSS vulnerability would have unrestricted access to execute arbitrary JavaScript, load external resources, and exfiltrate data. Without `X-Frame-Options`, the application can be embedded in an iframe for clickjacking attacks.
+| Dependency | License | Compatible with Apache-2.0? |
+|---|---|---|
+| All Go deps (pgx, zerolog, cors, qjs, migrate, etc.) | MIT / ISC / Apache-2.0 | Yes |
+| All Node deps (Svelte, CodeMirror, Tailwind, QuickJS-emscripten, wasmoon, etc.) | MIT / ISC / Apache-2.0 | Yes |
+| nhooyr.io/websocket | ISC | Yes |
+| tetratelabs/wazero (indirect) | Apache-2.0 | Yes |
 
-**Recommendation:** Add a middleware in the Go server that sets security headers for all responses:
-```go
-w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' wss:")
-w.Header().Set("X-Content-Type-Options", "nosniff")
-w.Header().Set("X-Frame-Options", "DENY")
-w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
-```
-
-**Note:** The CSP must allow `wasm-unsafe-eval` for QuickJS WASM and `connect-src wss:` for WebSocket connections.
+**No license incompatibilities found.** All dependencies use permissive licenses fully compatible with Apache-2.0.
 
 ---
 
-### LOW-002: Default Database URL Contains Credentials
+## Supply Chain & CI
 
-| Field | Value |
-|-------|-------|
-| **Severity** | LOW |
-| **Location** | `internal/config/config.go:19` |
-| **Category** | Secret Management |
-
-**Description:** The default value for `DATABASE_URL` is `postgres://testhooks:testhooks@localhost:5432/testhooks`. While this is clearly a local development default, it appears in source code and could be accidentally used in production if the environment variable is not set.
-
-**Evidence:**
-```go
-DatabaseURL string `env:"DATABASE_URL" envDefault:"postgres://testhooks:testhooks@localhost:5432/testhooks"`
-```
-
-**Impact:** Low — this is a common pattern for development defaults. The credentials (`testhooks:testhooks`) are not real production secrets. However, if the application is deployed without setting `DATABASE_URL`, it would attempt to connect with these default credentials.
-
-**Recommendation:**
-1. Consider making `DATABASE_URL` required (no default) so the application fails to start without explicit configuration.
-2. Alternatively, log a warning at startup if the default is being used.
+| Check | Status | Recommendation |
+|---|---|---|
+| `go.sum` committed | PASS | Good |
+| `package-lock.json` committed | PASS | Good |
+| `govulncheck` in CI | FAIL | No CI pipeline exists. Add GitHub Actions with `govulncheck`. |
+| `npm audit` in CI | FAIL | No CI pipeline exists. Add `npm audit` step. |
+| SAST/linting in CI | FAIL | No CI pipeline. Add `staticcheck` or `golangci-lint`. |
+| Dependency update automation | FAIL | No Dependabot/Renovate configured. |
+| `.gitignore` covers secrets | PASS | `.env` and `.env.local` are ignored. |
+| No secrets in repo | PASS | No committed secrets found. |
 
 ---
 
-### LOW-003: Hub Ring Buffers Not Cleaned Up on Endpoint Deletion (Memory)
+## Docker / Deployment
 
-| Field | Value |
-|-------|-------|
-| **Severity** | LOW |
-| **Location** | `internal/hub/hub.go:172-176` |
-| **Category** | Resource Management |
-
-**Description:** Ring buffers for browser-mode endpoints are only cleaned up when `RemoveBuffer` is explicitly called. If an endpoint is deleted but `RemoveBuffer` is not called (or if many browser-mode endpoints are created and abandoned), ring buffers accumulate in memory.
-
-**Impact:** Gradual memory growth on long-running servers with many browser-mode endpoints. Each ring buffer holds up to 100 messages (default) in memory.
-
-**Recommendation:** Verify that `RemoveBuffer` is called in the endpoint deletion path. Add a periodic sweep that removes buffers for slugs that no longer exist in the database.
+| Check | Status | Detail |
+|---|---|---|
+| Multi-stage build | PASS | 3 stages (node, go, scratch) |
+| Scratch final image | PASS | Minimal attack surface |
+| CGO disabled | PASS | `CGO_ENABLED=0` — static binary |
+| Binary stripped | PASS | `-trimpath -ldflags="-s -w"` |
+| `.dockerignore` | **FAIL** | Missing — `.env` and `.git/` sent to build context |
+| docker-compose Postgres exposed | WARNING | `5432:5432` on all interfaces; bind to `127.0.0.1` |
+| docker-compose hardcoded credentials | WARNING | `POSTGRES_PASSWORD: testhooks` — mark as dev-only |
 
 ---
 
-### INFO-001: All SQL Queries Use Parameterized Statements
+## Positive Findings (What's Done Well)
 
-| Field | Value |
-|-------|-------|
-| **Severity** | INFO (POSITIVE) |
-| **Location** | `internal/db/queries.go` (all queries) |
-| **Category** | GO-INJECT-001 |
-
-**Description:** Every SQL query in `queries.go` uses parameterized placeholders (`$1`, `$2`, etc.) with `pgx`. No string concatenation or interpolation is used to build SQL. This effectively prevents SQL injection.
-
-**Evidence:** All 13 query functions (`CreateEndpoint`, `GetEndpointBySlug`, `GetEndpointByID`, `ListEndpoints`, `UpdateEndpoint`, `DeleteEndpoint`, `InsertRequest`, `ListRequests`, `GetRequest`, `DeleteRequest`, `DeleteAllRequests`, `PruneByStorageBudget`, `PruneExcessRequests`) use `$N` placeholders.
-
-**Assessment:** SQL injection risk is **effectively mitigated**.
-
----
-
-### INFO-002: Frontend Uses Svelte Text Interpolation (XSS Mitigated)
-
-| Field | Value |
-|-------|-------|
-| **Severity** | INFO (POSITIVE) |
-| **Location** | `web/src/lib/components/RequestDetail.svelte`, all `.svelte` files |
-| **Category** | Frontend XSS |
-
-**Description:** The Svelte frontend renders all user-controlled data (request headers, bodies, query params, IPs, error messages) using Svelte's default text interpolation (`{variable}`), which auto-escapes HTML entities. Only one `{@html}` usage exists in the codebase (`[slug]/+page.svelte:679`), and it renders a static string literal, not user input.
-
-**Evidence:** In `RequestDetail.svelte`, request headers are rendered at line 305-307, body at line 383, query params at line 334-336, and error messages at lines 259, 271, 489 — all via `{variable}` text interpolation.
-
-**Assessment:** XSS risk is **effectively mitigated** by Svelte's default escaping. No `innerHTML`, `document.write`, or `eval()` usage found.
+1. **No SQL injection** — all queries use parameterized placeholders (`$1`, `$2`, ...) via pgx.
+2. **Robust SSRF protection** — post-DNS-resolution IP checking, private range blocking, cloud metadata IP blocking, scheme validation, redirect suppression.
+3. **WASM sandbox isolation** — QuickJS runs in Wazero WASM VM with memory limit (64 MB), stack limit (1 MB), execution timeout (5s), and fresh runtime per execution.
+4. **HTTP server hardened** — `ReadTimeout`, `ReadHeaderTimeout`, `IdleTimeout`, `MaxHeaderBytes` all set.
+5. **Body size limits** — `MaxBytesReader` on API mutations, `LimitReader` on capture handler.
+6. **Security headers** — `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, and CSP all set.
+7. **Slug entropy** — 12-char hex via `crypto/rand` (48 bits of entropy).
+8. **No `eval`/`innerHTML`/`document.write`** in frontend code.
+9. **Minimal Docker image** — `scratch` base, no shell, no OS.
+10. **All dependencies permissively licensed** — no compliance issues.
 
 ---
 
-### INFO-003: Browser-Side WASM Sandboxing is Properly Isolated
+## Recommended Fix Priority
 
-| Field | Value |
-|-------|-------|
-| **Severity** | INFO (POSITIVE) |
-| **Location** | `web/src/lib/wasm.ts` |
-| **Category** | Client-Side Sandbox |
+### Immediate (before any public deployment)
+1. **H-05:** Create `.dockerignore`
+2. **H-02:** Blocklist security-sensitive response headers from user scripts
+3. **M-02:** Change default CORS to restrictive; require explicit `ALLOWED_ORIGINS`
+4. **M-11:** Sanitize cURL header output (shell injection)
+5. **H-01:** Fail hard on default DB credentials in non-dev mode
 
-**Description:** Browser-side transforms use QuickJS WASM (`quickjs-emscripten`) which creates a fresh VM context per execution (`quickJSModule.newContext()` at line 68). Each context is properly disposed after use (`vm.dispose()` in `finally` block at line 127). User scripts run inside the WASM sandbox with no access to DOM, network, or host globals.
+### Short-term (next sprint)
+6. **H-03:** Add pagination to `ListEndpoints`
+7. **M-03 + M-09:** Rate limit / cap WebSocket connections
+8. **H-04:** Add TTL sweep for ring buffers
+9. **M-06:** Bound async forward response drain
+10. **M-07:** Limit QuickJS output size
 
-**Assessment:** Browser-side sandbox isolation is **well-implemented**. The per-request context creation prevents state leakage between executions (unlike the server-side pool — see MED-005).
+### Medium-term
+11. **M-01:** Replace `unsafe-inline` CSP with nonce-based CSP
+12. **M-05:** Add `http.TimeoutHandler` to `/api/*` routes
+13. **M-08:** Normalize IPv6 in `ClientIP()`
+14. **M-04:** Scope `DeliverResponse` to subscribing slug
+15. Set up CI with `govulncheck`, `npm audit`, `staticcheck`
 
----
-
-## Overall Assessment
-
-### Strengths
-- **SQL injection:** Fully parameterized queries throughout — no risk identified
-- **Frontend XSS:** Svelte's auto-escaping eliminates the primary XSS vector
-- **Capture body limit:** 512KB limit enforced via `io.LimitReader`
-- **Server-side WASM sandbox:** Memory limit (64MB), stack limit (1MB), execution timeout (5s)
-- **Browser-side WASM sandbox:** Fresh context per execution, proper disposal
-- **Secure randomness:** `crypto/rand` used for slug generation
-- **Forward client hardening:** Redirects disabled, response body capped, timeout set
-
-### Priority Remediation Order
-1. **HIGH-001 (SSRF):** Most exploitable in a production deployment — can hit cloud metadata
-2. **HIGH-003 (Server timeouts):** Easy to exploit for DoS, easy to fix
-3. **HIGH-002 (WS origin):** Enables cross-site data exfiltration
-4. **MED-003 (IP spoofing):** Undermines rate limiting entirely
-5. **MED-002 (API body size):** Easy DoS vector, one-line fix
-6. **MED-001 (CORS):** Defense-in-depth; critical if auth is ever added
-7. **MED-005 (QuickJS pool reuse):** Data leakage risk between endpoints
-8. **MED-004 (WS message size):** Explicit limits are better than defaults
-9. **LOW-001 (CSP/security headers):** Defense-in-depth layer
-10. **LOW-002 (Default DB URL):** Hygiene improvement
-
-### Architecture Note
-The application is intentionally designed without authentication — all endpoints are anonymous and public. This is a deliberate design decision, not a security gap. However, it means that **slug secrecy is the only access control**. If slug generation is predictable or slugs are leaked, anyone can read webhook data. The current 12-character slug with `crypto/rand` provides reasonable entropy (~71 bits assuming base62), but this should be documented as a security boundary.
+### If going public-facing
+16. **C-01:** Implement authentication (API keys or OAuth per endpoint)
+17. Add HSTS header (when deployed behind TLS)
+18. Configure Dependabot/Renovate for dependency updates

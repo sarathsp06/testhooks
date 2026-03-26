@@ -12,11 +12,12 @@ import (
 func newTestLimiter(rps float64, burst int) *RateLimiter {
 	log := zerolog.Nop()
 	rl := &RateLimiter{
-		rate:    rps,
-		burst:   float64(burst),
-		clients: make(map[string]*bucket),
-		log:     log,
-		done:    make(chan struct{}),
+		rate:       rps,
+		burst:      float64(burst),
+		clients:    make(map[string]*bucket),
+		maxClients: 100000, // L-10: must set to avoid 0-value rejecting all new IPs
+		log:        log,
+		done:       make(chan struct{}),
 	}
 	// Don't start the cleanup goroutine in tests.
 	return rl

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"math/rand"
 	"net"
 	"net/http"
 	"net/url"
@@ -329,7 +330,8 @@ func (f *Forwarder) doForward(ctx context.Context, req Request, target string) R
 	}
 	defer resp.Body.Close()
 	// Drain body to allow connection reuse.
-	io.Copy(io.Discard, resp.Body)
+	// M-06: Use LimitReader to prevent unbounded read on malicious/buggy targets.
+	io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<20)) // cap drain at 1MB
 
 	result.StatusCode = resp.StatusCode
 	result.OK = resp.StatusCode >= 200 && resp.StatusCode < 300
@@ -343,9 +345,20 @@ func (f *Forwarder) doForward(ctx context.Context, req Request, target string) R
 	return result
 }
 
-// backoff computes the delay for a given retry attempt using exponential backoff.
+// backoff computes the delay for a given retry attempt using exponential backoff
+// with jitter to prevent thundering herd.
 func (f *Forwarder) backoff(attempt int) time.Duration {
 	delay := time.Duration(float64(f.baseDelay) * math.Pow(2, float64(attempt-1)))
+	if delay > f.maxDelay {
+		delay = f.maxDelay
+	}
+	// Add jitter: ±25% of the delay.
+	jitter := time.Duration(float64(delay) * (rand.Float64()*0.5 - 0.25))
+	delay += jitter
+	if delay < 0 {
+		delay = 0
+	}
+	// Re-cap after jitter to ensure we never exceed maxDelay.
 	if delay > f.maxDelay {
 		delay = f.maxDelay
 	}
@@ -464,6 +477,7 @@ func init() {
 		"169.254.169.254/32", // AWS/GCP/Azure metadata
 		"100.100.100.200/32", // Alibaba Cloud metadata
 		"fd00:ec2::254/128",  // AWS IMDSv2 IPv6
+		"100.64.0.0/10",      // CGNAT (Carrier-Grade NAT) range
 	}
 	for _, cidr := range cidrs {
 		_, ipNet, err := net.ParseCIDR(cidr)

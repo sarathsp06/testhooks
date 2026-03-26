@@ -18,6 +18,7 @@
 	// Forward URL and mode from endpoint config
 	let forwardUrl = $state('');
 	let forwardMode = $state<'sync' | 'async'>('async');
+	let persistRequests = $state(false);
 
 	// Sync local state from endpoint prop when it changes
 	$effect(() => {
@@ -27,6 +28,7 @@
 	$effect(() => {
 		forwardUrl = (endpoint.config?.forward_url as string) ?? '';
 		forwardMode = ((endpoint.config?.forward_mode as string) || 'async') as 'sync' | 'async';
+		persistRequests = !!endpoint.config?.persist_requests;
 	});
 
 	const isServerMode = $derived(endpoint.mode === 'server');
@@ -78,7 +80,8 @@
 			config: {
 				...endpoint.config,
 				forward_url: forwardUrl.trim() || undefined,
-				forward_mode: forwardUrl.trim() ? forwardMode : undefined
+				forward_mode: forwardUrl.trim() ? forwardMode : undefined,
+				persist_requests: persistRequests || undefined
 			}
 		});
 
@@ -224,6 +227,42 @@
 			{/if}
 		</div>
 	</section>
+
+	<!-- Section 3: Persist Requests (browser mode only) -->
+	{#if !isServerMode}
+		<!-- Divider -->
+		<hr class="border-[var(--border)]" />
+
+		<section>
+			<h4 class="text-xs font-semibold text-[var(--text)] uppercase tracking-wider mb-1">Storage</h4>
+			<p class="text-[10px] text-[var(--text-muted)] mb-3">
+				Browser-mode endpoints don't store requests on the server by default. Enable persistence to keep a server-side copy of incoming requests so they're available when you return later.
+			</p>
+			<label class="flex items-center gap-3 cursor-pointer group">
+				<button
+					role="switch"
+					aria-checked={persistRequests}
+					aria-label="Persist requests to database"
+					onclick={() => { persistRequests = !persistRequests; markDirty(); }}
+					class="relative w-9 h-5 rounded-full transition-colors {persistRequests ? 'bg-[var(--accent)]' : 'bg-[var(--border)]'}"
+				>
+					<span
+						class="absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform {persistRequests ? 'translate-x-4' : ''}"
+					></span>
+				</button>
+				<span class="text-xs text-[var(--text)] group-hover:text-[var(--accent)] transition-colors">
+					Persist requests to database
+				</span>
+				<Tooltip text="When enabled, the server stores a copy of each incoming request in the database (same as server mode). Processing (transforms, forwarding) still happens in your browser." />
+			</label>
+			{#if persistRequests}
+				<div class="mt-2 flex items-start gap-2 text-[10px] text-[var(--text-muted)] bg-[var(--bg)] rounded px-3 py-2 border border-[var(--border)]">
+					<Info class="w-3 h-3 flex-shrink-0 mt-0.5" />
+					<p>Requests will be stored on the server and available when you return. Transforms and forwarding still run in your browser only.</p>
+				</div>
+			{/if}
+		</section>
+	{/if}
 
 	<!-- Save Settings button -->
 	<div class="flex items-center justify-end gap-3 pt-2">

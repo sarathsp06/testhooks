@@ -9,6 +9,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 
@@ -20,6 +21,26 @@ import (
 	"github.com/sarathsp06/testhooks/internal/middleware"
 	"github.com/sarathsp06/testhooks/internal/wasm"
 )
+
+// slugPattern validates slug format: 1-64 chars, alphanumeric + hyphens only.
+var slugPattern = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,64}$`)
+
+// blockedResponseHeaders are headers that user scripts must not override.
+// H-02: Prevents user scripts from setting security-sensitive response headers.
+var blockedResponseHeaders = map[string]bool{
+	"set-cookie":                          true,
+	"content-security-policy":             true,
+	"content-security-policy-report-only": true,
+	"x-frame-options":                     true,
+	"x-content-type-options":              true,
+	"strict-transport-security":           true,
+	"permissions-policy":                  true,
+	"referrer-policy":                     true,
+	"x-xss-protection":                    true,
+	"access-control-allow-origin":         true,
+	"access-control-allow-credentials":    true,
+	"transfer-encoding":                   true,
+}
 
 // Capture handles inbound webhook requests at /h/{slug} and /h/{slug}/{rest...}.
 type Capture struct {
@@ -57,6 +78,11 @@ func (c *Capture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "missing slug", http.StatusBadRequest)
 		return
 	}
+	// L-07: Validate slug format to prevent path traversal / unexpected lookups.
+	if !slugPattern.MatchString(slug) {
+		http.Error(w, "invalid slug format", http.StatusBadRequest)
+		return
+	}
 
 	// Sub-path after the slug.
 	subpath := r.PathValue("rest")
@@ -70,11 +96,15 @@ func (c *Capture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Read body (capped).
-	body, err := io.ReadAll(io.LimitReader(r.Body, c.maxBodySize))
+	// Read body (capped). L-05: Check if body was truncated and return 413.
+	body, err := io.ReadAll(io.LimitReader(r.Body, c.maxBodySize+1))
 	if err != nil {
 		c.log.Error().Err(err).Msg("failed to read body")
 		http.Error(w, "failed to read body", http.StatusInternalServerError)
+		return
+	}
+	if int64(len(body)) > c.maxBodySize {
+		http.Error(w, "request body too large", http.StatusRequestEntityTooLarge)
 		return
 	}
 
@@ -104,7 +134,7 @@ func (c *Capture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	isBrowserMode := endpoint.Mode == "browser"
 
-	// Browser mode: generate a unique ID since we skip DB insertion.
+	// Browser mode: generate a unique ID since we skip DB insertion (unless persist is on).
 	if isBrowserMode {
 		req.ID = generateRequestID()
 		req.CreatedAt = time.Now()
@@ -113,12 +143,20 @@ func (c *Capture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Parse endpoint config for server-side processing.
 	epConfig := config.ParseEndpointConfig(endpoint.Config)
 
-	// ── STEP 1: Store (server mode only) ──
+	// ── STEP 1: Store (server mode, or browser mode with persist_requests) ──
 	if !isBrowserMode {
 		if err := c.db.InsertRequest(r.Context(), req); err != nil {
 			c.log.Error().Err(err).Msg("failed to store request")
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
+		}
+	} else if epConfig.PersistRequests {
+		// Browser mode with persistence: store in DB but continue with browser pipeline.
+		// Use the already-generated ID and timestamp. InsertRequest will overwrite them
+		// with DB-generated values which is fine — the DB ID becomes the canonical one.
+		if err := c.db.InsertRequest(r.Context(), req); err != nil {
+			// Non-fatal for browser mode: log and continue with WS relay.
+			c.log.Warn().Err(err).Str("slug", slug).Msg("browser-mode persist failed, continuing with WS relay")
 		}
 	}
 
@@ -175,7 +213,7 @@ func (c *Capture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				if isBrowserMode {
 					defStatus = http.StatusAccepted
 				}
-				c.publishResponseInfo(slug, req.ID, defStatus, nil, fmt.Sprintf(`{"status":"ok","id":"%s"}`, req.ID), "application/json", "default")
+				c.publishResponseInfo(slug, req.ID, defStatus, nil, defaultResponseBody(req.ID), "application/json", "default")
 				return
 			}
 
@@ -234,7 +272,7 @@ func (c *Capture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		data, _ := json.Marshal(req)
 		c.hub.Publish(endpoint.Slug, hub.Message{Type: "request", Data: data}, true)
 		c.writeDefaultResponse(w, true, req.ID)
-		c.publishResponseInfo(slug, req.ID, http.StatusAccepted, nil, fmt.Sprintf(`{"status":"ok","id":"%s"}`, req.ID), "application/json", "default")
+		c.publishResponseInfo(slug, req.ID, http.StatusAccepted, nil, defaultResponseBody(req.ID), "application/json", "default")
 		return
 	}
 
@@ -352,7 +390,7 @@ func (c *Capture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// ── STEP 5: Default HTTP Response ──
 	c.writeDefaultResponse(w, false, req.ID)
-	c.publishResponseInfo(slug, req.ID, http.StatusOK, nil, fmt.Sprintf(`{"status":"ok","id":"%s"}`, req.ID), "application/json", "default")
+	c.publishResponseInfo(slug, req.ID, http.StatusOK, nil, defaultResponseBody(req.ID), "application/json", "default")
 }
 
 // handleBrowserResponse holds the HTTP connection open, sends a response_needed
@@ -360,7 +398,7 @@ func (c *Capture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // a computed response (or times out).
 func (c *Capture) handleBrowserResponse(w http.ResponseWriter, r *http.Request, slug string, req *db.CapturedRequest, epConfig config.EndpointConfig, body []byte) {
 	// Register a pending response channel before publishing.
-	respCh, cleanup := c.hub.WaitForResponse(req.ID)
+	respCh, cleanup := c.hub.WaitForResponse(slug, req.ID)
 	defer cleanup()
 
 	// Build the response_needed message with the full request data.
@@ -395,8 +433,13 @@ func (c *Capture) handleBrowserResponse(w http.ResponseWriter, r *http.Request, 
 	select {
 	case result := <-respCh:
 		// Browser sent back a response — use it.
+		// H-02: Block security-sensitive headers from browser responses.
 		respHeaders := make(map[string]string)
 		for k, v := range result.Headers {
+			if blockedResponseHeaders[strings.ToLower(k)] {
+				c.log.Warn().Str("header", k).Str("request_id", req.ID).Msg("blocked security-sensitive header from browser response")
+				continue
+			}
 			w.Header().Set(k, v)
 			respHeaders[k] = v
 		}
@@ -423,13 +466,18 @@ func (c *Capture) handleBrowserResponse(w http.ResponseWriter, r *http.Request, 
 		// Timeout — browser didn't respond in time. Send default.
 		c.log.Warn().Str("slug", slug).Str("request_id", req.ID).Dur("timeout", c.browserResponseTimeout).Msg("browser response timed out, using default")
 		c.writeDefaultResponse(w, true, req.ID)
-		c.publishResponseInfo(slug, req.ID, http.StatusAccepted, nil, fmt.Sprintf(`{"status":"ok","id":"%s"}`, req.ID), "application/json", "default")
+		c.publishResponseInfo(slug, req.ID, http.StatusAccepted, nil, defaultResponseBody(req.ID), "application/json", "default")
 	}
 }
 
 // writeCustomResponse sends the handler script's output as the HTTP response.
+// H-02: Blocks security-sensitive response headers from user scripts.
 func (c *Capture) writeCustomResponse(w http.ResponseWriter, output *wasm.ResponseHandlerOutput, reqID string, dur time.Duration) {
 	for k, v := range output.Headers {
+		if blockedResponseHeaders[strings.ToLower(k)] {
+			c.log.Warn().Str("header", k).Str("request_id", reqID).Msg("blocked security-sensitive header from custom response")
+			continue
+		}
 		w.Header().Set(k, v)
 	}
 	ct := output.ContentType
@@ -457,6 +505,7 @@ func (c *Capture) writeCustomResponse(w http.ResponseWriter, output *wasm.Respon
 }
 
 // writeDefaultResponse sends the standard JSON response to the webhook sender.
+// L-06: Uses json.Marshal instead of fmt.Sprintf to prevent injection.
 func (c *Capture) writeDefaultResponse(w http.ResponseWriter, isBrowserMode bool, reqID string) {
 	w.Header().Set("Content-Type", "application/json")
 	status := http.StatusOK
@@ -464,8 +513,9 @@ func (c *Capture) writeDefaultResponse(w http.ResponseWriter, isBrowserMode bool
 		status = http.StatusAccepted
 	}
 	w.WriteHeader(status)
-	body := fmt.Sprintf(`{"status":"ok","id":"%s"}`, reqID)
-	w.Write([]byte(body))
+	resp := map[string]string{"status": "ok", "id": reqID}
+	data, _ := json.Marshal(resp)
+	w.Write(data)
 	w.Write([]byte("\n"))
 }
 
@@ -538,6 +588,12 @@ func (c *Capture) publishForwardResult(slug string, reqID string, result forward
 		return
 	}
 	c.hub.Publish(slug, hub.Message{Type: "forward_result", Data: data}, false)
+}
+
+// defaultResponseBody returns a safe JSON response body string. L-06.
+func defaultResponseBody(reqID string) string {
+	data, _ := json.Marshal(map[string]string{"status": "ok", "id": reqID})
+	return string(data)
 }
 
 // GenerateSlug creates a random 8-character hex slug.

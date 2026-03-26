@@ -23,9 +23,11 @@ type RateLimiter struct {
 	burst          float64 // max tokens (bucket capacity)
 	mu             sync.Mutex
 	clients        map[string]*bucket
+	maxClients     int // L-10: max entries in the client map
 	trustedProxies []*net.IPNet
 	log            zerolog.Logger
 	done           chan struct{}
+	closeOnce      sync.Once // L-11: prevent double-close panic
 }
 
 // NewRateLimiter creates a rate limiter. `rps` is the sustained requests/sec
@@ -38,6 +40,7 @@ func NewRateLimiter(rps float64, burst int, trustedProxies []*net.IPNet, log zer
 		rate:           rps,
 		burst:          float64(burst),
 		clients:        make(map[string]*bucket),
+		maxClients:     100000, // L-10: cap to prevent unbounded memory growth
 		trustedProxies: trustedProxies,
 		log:            log,
 		done:           make(chan struct{}),
@@ -61,9 +64,11 @@ func (rl *RateLimiter) Wrap(next http.Handler) http.Handler {
 	})
 }
 
-// Close stops the background cleanup goroutine.
+// Close stops the background cleanup goroutine. Safe to call multiple times (L-11).
 func (rl *RateLimiter) Close() {
-	close(rl.done)
+	rl.closeOnce.Do(func() {
+		close(rl.done)
+	})
 }
 
 // allow checks whether the given IP has tokens remaining. It refills tokens
@@ -75,6 +80,11 @@ func (rl *RateLimiter) allow(ip string) bool {
 	now := time.Now()
 	b, exists := rl.clients[ip]
 	if !exists {
+		// L-10: Enforce max entries to prevent unbounded memory growth.
+		if len(rl.clients) >= rl.maxClients {
+			// At capacity — reject new clients until cleanup frees slots.
+			return false
+		}
 		// First request from this IP — start with a full bucket minus 1 token.
 		rl.clients[ip] = &bucket{
 			tokens:   rl.burst - 1,
