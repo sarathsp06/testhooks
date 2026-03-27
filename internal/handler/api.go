@@ -122,7 +122,7 @@ func (a *API) GetEndpoint(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, ep)
 }
 
-// GetEndpointBySlug handles GET /api/endpoints/by-slug/{slug}.
+// GetEndpointBySlug handles GET /api/slug/{slug}.
 func (a *API) GetEndpointBySlug(w http.ResponseWriter, r *http.Request) {
 	slug := r.PathValue("slug")
 	ep, err := a.db.GetEndpointBySlug(r.Context(), slug)

@@ -88,7 +88,7 @@ export function getEndpoint(id: string) {
 }
 
 export function getEndpointBySlug(slug: string) {
-	return request<Endpoint>(`/endpoints/by-slug/${slug}`);
+	return request<Endpoint>(`/slug/${slug}`);
 }
 
 export function updateEndpoint(
