@@ -2,7 +2,7 @@
 	import { goto } from '$app/navigation';
 	import { createEndpoint, listEndpoints, deleteEndpoint } from '$lib/api';
 	import { getWebhookURL, formatTime, copyToClipboard } from '$lib/utils';
-	import { SUPPORTED_LANGUAGES, DEFAULT_SCRIPTS, DEFAULT_RESPONSE_SCRIPTS, type TransformLanguage } from '$lib/wasm';
+	import { SUPPORTED_LANGUAGES, DEFAULT_SCRIPTS, DEFAULT_RESPONSE_SCRIPTS, initWasm, isWasmReady, validateResponseHandler, type TransformLanguage } from '$lib/wasm';
 	import CodeEditor from '$lib/components/CodeEditor.svelte';
 	import {
 		Plus,
@@ -27,7 +27,10 @@
 		GitBranch,
 		Unplug,
 		Laptop,
-		CircleCheck
+		CircleCheck,
+		Check,
+		AlertTriangle,
+		Loader2
 	} from 'lucide-svelte';
 	import type { Endpoint, EndpointConfig } from '$lib/types';
 
@@ -59,6 +62,25 @@
 	let newCustomResponseEnabled = $state(false);
 	let newCustomResponseLanguage = $state<TransformLanguage>('javascript');
 	let newCustomResponseScript = $state('');
+	let newResponseValidating = $state(false);
+	let newResponseValidationResult = $state<{ valid: boolean; error?: string } | null>(null);
+
+	async function handleNewResponseValidate() {
+		if (!isWasmReady(newCustomResponseLanguage)) {
+			await initWasm(newCustomResponseLanguage);
+		}
+		if (!isWasmReady(newCustomResponseLanguage)) return;
+		newResponseValidating = true;
+		newResponseValidationResult = null;
+		try {
+			newResponseValidationResult = await validateResponseHandler(
+				newCustomResponseScript || DEFAULT_RESPONSE_SCRIPTS[newCustomResponseLanguage],
+				newCustomResponseLanguage
+			);
+		} finally {
+			newResponseValidating = false;
+		}
+	}
 
 	async function loadEndpoints() {
 		loading = true;
@@ -874,6 +896,18 @@
 												Insert template
 											</button>
 										{/if}
+										<button
+											onclick={handleNewResponseValidate}
+											disabled={newResponseValidating || !newCustomResponseScript}
+											class="text-[11px] px-2.5 py-1 rounded-lg border border-[var(--border)] hover:bg-[var(--bg-hover)] text-[var(--text-muted)] hover:text-[var(--text)] transition-colors flex items-center gap-1 disabled:opacity-50"
+										>
+											{#if newResponseValidating}
+												<Loader2 class="w-3 h-3 animate-spin" />
+											{:else}
+												<Check class="w-3 h-3" />
+											{/if}
+											Validate
+										</button>
 									</div>
 									{#if newMode === 'server' && newCustomResponseLanguage !== 'javascript'}
 										<p class="text-[10px] text-[var(--yellow)]">Server mode only supports JavaScript. {newCustomResponseLanguage === 'lua' ? 'Lua' : 'Jsonnet'} will only run when the browser tab is open.</p>
@@ -885,6 +919,16 @@
 										minHeight="140px"
 										language={newCustomResponseLanguage}
 									/>
+
+									{#if newResponseValidationResult}
+										<div class="text-xs px-3 py-2 rounded border {newResponseValidationResult.valid ? 'border-green-500/30 bg-green-500/5 text-[var(--green)]' : 'border-red-500/30 bg-red-500/5 text-[var(--red)]'}">
+											{#if newResponseValidationResult.valid}
+												<span class="flex items-center gap-1"><Check class="w-3 h-3" /> Handler script is valid</span>
+											{:else}
+												<span class="flex items-center gap-1"><AlertTriangle class="w-3 h-3" /> {newResponseValidationResult.error}</span>
+											{/if}
+										</div>
+									{/if}
 								</div>
 							{/if}
 						</div>

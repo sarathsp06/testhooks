@@ -13,7 +13,6 @@
   <a href="#quick-start">Quick Start</a> &middot;
   <a href="#features">Features</a> &middot;
   <a href="#how-it-works">How It Works</a> &middot;
-  <a href="#api">API</a> &middot;
   <a href="#configuration">Configuration</a> &middot;
   <a href="https://testhooks.sarathsadasivan.com/">Live Demo</a>
 </p>
@@ -123,75 +122,29 @@ make dev-web   # Vite dev server only
 
 ## Configuration
 
-All configuration is via environment variables. Copy `.env.example` to `.env` to get started.
+All config is via environment variables. Copy `.env.example` to `.env` to get started.
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `LISTEN` | `:8080` | Address the HTTP server binds to |
-| `PORT` | *unset* | Overrides `LISTEN` with `:<PORT>` (PaaS convention) |
-| `DATABASE_URL` | `postgres://testhooks:testhooks@localhost:5432/testhooks?sslmode=disable` | PostgreSQL connection string. Migrations run automatically |
-| `DEV` | `false` | Proxy SPA requests to the Vite dev server |
-| `VITE_URL` | `http://localhost:5173` | Vite dev server URL (only when `DEV=true`) |
-| `MAX_BODY_SIZE` | `524288` (512 KB) | Max request body size for captured webhooks |
-| `MAX_ENDPOINT_STORAGE_BYTES` | `10485760` (10 MB) | Total body storage budget per endpoint |
-| `MAX_REQUESTS_PER_ENDPOINT` | `500` | Max stored requests per endpoint |
-| `PRUNE_INTERVAL_SECONDS` | `60` | How often the background pruner runs |
-| `RING_BUFFER_SIZE` | `100` | Per-endpoint in-memory ring buffer for browser-mode |
-| `RATE_LIMIT_RPS` | `20` | Sustained requests/sec per IP on capture endpoints (`0` to disable) |
-| `RATE_LIMIT_BURST` | `40` | Max burst size per IP |
+```bash
+# Required
+DATABASE_URL="postgres://user:pass@localhost:5432/testhooks?sslmode=disable"
 
----
+# Server
+LISTEN=":8080"          # bind address (PORT env overrides this for PaaS)
+MAX_BODY_SIZE=524288     # max webhook body — 512 KB
+RATE_LIMIT_RPS=20        # per-IP req/s on /h/ routes (0 = off)
+RATE_LIMIT_BURST=40      # per-IP burst cap
 
-## API
+# Storage limits
+MAX_ENDPOINT_STORAGE_BYTES=10485760  # 10 MB per endpoint
+MAX_REQUESTS_PER_ENDPOINT=500
+PRUNE_INTERVAL_SECONDS=60
 
-| Method | Path | Description |
-|--------|------|-------------|
-| `ANY` | `/h/:slug` | Capture inbound webhook |
-| `ANY` | `/h/:slug/*` | Capture with sub-path |
-| `GET` | `/api/endpoints` | List endpoints |
-| `POST` | `/api/endpoints` | Create endpoint |
-| `GET` | `/api/endpoints/:id` | Get endpoint |
-| `PATCH` | `/api/endpoints/:id` | Update endpoint config |
-| `DELETE` | `/api/endpoints/:id` | Delete endpoint + requests |
-| `GET` | `/api/endpoints/:id/requests` | List requests (paginated) |
-| `DELETE` | `/api/endpoints/:id/requests` | Clear all requests |
-| `GET` | `/api/requests/:reqId` | Get single request |
-| `DELETE` | `/api/requests/:reqId` | Delete a request |
-| `WS` | `/ws/:slug` | WebSocket stream |
+# Browser-mode
+RING_BUFFER_SIZE=100     # in-memory buffer per endpoint
 
----
-
-## Tech Stack
-
-| Layer | Technology | Notes |
-|-------|-----------|-------|
-| Backend | **Go** | stdlib `net/http`, single binary, `go:embed` for SPA |
-| Frontend | **Svelte 5** | SvelteKit SPA mode, `adapter-static` |
-| Database | **PostgreSQL** | JSONB for request payloads |
-| Real-time | **WebSockets** | `nhooyr.io/websocket` |
-| WASM (server) | **QuickJS** | `fastschema/qjs` pool for server-side JS transforms |
-| WASM (browser) | **QuickJS + Lua + Jsonnet** | `quickjs-emscripten`, `wasmoon`, `tplfa-jsonnet` |
-
----
-
-## Makefile Targets
-
-```
-make help         Show all targets
-make dev          Run Go + Vite concurrently (hot reload)
-make dev-api      Run Go backend only
-make dev-web      Run Vite dev server only
-make build        Full production build (SPA + Go binary)
-make build-all    Cross-compile for all OS/arch combinations
-make build-web    Build SPA into web/dist/
-make build-go     Build Go binary (assumes web/dist/ exists)
-make run          Run the compiled binary
-make docker-build Build the Docker image
-make docker-up    Start app + Postgres via Docker Compose
-make docker-down  Stop containers and remove volumes
-make lint         Run Go vet + Svelte check
-make test         Run Go tests
-make clean        Remove build artifacts
+# Dev only
+DEV=false                # proxy SPA to Vite dev server
+VITE_URL="http://localhost:5173"
 ```
 
 ---

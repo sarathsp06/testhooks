@@ -7,7 +7,7 @@
 	import { getEndpointStore } from '$lib/stores/endpoint.svelte';
 	import { getRequestsStore } from '$lib/stores/requests.svelte';
 	import { getWebhookURL, copyToClipboard } from '$lib/utils';
-	import { initWasm, runTransform, runResponseHandler, SUPPORTED_LANGUAGES, DEFAULT_RESPONSE_SCRIPTS, RESPONSE_HANDLER_EXAMPLES, formatRequestReference, type TransformLanguage } from '$lib/wasm';
+	import { initWasm, isWasmReady, runTransform, runResponseHandler, validateResponseHandler, SUPPORTED_LANGUAGES, DEFAULT_RESPONSE_SCRIPTS, RESPONSE_HANDLER_EXAMPLES, formatRequestReference, type TransformLanguage } from '$lib/wasm';
 	import CodeEditor from '$lib/components/CodeEditor.svelte';
 	import { forwardRequest, forwardRequestSync, forwardRequestWithResponse } from '$lib/forward';
 	import { saveRequest as saveToIDB } from '$lib/idb';
@@ -16,7 +16,7 @@
 	import ForwardConfig from '$lib/components/ForwardConfig.svelte';
 	import TransformConfig from '$lib/components/TransformConfig.svelte';
 	import type { CapturedRequest, CapturedResponse, Endpoint, ResponseNeededData, ResponseInfoData, ForwardResponse, ForwardResultData } from '$lib/types';
-	import { Copy, Wifi, WifiOff, Trash2, Server, Monitor, Settings, Code2, Download, Inbox, Check, XCircle, AlertTriangle, MessageSquare, BookOpen, AlertCircle } from 'lucide-svelte';
+	import { Copy, Wifi, WifiOff, Trash2, Server, Monitor, Settings, Code2, Download, Inbox, Check, XCircle, AlertTriangle, MessageSquare, BookOpen, AlertCircle, Loader2, Play } from 'lucide-svelte';
 	import Tooltip from '$lib/components/Tooltip.svelte';
 
 	type RightPanelTab = 'requests' | 'transform' | 'settings';
@@ -45,6 +45,10 @@
 	let customResponseLanguage = $state<TransformLanguage>('javascript');
 	let showResponseExample = $state(false);
 	let showResponseReqRef = $state(false);
+	let responseValidating = $state(false);
+	let responseValidationResult = $state<{ valid: boolean; error?: string } | null>(null);
+	let responseTesting = $state(false);
+	let responseTestResult = $state<import('$lib/wasm').ResponseHandlerResult | null>(null);
 
 	// Resolve the endpoint by slug -> get ID -> load requests
 	async function init(s: string) {
@@ -339,6 +343,45 @@
 		customResponseLanguage = lang;
 		customResponseScript = '';
 		scriptSaved = false;
+		responseValidationResult = null;
+		responseTestResult = null;
+	}
+
+	async function handleResponseValidate() {
+		if (!isWasmReady(customResponseLanguage)) {
+			await initWasm(customResponseLanguage);
+		}
+		if (!isWasmReady(customResponseLanguage)) return;
+		responseValidating = true;
+		responseValidationResult = null;
+		try {
+			responseValidationResult = await validateResponseHandler(
+				customResponseScript || DEFAULT_RESPONSE_SCRIPTS[customResponseLanguage],
+				customResponseLanguage
+			);
+		} finally {
+			responseValidating = false;
+		}
+	}
+
+	async function handleResponseTest() {
+		const req = requestsStore.selected;
+		if (!req) return;
+		if (!isWasmReady(customResponseLanguage)) {
+			await initWasm(customResponseLanguage);
+		}
+		if (!isWasmReady(customResponseLanguage)) return;
+		responseTesting = true;
+		responseTestResult = null;
+		try {
+			responseTestResult = await runResponseHandler(
+				customResponseScript || DEFAULT_RESPONSE_SCRIPTS[customResponseLanguage],
+				req,
+				customResponseLanguage
+			);
+		} finally {
+			responseTesting = false;
+		}
 	}
 
 	function saveTransformScript() {
@@ -753,6 +796,31 @@
 											<BookOpen class="w-3 h-3" />
 											Reference
 										</button>
+										<button
+											onclick={handleResponseValidate}
+											disabled={responseValidating || !customResponseScript}
+											class="text-[11px] px-2.5 py-1 rounded border border-[var(--border)] hover:bg-[var(--bg-hover)] text-[var(--text-muted)] hover:text-[var(--text)] transition-colors flex items-center gap-1 disabled:opacity-50"
+										>
+											{#if responseValidating}
+												<Loader2 class="w-3 h-3 animate-spin" />
+											{:else}
+												<Check class="w-3 h-3" />
+											{/if}
+											Validate
+										</button>
+										<button
+											onclick={handleResponseTest}
+											disabled={responseTesting || !requestsStore.selected || !customResponseScript}
+											class="text-[11px] px-2.5 py-1 rounded border border-[var(--border)] hover:bg-[var(--bg-hover)] text-[var(--text-muted)] hover:text-[var(--text)] transition-colors flex items-center gap-1 disabled:opacity-50"
+											title={!requestsStore.selected ? 'Select a request to test against' : 'Run handler on selected request'}
+										>
+											{#if responseTesting}
+												<Loader2 class="w-3 h-3 animate-spin" />
+											{:else}
+												<Play class="w-3 h-3" />
+											{/if}
+											Test
+										</button>
 									</div>
 
 									{#if showResponseExample}
@@ -792,6 +860,30 @@
 										minHeight="140px"
 										language={customResponseLanguage}
 									/>
+
+									{#if responseValidationResult}
+										<div class="text-xs px-3 py-2 rounded border {responseValidationResult.valid ? 'border-green-500/30 bg-green-500/5 text-[var(--green)]' : 'border-red-500/30 bg-red-500/5 text-[var(--red)]'}">
+											{#if responseValidationResult.valid}
+												<span class="flex items-center gap-1"><Check class="w-3 h-3" /> Handler script is valid</span>
+											{:else}
+												<span class="flex items-center gap-1"><AlertTriangle class="w-3 h-3" /> {responseValidationResult.error}</span>
+											{/if}
+										</div>
+									{/if}
+
+									{#if responseTestResult}
+										<div class="bg-[var(--bg-card)] border border-[var(--border)] rounded">
+											<div class="px-3 py-2 text-xs font-medium text-[var(--text-muted)] border-b border-[var(--border)] flex items-center justify-between">
+												<span>Handler Result</span>
+												<span class="{responseTestResult.ok ? 'text-[var(--green)]' : 'text-[var(--red)]'}">{responseTestResult.duration}ms</span>
+											</div>
+											{#if responseTestResult.ok}
+												<pre class="px-3 py-2 text-xs font-mono text-[var(--text)] overflow-x-auto max-h-60 whitespace-pre">{JSON.stringify(responseTestResult.response, null, 2)}</pre>
+											{:else}
+												<div class="px-3 py-2 text-xs text-[var(--red)]">{responseTestResult.error}</div>
+											{/if}
+										</div>
+									{/if}
 								</div>
 							{:else}
 								<div class="text-xs text-[var(--text-muted)] italic bg-[var(--bg)] border border-[var(--border)] rounded-lg px-3 py-4 text-center">

@@ -507,6 +507,105 @@ export async function validateScript(
 	}
 }
 
+/**
+ * Validate a custom response handler script (compiles and defines handler()).
+ */
+export async function validateResponseHandler(
+	script: string,
+	language: TransformLanguage = 'javascript'
+): Promise<{ valid: boolean; error?: string }> {
+	switch (language) {
+		case 'javascript':
+			return validateResponseHandlerJS(script);
+		case 'lua':
+			return validateResponseHandlerLua(script);
+		case 'jsonnet':
+			return validateResponseHandlerJsonnet(script);
+	}
+}
+
+async function validateResponseHandlerJS(script: string): Promise<{ valid: boolean; error?: string }> {
+	if (!quickJSModule) return { valid: false, error: 'QuickJS WASM not initialized' };
+
+	const vm = quickJSModule.newContext();
+	try {
+		const code = `
+${script}
+typeof handler === 'function' ? 'ok' : 'No handler() function defined';
+`;
+		const result = vm.evalCode(code);
+		if (result.error) {
+			const errorVal = vm.dump(result.error);
+			result.error.dispose();
+			return {
+				valid: false,
+				error: typeof errorVal === 'object' ? JSON.stringify(errorVal) : String(errorVal)
+			};
+		}
+		const value = vm.dump(result.value);
+		result.value.dispose();
+		return value === 'ok' ? { valid: true } : { valid: false, error: String(value) };
+	} catch (err) {
+		return { valid: false, error: err instanceof Error ? err.message : 'Unknown error' };
+	} finally {
+		vm.dispose();
+	}
+}
+
+async function validateResponseHandlerLua(script: string): Promise<{ valid: boolean; error?: string }> {
+	if (!luaFactory) return { valid: false, error: 'Lua WASM not initialized' };
+
+	let engine: LuaEngine | null = null;
+	try {
+		engine = await luaFactory.createEngine();
+
+		const code = `
+${script}
+
+if type(handler) == "function" then
+  return "ok"
+else
+  return "No handler() function defined"
+end
+`;
+		const result = await engine.doString(code);
+		return result === 'ok' ? { valid: true } : { valid: false, error: String(result) };
+	} catch (err) {
+		return { valid: false, error: err instanceof Error ? err.message : 'Unknown Lua error' };
+	} finally {
+		engine?.global.close();
+	}
+}
+
+async function validateResponseHandlerJsonnet(script: string): Promise<{ valid: boolean; error?: string }> {
+	if (!jsonnetInstance) return { valid: false, error: 'Jsonnet WASM not initialized' };
+
+	try {
+		const dummyVars: Record<string, string> = {
+			req: JSON.stringify({
+				method: 'POST',
+				path: '/',
+				headers: {},
+				query: {},
+				body: '{}',
+				content_type: 'application/json'
+			})
+		};
+		const result = await jsonnetInstance.evaluate(script, dummyVars);
+		try {
+			const parsed = JSON.parse(result);
+			if (typeof parsed !== 'object' || parsed === null) {
+				return { valid: false, error: 'Script must evaluate to a response object' };
+			}
+			return { valid: true };
+		} catch {
+			return { valid: false, error: 'Script must evaluate to valid JSON' };
+		}
+	} catch (err) {
+		return { valid: false, error: err instanceof Error ? err.message : 'Unknown Jsonnet error' };
+	}
+}
+
 /** List of supported transform languages with display info. */
 export const SUPPORTED_LANGUAGES: { id: TransformLanguage; label: string; ext: string }[] = [
 	{ id: 'javascript', label: 'JavaScript', ext: 'js' },
