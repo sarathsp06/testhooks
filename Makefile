@@ -4,6 +4,8 @@
 BINARY  := testhooks
 WEB_DIR := web
 DIST    := dist
+VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
+LDFLAGS := -s -w -X main.version=$(VERSION)
 
 # OS/arch matrix for cross-compilation.
 PLATFORMS := \
@@ -45,7 +47,7 @@ build-web: ## Build the SPA into web/dist/
 	cd $(WEB_DIR) && npm ci && npm run build
 
 build-go: ## Build the Go binary (assumes web/dist/ exists)
-	CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o $(BINARY) ./cmd/$(BINARY)
+	CGO_ENABLED=0 go build -trimpath -ldflags="$(LDFLAGS)" -o $(BINARY) ./cmd/$(BINARY)
 
 build-all: build-web ## Cross-compile for all OS/arch combinations
 	@mkdir -p $(DIST)
@@ -57,7 +59,7 @@ build-all: build-web ## Cross-compile for all OS/arch combinations
 		out=$(DIST)/$(BINARY)-$$os-$$arch$$ext; \
 		echo "  Building $$out ..."; \
 		CGO_ENABLED=0 GOOS=$$os GOARCH=$$arch \
-			go build -trimpath -ldflags="-s -w" -o $$out ./cmd/$(BINARY) || exit 1; \
+			go build -trimpath -ldflags="$(LDFLAGS)" -o $$out ./cmd/$(BINARY) || exit 1; \
 	done
 	@echo ""
 	@echo "All binaries written to $(DIST)/:"

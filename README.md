@@ -6,149 +6,206 @@
 
 <p align="center">
   <strong>A lightweight, self-hostable <a href="https://webhook.site">webhook.site</a> replacement.</strong><br/>
-  Ships as a single binary with the SPA embedded — just point it at Postgres and go.
+  Capture, inspect, transform, forward and mock webhooks. One binary with the UI embedded, plus PostgreSQL.
 </p>
 
 <p align="center">
-  <a href="#quick-start">Quick Start</a> &middot;
+  <a href="#quick-start">Quick start</a> &middot;
   <a href="#features">Features</a> &middot;
-  <a href="#how-it-works">How It Works</a> &middot;
+  <a href="#how-it-works">How it works</a> &middot;
+  <a href="#verifying-signed-webhooks">Signed webhooks</a> &middot;
   <a href="#configuration">Configuration</a> &middot;
-  <a href="https://testhooks.sarathsadasivan.com/">Live Demo</a>
+  <a href="https://testhooks.sarathsadasivan.com/">Live demo</a>
 </p>
 
 ---
 
-## Why Testhooks?
+## Quick start
 
-- **No signup, no SaaS** — run it on your own infra in under a minute.
-- **Replace ngrok for webhook testing** — webhooks hit the public server, stream to your browser via WebSocket, and forward to `localhost` via `fetch()`. No CLI, no daemon, no port forwarding.
-- **Privacy when you need it** — Browser mode means payloads never touch the server's disk. All processing happens client-side.
-- **Always-on when you need it** — Server mode stores everything in Postgres and runs transforms/forwards headlessly, even when no browser is open.
-- **Single binary, one dependency** — Go binary with the SPA embedded via `go:embed`. PostgreSQL is the only external requirement.
+### Docker Compose (one line)
+
+Runs testhooks and PostgreSQL from the published image. No clone, no build:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/sarathsp06/testhooks/main/deploy/docker-compose.yml | docker compose -p testhooks -f - up -d
+```
+
+Open **http://localhost:8080**, create an endpoint, and send it a request:
+
+```bash
+curl -X POST http://localhost:8080/h/<slug> -H 'Content-Type: application/json' -d '{"hello":"world"}'
+```
+
+Set options inline, for example `TESTHOOKS_PORT=9000 AUTH_TOKEN=change-me curl -fsSL … | docker compose -p testhooks -f - up -d`. Stop it with `docker compose -p testhooks down` (add `-v` to delete the data too).
+
+### Install the binary (one line)
+
+Downloads the right build for your OS and architecture from GitHub Releases and checks its SHA-256:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/sarathsp06/testhooks/main/install.sh | sh
+```
+
+It installs to `/usr/local/bin` when that's writable, otherwise `~/.local/bin`. Use `TESTHOOKS_VERSION=v1.1.0` to pin a release and `TESTHOOKS_INSTALL_DIR=…` to choose the directory. The binary needs PostgreSQL:
+
+```bash
+docker run -d --name testhooks-pg -p 127.0.0.1:5432:5432 \
+  -e POSTGRES_USER=testhooks -e POSTGRES_PASSWORD=testhooks -e POSTGRES_DB=testhooks \
+  postgres:17-alpine
+testhooks          # defaults to postgres://testhooks:testhooks@localhost:5432/testhooks
+```
+
+Migrations run automatically on startup, and the server waits up to 60 s for the database to come up.
+
+### From source
+
+Prerequisites: Go 1.26+, Node 22+, PostgreSQL 15+.
+
+```bash
+git clone https://github.com/sarathsp06/testhooks.git && cd testhooks
+docker compose up --build        # app + Postgres, built from this checkout
+# or
+make build && ./testhooks        # single binary with the SPA embedded
+```
+
+`make build-all` cross-compiles for Linux, macOS and Windows (amd64 and arm64) into `dist/`.
+
+---
+
+## Why testhooks?
+
+- **No signup, no SaaS.** Run it on your own infra in under a minute.
+- **Test webhooks against localhost without ngrok.** Webhooks hit the public server, stream to your browser over WebSocket, and your browser forwards them to `localhost` with `fetch()`. No CLI, daemon or tunnel.
+- **Private when you need it.** In browser mode, payloads are relayed and never written to the server's disk.
+- **Always on when you need it.** In server mode, everything is stored in Postgres, and transforms and forwarding run headlessly with no browser open.
+- **Small footprint.** One Go binary with the Svelte UI embedded. PostgreSQL is the only dependency.
 
 ---
 
 ## Features
 
-|  |  |
+| | |
 |---|---|
-| **Unique webhook URLs** | Each endpoint gets a short URL (`/h/a1b2c3d4`) |
-| **Real-time streaming** | Requests pushed to the browser instantly via WebSocket |
-| **Two endpoint modes** | Server mode (persistent, always-on) or Browser mode (zero storage, privacy-first) |
-| **Browser-side forwarding** | Forward to `localhost` or any URL via `fetch()` |
-| **Server-side forwarding** | Reliable forwarding from Go to public URLs |
-| **WASM transforms** | JavaScript on the server (QuickJS), JS + Lua + Jsonnet in the browser |
-| **Custom responses** | Script-based HTTP response control per endpoint |
-| **Code editor** | CodeMirror 6 built in for writing transform scripts |
-| **Export** | Download captured requests as JSON or CSV |
-| **Copy as cURL** | Replay requests from the UI |
-| **Dark mode** | System / light / dark theme toggle |
-| **Rate limiting** | Per-IP token-bucket middleware |
+| **Unique webhook URLs** | Every endpoint gets a short URL, `/h/a1b2c3d4`; sub-paths (`/h/a1b2c3d4/any/path`) are captured too |
+| **Real-time streaming** | Requests are pushed to the browser instantly over WebSocket |
+| **Two endpoint modes** | Server mode (persistent, always on) or browser mode (no server storage) |
+| **Forwarding** | Server-side to public URLs (async or sync, with retries and SSRF protection), or browser-side to anything including `localhost` |
+| **Transforms** | Reshape requests with JavaScript on the server (QuickJS on WASM), or JS, Lua and Jsonnet in the browser |
+| **Custom responses** | A script decides the status, headers and body returned to the sender, optionally using the forward target's response |
+| **Signature verification** | Checks [Standard Webhooks](https://www.standardwebhooks.com) signatures (Sparrow, Svix and others), HMAC and Ed25519 |
+| **Code editor** | CodeMirror 6 for writing scripts |
+| **Export and replay** | Download requests as JSON or CSV, or copy any request as a cURL command |
+| **Protection** | Optional bearer-token auth, per-IP rate limiting, body size and storage limits, automatic pruning |
+| **Themes** | System, light or dark |
 
 ---
 
-## How It Works
+## How it works
 
 ```
-                                    ┌──────────────────────────────────────────┐
-                                    │            Browser (Svelte 5)            │
-                                    │                                          │
-                                    │  inspect ─► transform (WASM) ─► forward  │
-                                    │                                 fetch()  │
-                                    └──────────┬───────────────────┬───────────┘
-                                               │ WebSocket         │
-                                               │                   ▼
-  webhook sender ──► POST /h/:slug ──► Go Server ──► Postgres    localhost
-                                          │
-                                          ▼ (optional)
-                                       Redis Pub/Sub
+                                     ┌───────────────────────────────────────────┐
+                                     │             Browser (Svelte 5)            │
+                                     │                                           │
+                                     │  inspect ─► transform (WASM) ─► forward   │
+                                     │                                  fetch()  │
+                                     └───────────▲──────────────────────┬────────┘
+                                                 │ WebSocket            ▼
+  webhook sender ──► POST /h/:slug ──► Go server ┤                  localhost
+                                         │       └─► transform ─► forward (server mode)
+                                         ▼
+                                     PostgreSQL
 ```
 
-**Server mode** — The Go server stores every request in Postgres, runs WASM transforms via QuickJS, and forwards to configured URLs. The browser is just a viewer. Works headlessly, always on.
+**Server mode** stores every request in Postgres, runs the transform on the server, forwards to the configured URL and returns the custom response. The browser is only a viewer, so it keeps working with no tab open.
 
-**Browser mode** — The server acts as a thin relay: receives the webhook, streams it over WebSocket, and discards it immediately. All transforms run in-browser via WASM. Forward to `localhost` with `fetch()`. Nothing written to disk.
+**Browser mode** makes the server a thin relay: it receives the webhook, streams it over WebSocket and keeps only a short in-memory buffer so a reconnecting tab can catch up. Transforms and forwarding run in your browser, which is how it reaches `localhost`. Turn on *Persist requests* to keep a server-side copy as well.
+
+The server is required in both modes because something public has to receive the webhook. A static build of the UI alone can't accept incoming HTTP requests.
+
+### Responses webhook senders see
+
+| Status | When |
+|---|---|
+| `200` | Captured (server mode), or whatever your custom response or sync forward target returned |
+| `202` | Captured and relayed (browser mode) |
+| `401` | Signature verification is enforced and the signature is missing or invalid |
+| `404` | No endpoint with that slug |
+| `413` | Body larger than `MAX_BODY_SIZE` |
+| `429` | Rate limited (`Retry-After: 1`) |
+| `503` | Database unavailable. Senders that retry on 5xx will redeliver |
 
 ---
 
-## Quick Start
+## Verifying signed webhooks
 
-### Docker Compose (easiest)
+testhooks can verify [Standard Webhooks](https://www.standardwebhooks.com) signatures, the `webhook-id`, `webhook-timestamp` and `webhook-signature` headers sent by [Sparrow](https://sarathsp06.github.io/sparrow/), Svix and others.
 
-```bash
-git clone https://github.com/sarathsp06/testhooks.git
-cd testhooks
-docker compose up --build
-```
+In an endpoint's **Settings → Signature Verification**, paste the sender's secret (`whsec_…`, or any raw secret) and/or its Ed25519 public key (hex). Each captured request then shows **verified** or **invalid**, with the reason and the `webhook-id`, which stays the same across retries so duplicates are easy to spot.
 
-Open **http://localhost:8080** and start sending webhooks.
-
-### Pre-built binary
+Turn on **Reject invalid signatures with 401** to make the endpoint behave like a real receiver. Rejected requests are still captured so you can inspect them. The same settings are available through the API:
 
 ```bash
-make build-all
-DATABASE_URL="postgres://user:pass@localhost:5432/testhooks?sslmode=disable" ./testhooks
+curl -X PATCH http://localhost:8080/api/endpoints/<id> -H 'Content-Type: application/json' \
+  -d '{"config":{"signature":{"secret":"whsec_...","enforce":true}}}'
 ```
 
-The binary includes the SPA — there are no static files to serve separately. Cross-compile for all platforms with `make build-all`.
+Timestamps more than 5 minutes off are rejected as replays. The verifier is tested against Sparrow's published signature test vectors.
 
-### From source
+---
 
-**Prerequisites:** Go 1.22+, Node 20+, PostgreSQL 15+
+## Configuration
 
-```bash
-cd web && npm ci && cd ..
-make build
-./testhooks
-```
+Everything is configured with environment variables. A `.env` file in the working directory is loaded if present; see [`.env.example`](.env.example).
+
+| Variable | Default | Description |
+|---|---|---|
+| `DATABASE_URL` | `postgres://testhooks:testhooks@localhost:5432/testhooks?sslmode=disable` | PostgreSQL connection string |
+| `LISTEN` | `:8080` | Bind address |
+| `PORT` | | Overrides `LISTEN` with `:<PORT>` (PaaS convention) |
+| `AUTH_TOKEN` | | When set, the UI, API and WebSocket require this bearer token. `/h/*` and `/healthz` stay public |
+| `ALLOWED_ORIGINS` | `*` | Comma-separated CORS and WebSocket origins. Set this in production |
+| `ALLOWED_HEADERS` | `Content-Type,Authorization,X-Requested-With` | CORS allowed headers |
+| `TRUSTED_PROXIES` | | Comma-separated CIDRs allowed to set `X-Forwarded-For` / `X-Real-IP`, such as your load balancer |
+| `MAX_BODY_SIZE` | `524288` | Max captured body in bytes (512 KB) |
+| `MAX_ENDPOINT_STORAGE_BYTES` | `10485760` | Per-endpoint storage budget; oldest requests are pruned beyond it |
+| `MAX_REQUESTS_PER_ENDPOINT` | `500` | Per-endpoint request cap; oldest are pruned beyond it |
+| `PRUNE_INTERVAL_SECONDS` | `60` | How often the pruner runs |
+| `RATE_LIMIT_RPS` | `20` | Per-IP requests/second on capture and API routes (`0` disables) |
+| `RATE_LIMIT_BURST` | `40` | Per-IP burst size |
+| `API_TIMEOUT_SECONDS` | `30` | Timeout for REST API requests |
+| `RING_BUFFER_SIZE` | `100` | Browser-mode catch-up buffer per endpoint (in memory) |
+| `RING_BUFFER_TTL_SECONDS` | `300` | How long buffered browser-mode requests are kept |
+| `MAX_SUBSCRIBERS_PER_SLUG` | `50` | Max concurrent WebSocket viewers per endpoint |
+| `DEV` | `false` | Proxy the UI to the Vite dev server |
+| `VITE_URL` | `http://localhost:5173` | Vite dev server URL when `DEV=true` |
+
+### Running in production
+
+- Set `AUTH_TOKEN` and `ALLOWED_ORIGINS`. Without them anyone who can reach the server can read every endpoint.
+- Put it behind a TLS-terminating reverse proxy and list that proxy in `TRUSTED_PROXIES` so rate limiting sees real client IPs.
+- `GET /healthz` returns `200` when the database is reachable and `503` when it isn't. Use it for liveness and readiness checks.
+- On `SIGTERM` the server stops accepting requests and gives in-flight requests and background forwards up to 10 s to finish.
 
 ---
 
 ## Development
 
 ```bash
-# Start both Go backend and Vite dev server with hot reload
-make dev
+make dev        # Go on :8080 (API + WebSocket + proxy to Vite) and Vite on :5173 with hot reload
+make dev-api    # Go backend only
+make dev-web    # Vite dev server only
+make test       # Go tests (the web package's tests need `make build-web` first)
+make lint       # go vet + svelte-check
 ```
 
-This starts **Go** on `:8080` (API + WebSocket + reverse proxy to Vite) and **Vite** on `:5173` (SPA with HMR). Open http://localhost:8080 for the full experience.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for more.
 
-```bash
-make dev-api   # Go backend only
-make dev-web   # Vite dev server only
-```
+### Releasing
 
----
-
-## Configuration
-
-All config is via environment variables. Copy `.env.example` to `.env` to get started.
-
-```bash
-# Required
-DATABASE_URL="postgres://user:pass@localhost:5432/testhooks?sslmode=disable"
-
-# Server
-LISTEN=":8080"          # bind address (PORT env overrides this for PaaS)
-MAX_BODY_SIZE=524288     # max webhook body — 512 KB
-RATE_LIMIT_RPS=20        # per-IP req/s on /h/ routes (0 = off)
-RATE_LIMIT_BURST=40      # per-IP burst cap
-
-# Storage limits
-MAX_ENDPOINT_STORAGE_BYTES=10485760  # 10 MB per endpoint
-MAX_REQUESTS_PER_ENDPOINT=500
-PRUNE_INTERVAL_SECONDS=60
-
-# Browser-mode
-RING_BUFFER_SIZE=100     # in-memory buffer per endpoint
-
-# Dev only
-DEV=false                # proxy SPA to Vite dev server
-VITE_URL="http://localhost:5173"
-```
+Push a tag such as `v1.1.0`. The [release workflow](.github/workflows/release.yml) attaches binaries and checksums to the GitHub release and publishes `ghcr.io/sarathsp06/testhooks:1.1.0` and `:latest` for amd64 and arm64. The one-line installers above download from these.
 
 ---
 
 ## License
 
-MIT
+[Apache License 2.0](LICENSE)

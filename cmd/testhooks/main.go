@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io/fs"
 	"net/http"
 	"net/http/httputil"
@@ -27,7 +28,15 @@ import (
 	"github.com/sarathsp06/testhooks/web"
 )
 
+// version is set at build time with -ldflags "-X main.version=v1.2.3".
+var version = "dev"
+
 func main() {
+	if len(os.Args) > 1 && (os.Args[1] == "--version" || os.Args[1] == "version") {
+		fmt.Println("testhooks", version)
+		return
+	}
+
 	// Load .env file if present (before anything else).
 	// Silently ignored if the file doesn't exist.
 	_ = godotenv.Load()
@@ -43,6 +52,7 @@ func main() {
 	}
 
 	log.Info().
+		Str("version", version).
 		Str("listen", cfg.Listen).
 		Bool("dev", cfg.Dev).
 		Msg("starting testhooks")
