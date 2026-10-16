@@ -50,6 +50,7 @@ type Hub struct {
 	ringBufferTTL      time.Duration // H-04: TTL for ring buffer entries
 	maxSubscribersSlug int           // M-09: max subscribers per slug
 	stopSweep          chan struct{}
+	stopOnce           sync.Once
 }
 
 // ringBuffer is a fixed-size circular buffer of timestamped Messages.
@@ -85,37 +86,52 @@ func (rb *ringBuffer) drain() []Message {
 		return nil
 	}
 	var out []Message
+	appendLive := func(i int) {
+		// Skip slots cleared by sweepExpired so clients never receive
+		// blank {"type":"","data":null} messages.
+		if !rb.msgs[i].createdAt.IsZero() {
+			out = append(out, rb.msgs[i].msg)
+		}
+	}
 	if rb.full {
 		// Read from pos (oldest) to end, then from 0 to pos-1
 		out = make([]Message, 0, rb.size)
 		for i := rb.pos; i < rb.size; i++ {
-			out = append(out, rb.msgs[i].msg)
+			appendLive(i)
 		}
 		for i := 0; i < rb.pos; i++ {
-			out = append(out, rb.msgs[i].msg)
+			appendLive(i)
 		}
 	} else {
 		out = make([]Message, 0, rb.pos)
 		for i := 0; i < rb.pos; i++ {
-			out = append(out, rb.msgs[i].msg)
+			appendLive(i)
 		}
 	}
 	return out
 }
 
-// sweepExpired removes entries older than maxAge. H-04: TTL sweep for ring buffers.
-func (rb *ringBuffer) sweepExpired(maxAge time.Duration) {
+// sweepExpired removes entries older than maxAge and reports whether the
+// buffer is now empty. H-04: TTL sweep for ring buffers.
+func (rb *ringBuffer) sweepExpired(maxAge time.Duration) (empty bool) {
 	rb.mu.Lock()
 	defer rb.mu.Unlock()
 	cutoff := time.Now().Add(-maxAge)
 
 	// Zero out expired entries. Since the ring buffer is circular,
 	// we mark expired slots as zero-value. This is best-effort cleanup.
+	empty = true
 	for i := range rb.msgs {
-		if !rb.msgs[i].createdAt.IsZero() && rb.msgs[i].createdAt.Before(cutoff) {
-			rb.msgs[i] = timestampedMessage{}
+		if rb.msgs[i].createdAt.IsZero() {
+			continue
 		}
+		if rb.msgs[i].createdAt.Before(cutoff) {
+			rb.msgs[i] = timestampedMessage{}
+			continue
+		}
+		empty = false
 	}
+	return empty
 }
 
 // New creates a new Hub with the given ring buffer size for browser-mode endpoints.
@@ -172,8 +188,25 @@ func (h *Hub) sweepRingBuffers() {
 	}
 	h.mu.RUnlock()
 
-	for _, rb := range buffers {
-		rb.sweepExpired(h.ringBufferTTL)
+	var emptied []string
+	for slug, rb := range buffers {
+		if rb.sweepExpired(h.ringBufferTTL) {
+			emptied = append(emptied, slug)
+		}
+	}
+	if len(emptied) == 0 {
+		return
+	}
+
+	// Drop fully-expired buffers so slugs that stopped receiving traffic don't
+	// pin a ringBufferSize slice each forever. Re-check under the write lock in
+	// case a Publish raced in after the sweep.
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	for _, slug := range emptied {
+		if rb, ok := h.buffers[slug]; ok && rb.sweepExpired(h.ringBufferTTL) {
+			delete(h.buffers, slug)
+		}
 	}
 }
 
@@ -189,9 +222,9 @@ func (h *Hub) sweepPending() {
 	}
 }
 
-// Stop terminates the background sweep goroutine.
+// Stop terminates the background sweep goroutine. Safe to call more than once.
 func (h *Hub) Stop() {
-	close(h.stopSweep)
+	h.stopOnce.Do(func() { close(h.stopSweep) })
 }
 
 // Subscribe registers a client for the given slug. Returns a channel

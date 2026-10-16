@@ -77,7 +77,7 @@ func (m *mockStore) GetEndpointBySlug(_ context.Context, slug string) (*db.Endpo
 	}
 	id, ok := m.slugIndex[slug]
 	if !ok {
-		return nil, fmt.Errorf("not found")
+		return nil, db.ErrNotFound
 	}
 	return m.endpoints[id], nil
 }
@@ -90,7 +90,7 @@ func (m *mockStore) GetEndpointByID(_ context.Context, id string) (*db.Endpoint,
 	}
 	ep, ok := m.endpoints[id]
 	if !ok {
-		return nil, fmt.Errorf("not found")
+		return nil, db.ErrNotFound
 	}
 	return ep, nil
 }
@@ -128,7 +128,7 @@ func (m *mockStore) UpdateEndpoint(_ context.Context, id, name, mode string, con
 	}
 	ep, ok := m.endpoints[id]
 	if !ok {
-		return nil, fmt.Errorf("not found")
+		return nil, db.ErrNotFound
 	}
 	ep.Name = name
 	ep.Mode = mode
@@ -195,7 +195,7 @@ func (m *mockStore) GetRequest(_ context.Context, id string) (*db.CapturedReques
 	}
 	r, ok := m.requests[id]
 	if !ok {
-		return nil, fmt.Errorf("not found")
+		return nil, db.ErrNotFound
 	}
 	return r, nil
 }

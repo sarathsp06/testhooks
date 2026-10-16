@@ -65,13 +65,16 @@ type Runner struct {
 	timeout       time.Duration
 	ready         atomic.Bool // L-09: atomic for concurrent access
 	maxOutputSize int         // M-07: max WASM output size in bytes
+	// slots bounds concurrent runtimes so a burst of requests can't allocate
+	// PoolSize×MemoryLimit without limit and OOM the process.
+	slots chan struct{}
 }
 
 // Config for the WASM runner.
 type Config struct {
 	// Timeout for each transform execution (milliseconds sent to QuickJS).
 	Timeout time.Duration
-	// PoolSize is the number of QuickJS runtimes kept in the pool.
+	// PoolSize is the maximum number of QuickJS runtimes executing at once.
 	PoolSize int
 	// MemoryLimit in bytes for each QuickJS runtime.
 	MemoryLimit int
@@ -100,7 +103,13 @@ func New(_ context.Context, cfg Config, log zerolog.Logger) (*Runner, error) {
 		MaxExecutionTime: int(cfg.Timeout.Milliseconds()),
 	}
 
+	poolSize := cfg.PoolSize
+	if poolSize <= 0 {
+		poolSize = 1
+	}
+
 	r := &Runner{
+		slots:         make(chan struct{}, poolSize),
 		option:        option,
 		log:           l,
 		timeout:       cfg.Timeout,
@@ -111,6 +120,7 @@ func New(_ context.Context, cfg Config, log zerolog.Logger) (*Runner, error) {
 	l.Info().
 		Int("memory_limit_mb", cfg.MemoryLimit/(1024*1024)).
 		Dur("timeout", cfg.Timeout).
+		Int("max_concurrent", poolSize).
 		Msg("WASM runner initialized (fresh runtime per execution)")
 
 	return r, nil
@@ -141,6 +151,12 @@ func (r *Runner) Transform(ctx context.Context, script string, input TransformIn
 	if err != nil {
 		return nil, fmt.Errorf("marshal input: %w", err)
 	}
+
+	release, err := r.acquire(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
 
 	// Create a fresh runtime for this execution (MED-005: no state leakage).
 	rt, err := qjs.New(r.option)
@@ -183,8 +199,6 @@ JSON.stringify(__result);
 	if err := json.Unmarshal([]byte(resultJSON), &result); err != nil {
 		return nil, fmt.Errorf("unmarshal output: %w (raw: %s)", err, resultJSON)
 	}
-
-	_ = ctx // context honoured by QuickJS MaxExecutionTime; kept for interface compat
 
 	return &result, nil
 }
@@ -230,6 +244,12 @@ func (r *Runner) RunResponseHandler(ctx context.Context, script string, input Tr
 	if err != nil {
 		return nil, fmt.Errorf("marshal input: %w", err)
 	}
+
+	release, err := r.acquire(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
 
 	// Create a fresh runtime for this execution (MED-005: no state leakage).
 	rt, err := qjs.New(r.option)
@@ -277,9 +297,18 @@ JSON.stringify(__result);
 		return nil, fmt.Errorf("unmarshal handler output: %w (raw: %s)", err, resultJSON)
 	}
 
-	_ = ctx // context honoured by QuickJS MaxExecutionTime
-
 	return &result, nil
+}
+
+// acquire waits for a free runtime slot, giving up when ctx is done (e.g. the
+// webhook sender disconnected). The returned func releases the slot.
+func (r *Runner) acquire(ctx context.Context) (func(), error) {
+	select {
+	case r.slots <- struct{}{}:
+		return func() { <-r.slots }, nil
+	case <-ctx.Done():
+		return nil, fmt.Errorf("waiting for wasm runtime: %w", ctx.Err())
+	}
 }
 
 // quote returns a JS string literal wrapping s, safe for embedding in JS source.

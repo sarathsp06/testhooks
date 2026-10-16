@@ -1,13 +1,19 @@
 package handler
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rs/zerolog"
 	"github.com/sarathsp06/testhooks/internal/hub"
@@ -300,3 +306,85 @@ func TestCapture_AllMethods(t *testing.T) {
 
 // errTestDB is a sentinel error for testing DB error injection.
 var errTestDB = http.ErrAbortHandler
+
+func TestCapture_DBError_Returns503(t *testing.T) {
+	store := newMockStore()
+	store.getEndpointBySlugErr = errors.New("db connection lost")
+	capture, _ := newTestCapture(store)
+
+	w := httptest.NewRecorder()
+	captureMux(capture).ServeHTTP(w, httptest.NewRequest("POST", "/h/abc123", strings.NewReader("{}")))
+
+	// Senders typically retry 5xx but give up on 404, so a DB outage must not look like "not found".
+	if w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want 503", w.Code)
+	}
+}
+
+func TestCapture_UnknownSlug_Returns404(t *testing.T) {
+	capture, _ := newTestCapture(newMockStore())
+
+	w := httptest.NewRecorder()
+	captureMux(capture).ServeHTTP(w, httptest.NewRequest("POST", "/h/nope", nil))
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404", w.Code)
+	}
+}
+
+// signStandardWebhook signs body the way Sparrow does (Standard Webhooks v1).
+func signStandardWebhook(req *http.Request, rawSecret, id string, body string, at time.Time) {
+	ts := strconv.FormatInt(at.Unix(), 10)
+	mac := hmac.New(sha256.New, []byte(rawSecret))
+	mac.Write([]byte(id + "." + ts + "." + body))
+	req.Header.Set("webhook-id", id)
+	req.Header.Set("webhook-timestamp", ts)
+	req.Header.Set("webhook-signature", "v1,"+base64.StdEncoding.EncodeToString(mac.Sum(nil)))
+}
+
+func TestCapture_Signature(t *testing.T) {
+	const secret = "shared-secret"
+	body := `{"event":"order.created"}`
+
+	cases := []struct {
+		name       string
+		enforce    bool
+		secret     string // secret used to sign; "" = unsigned
+		wantCode   int
+		wantStatus string
+	}{
+		{"valid", true, secret, http.StatusOK, "verified"},
+		{"wrong secret enforced", true, "other", http.StatusUnauthorized, "invalid"},
+		{"unsigned enforced", true, "", http.StatusUnauthorized, "missing"},
+		{"wrong secret report-only", false, "other", http.StatusOK, "invalid"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			store := newMockStore()
+			cfg, _ := json.Marshal(map[string]any{"signature": map[string]any{"secret": secret, "enforce": tc.enforce}})
+			store.seedEndpoint("ep-1", "sig", "Sig", "server", cfg)
+			capture, _ := newTestCapture(store)
+
+			req := httptest.NewRequest("POST", "/h/sig", strings.NewReader(body))
+			if tc.secret != "" {
+				signStandardWebhook(req, tc.secret, "msg_1", body, time.Now())
+			}
+			w := httptest.NewRecorder()
+			captureMux(capture).ServeHTTP(w, req)
+
+			if w.Code != tc.wantCode {
+				t.Fatalf("status = %d, want %d (body %s)", w.Code, tc.wantCode, w.Body)
+			}
+			store.mu.Lock()
+			defer store.mu.Unlock()
+			if len(store.requests) != 1 {
+				t.Fatalf("stored %d requests, want 1 (rejected attempts are kept)", len(store.requests))
+			}
+			for _, r := range store.requests {
+				if r.Signature == nil || r.Signature.Status != tc.wantStatus {
+					t.Errorf("signature = %+v, want status %q", r.Signature, tc.wantStatus)
+				}
+			}
+		})
+	}
+}

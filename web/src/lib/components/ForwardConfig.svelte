@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { Endpoint } from '$lib/types';
-	import { Server, Monitor, Globe, Reply, Info, AlertCircle, Check, Save } from 'lucide-svelte';
+	import { Server, Monitor, Globe, Reply, Info, AlertCircle, Check, Save, ShieldCheck } from 'lucide-svelte';
 	import Tooltip from './Tooltip.svelte';
 
 	let {
@@ -20,6 +20,11 @@
 	let forwardMode = $state<'sync' | 'async'>('async');
 	let persistRequests = $state(false);
 
+	// Standard Webhooks signature verification
+	let sigSecret = $state('');
+	let sigPublicKey = $state('');
+	let sigEnforce = $state(false);
+
 	// Sync local state from endpoint prop when it changes
 	$effect(() => {
 		editName = endpoint.name;
@@ -29,6 +34,9 @@
 		forwardUrl = (endpoint.config?.forward_url as string) ?? '';
 		forwardMode = ((endpoint.config?.forward_mode as string) || 'async') as 'sync' | 'async';
 		persistRequests = !!endpoint.config?.persist_requests;
+		sigSecret = endpoint.config?.signature?.secret ?? '';
+		sigPublicKey = endpoint.config?.signature?.public_key ?? '';
+		sigEnforce = !!endpoint.config?.signature?.enforce;
 	});
 
 	const isServerMode = $derived(endpoint.mode === 'server');
@@ -81,7 +89,15 @@
 				...endpoint.config,
 				forward_url: forwardUrl.trim() || undefined,
 				forward_mode: forwardUrl.trim() ? forwardMode : undefined,
-				persist_requests: persistRequests || undefined
+				persist_requests: persistRequests || undefined,
+				signature:
+					sigSecret.trim() || sigPublicKey.trim()
+						? {
+								secret: sigSecret.trim() || undefined,
+								public_key: sigPublicKey.trim() || undefined,
+								enforce: sigEnforce || undefined
+							}
+						: undefined
 			}
 		});
 
@@ -263,6 +279,59 @@
 			{/if}
 		</section>
 	{/if}
+
+	<!-- Signature verification -->
+	<hr class="border-[var(--border)]" />
+
+	<section>
+		<div class="flex items-center gap-2 mb-1">
+			<ShieldCheck class="w-3.5 h-3.5 text-[var(--text-muted)]" />
+			<h4 class="text-xs font-semibold text-[var(--text)] uppercase tracking-wider">Signature Verification</h4>
+			<Tooltip text="Verify Standard Webhooks signatures (webhook-id, webhook-timestamp, webhook-signature headers), as sent by Sparrow, Svix and others." />
+		</div>
+		<p class="text-[10px] text-[var(--text-muted)] mb-3">
+			Paste the sender's webhook secret (<code class="text-[10px]">whsec_…</code>) or Ed25519 public key. Each captured request is then marked verified or invalid.
+		</p>
+		<div class="flex flex-col gap-3">
+			<label class="flex flex-col gap-1">
+				<span class="text-xs text-[var(--text-muted)]">Secret (HMAC, v1)</span>
+				<input
+					bind:value={sigSecret}
+					oninput={markDirty}
+					placeholder="whsec_..."
+					autocomplete="off"
+					spellcheck="false"
+					class="w-full bg-[var(--bg)] border border-[var(--border)] rounded px-3 py-1.5 text-sm font-mono text-[var(--text)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent)]"
+				/>
+			</label>
+			<label class="flex flex-col gap-1">
+				<span class="text-xs text-[var(--text-muted)]">Public key (Ed25519 hex, v1a)</span>
+				<input
+					bind:value={sigPublicKey}
+					oninput={markDirty}
+					placeholder="optional"
+					autocomplete="off"
+					spellcheck="false"
+					class="w-full bg-[var(--bg)] border border-[var(--border)] rounded px-3 py-1.5 text-sm font-mono text-[var(--text)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent)]"
+				/>
+			</label>
+			{#if sigSecret.trim() || sigPublicKey.trim()}
+				<label class="flex items-center gap-3 cursor-pointer group">
+					<button
+						role="switch"
+						aria-checked={sigEnforce}
+						aria-label="Reject requests with invalid signatures"
+						onclick={() => { sigEnforce = !sigEnforce; markDirty(); }}
+						class="relative w-9 h-5 rounded-full transition-colors {sigEnforce ? 'bg-[var(--accent)]' : 'bg-[var(--border)]'}"
+					>
+						<span class="absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform {sigEnforce ? 'translate-x-4' : ''}"></span>
+					</button>
+					<span class="text-xs text-[var(--text)] group-hover:text-[var(--accent)] transition-colors">Reject invalid signatures with 401</span>
+					<Tooltip text="Respond like a real receiver would. Rejected requests are still captured here. Senders such as Sparrow treat 401 as permanent and won't retry." />
+				</label>
+			{/if}
+		</div>
+	</section>
 
 	<!-- Save Settings button -->
 	<div class="flex items-center justify-end gap-3 pt-2">

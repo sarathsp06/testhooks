@@ -5,12 +5,14 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -19,6 +21,7 @@ import (
 	"github.com/sarathsp06/testhooks/internal/forward"
 	"github.com/sarathsp06/testhooks/internal/hub"
 	"github.com/sarathsp06/testhooks/internal/middleware"
+	"github.com/sarathsp06/testhooks/internal/signature"
 	"github.com/sarathsp06/testhooks/internal/wasm"
 )
 
@@ -42,6 +45,11 @@ var blockedResponseHeaders = map[string]bool{
 	"transfer-encoding":                   true,
 }
 
+// maxAsyncForwards caps in-flight fire-and-forget forwards. Each one can live
+// for up to 30s (retries with backoff), so without a cap a slow forward target
+// under load piles up goroutines and request bodies until the process OOMs.
+const maxAsyncForwards = 256
+
 // Capture handles inbound webhook requests at /h/{slug} and /h/{slug}/{rest...}.
 type Capture struct {
 	db                     Store
@@ -52,6 +60,8 @@ type Capture struct {
 	browserResponseTimeout time.Duration
 	trustedProxies         []*net.IPNet
 	log                    zerolog.Logger
+	asyncSlots             chan struct{}
+	asyncWG                sync.WaitGroup
 }
 
 // NewCapture creates a new Capture handler.
@@ -65,7 +75,58 @@ func NewCapture(store Store, h *hub.Hub, fwd *forward.Forwarder, wr *wasm.Runner
 		browserResponseTimeout: 10 * time.Second,
 		trustedProxies:         trustedProxies,
 		log:                    log.With().Str("component", "capture").Logger(),
+		asyncSlots:             make(chan struct{}, maxAsyncForwards),
 	}
+}
+
+// Shutdown waits for in-flight async forwards to finish, or for ctx to end.
+func (c *Capture) Shutdown(ctx context.Context) error {
+	done := make(chan struct{})
+	go func() {
+		c.asyncWG.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+// forwardAsync runs a fire-and-forget forward in the background, bounded by
+// asyncSlots. When saturated the forward is skipped rather than queued.
+func (c *Capture) forwardAsync(slug, reqID string, fwdReq forward.Request, target string) {
+	select {
+	case c.asyncSlots <- struct{}{}:
+	default:
+		c.log.Warn().Str("slug", slug).Str("request_id", reqID).Msg("async forward skipped: too many in flight")
+		c.publishForwardResult(slug, reqID, forward.Result{URL: target, Error: "skipped: too many forwards in flight"})
+		return
+	}
+	c.asyncWG.Add(1)
+	go func() {
+		defer c.asyncWG.Done()
+		defer func() { <-c.asyncSlots }()
+		// A panic in a bare goroutine kills the whole server; contain it.
+		defer func() {
+			if p := recover(); p != nil {
+				c.log.Error().Interface("panic", p).Str("slug", slug).Str("request_id", reqID).Msg("async forward panicked")
+			}
+		}()
+
+		fwdCtx, fwdCancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer fwdCancel()
+		result := c.forwarder.ForwardOne(fwdCtx, fwdReq, target)
+		if result.OK {
+			c.log.Debug().Str("url", result.URL).Int("status", result.StatusCode).Msg("async forwarded")
+		} else {
+			c.log.Warn().Str("url", result.URL).Str("error", result.Error).
+				Int("status", result.StatusCode).Msg("async forward failed")
+		}
+		// Publish forward result to browser for display (arrives after webhook response).
+		c.publishForwardResult(slug, reqID, result)
+	}()
 }
 
 // ServeHTTP captures any HTTP request sent to a webhook endpoint.
@@ -91,8 +152,15 @@ func (c *Capture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Look up endpoint.
 	endpoint, err := c.db.GetEndpointBySlug(r.Context(), slug)
 	if err != nil {
-		c.log.Debug().Str("slug", slug).Err(err).Msg("endpoint not found")
-		http.Error(w, "endpoint not found", http.StatusNotFound)
+		if errors.Is(err, db.ErrNotFound) {
+			c.log.Debug().Str("slug", slug).Msg("endpoint not found")
+			http.Error(w, "endpoint not found", http.StatusNotFound)
+			return
+		}
+		// Report store failures as 503 so webhook senders retry instead of
+		// treating the endpoint as permanently gone.
+		c.log.Error().Str("slug", slug).Err(err).Msg("endpoint lookup failed")
+		http.Error(w, "service unavailable", http.StatusServiceUnavailable)
 		return
 	}
 
@@ -143,6 +211,9 @@ func (c *Capture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Parse endpoint config for server-side processing.
 	epConfig := config.ParseEndpointConfig(endpoint.Config)
 
+	// Verify Standard Webhooks signature (e.g. Sparrow deliveries) if configured.
+	req.Signature = checkSignature(epConfig, r.Header, body, time.Now())
+
 	// ── STEP 1: Store (server mode, or browser mode with persist_requests) ──
 	if !isBrowserMode {
 		if err := c.db.InsertRequest(r.Context(), req); err != nil {
@@ -158,6 +229,18 @@ func (c *Capture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			// Non-fatal for browser mode: log and continue with WS relay.
 			c.log.Warn().Err(err).Str("slug", slug).Msg("browser-mode persist failed, continuing with WS relay")
 		}
+	}
+
+	// Enforced signature: reject after storing so the rejected attempt is still
+	// visible in the UI. 401 tells senders like Sparrow not to retry.
+	if epConfig.Signature != nil && epConfig.Signature.Enforce && req.Signature != nil && !req.Signature.Verified() {
+		data, _ := json.Marshal(req)
+		c.hub.Publish(endpoint.Slug, hub.Message{Type: "request", Data: data}, isBrowserMode)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(map[string]string{"error": "invalid webhook signature", "detail": req.Signature.Error})
+		c.publishResponseInfo(slug, req.ID, http.StatusUnauthorized, nil, "invalid webhook signature", "application/json", "signature")
+		return
 	}
 
 	// ── STEP 2: Transform ──
@@ -323,19 +406,9 @@ func (c *Capture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 		} else {
 			// Async: fire-and-forget, don't block the webhook response.
-			go func() {
-				fwdCtx, fwdCancel := context.WithTimeout(context.Background(), 30*time.Second)
-				defer fwdCancel()
-				result := c.forwarder.ForwardOne(fwdCtx, fwdReq, epConfig.ForwardURL)
-				if result.OK {
-					c.log.Debug().Str("url", result.URL).Int("status", result.StatusCode).Msg("async forwarded")
-				} else {
-					c.log.Warn().Str("url", result.URL).Str("error", result.Error).
-						Int("status", result.StatusCode).Msg("async forward failed")
-				}
-				// Publish forward result to browser for display (arrives after webhook response).
-				c.publishForwardResult(slug, req.ID, result)
-			}()
+			// Clone headers: the goroutine outlives this request.
+			fwdReq.Headers = http.Header(fwdReq.Headers).Clone()
+			c.forwardAsync(slug, req.ID, fwdReq, epConfig.ForwardURL)
 		}
 	}
 
@@ -594,6 +667,29 @@ func (c *Capture) publishForwardResult(slug string, reqID string, result forward
 func defaultResponseBody(reqID string) string {
 	data, _ := json.Marshal(map[string]string{"status": "ok", "id": reqID})
 	return string(data)
+}
+
+// checkSignature verifies a request against the endpoint's Standard Webhooks
+// keys, using receivedAt as the clock for the timestamp tolerance check (so
+// stored requests can be re-verified later). Returns nil if not configured.
+func checkSignature(cfg config.EndpointConfig, h http.Header, body []byte, receivedAt time.Time) *signature.Result {
+	if cfg.Signature == nil {
+		return nil
+	}
+	return signature.Check(cfg.Signature.Secret, cfg.Signature.PublicKey, h, body, receivedAt)
+}
+
+// annotateSignatures fills in Signature for stored requests, which don't
+// persist the result. Headers are stored as the JSON-encoded http.Header.
+func annotateSignatures(cfg config.EndpointConfig, reqs ...*db.CapturedRequest) {
+	if cfg.Signature == nil {
+		return
+	}
+	for _, r := range reqs {
+		var h http.Header
+		_ = json.Unmarshal(r.Headers, &h)
+		r.Signature = checkSignature(cfg, h, r.Body, r.CreatedAt)
+	}
 }
 
 // GenerateSlug creates a random 8-character hex slug.

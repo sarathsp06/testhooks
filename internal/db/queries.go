@@ -4,12 +4,33 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"strings"
 	"time"
 	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
+
+	"github.com/sarathsp06/testhooks/internal/signature"
 )
+
+// ErrNotFound is returned by lookups that match no row. Callers use it to
+// distinguish a genuinely missing record from a database failure.
+var ErrNotFound = errors.New("not found")
+
+// mapNotFound converts "no row" errors (and malformed UUID input, which can
+// never match a row) into ErrNotFound, leaving real database errors intact.
+func mapNotFound(err error) error {
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrNotFound
+	}
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code == "22P02" { // invalid_text_representation
+		return ErrNotFound
+	}
+	return err
+}
 
 // Endpoint represents a webhook capture endpoint.
 type Endpoint struct {
@@ -35,6 +56,10 @@ type CapturedRequest struct {
 	IP          string          `json:"ip"`
 	Size        int             `json:"size"`
 	CreatedAt   time.Time       `json:"created_at"`
+
+	// Signature is the Standard Webhooks verification result. Not stored:
+	// computed from the endpoint's config when the request is served.
+	Signature *signature.Result `json:"signature,omitempty"`
 }
 
 // isTextBody heuristically determines whether the body is displayable text.
@@ -138,7 +163,7 @@ func (p *Pool) GetEndpointBySlug(ctx context.Context, slug string) (*Endpoint, e
 		 FROM endpoints WHERE slug = $1`, slug,
 	).Scan(&e.ID, &e.Slug, &e.Name, &e.Mode, &e.ClientID, &e.CreatedAt, &e.Config)
 	if err != nil {
-		return nil, err
+		return nil, mapNotFound(err)
 	}
 	return e, nil
 }
@@ -151,7 +176,7 @@ func (p *Pool) GetEndpointByID(ctx context.Context, id string) (*Endpoint, error
 		 FROM endpoints WHERE id = $1`, id,
 	).Scan(&e.ID, &e.Slug, &e.Name, &e.Mode, &e.ClientID, &e.CreatedAt, &e.Config)
 	if err != nil {
-		return nil, err
+		return nil, mapNotFound(err)
 	}
 	return e, nil
 }
@@ -263,7 +288,7 @@ func (p *Pool) GetRequest(ctx context.Context, id string) (*CapturedRequest, err
 		 FROM requests WHERE id = $1`, id,
 	).Scan(&r.ID, &r.EndpointID, &r.Method, &r.Path, &r.Headers, &r.Query, &r.Body, &r.ContentType, &r.IP, &r.Size, &r.CreatedAt)
 	if err != nil {
-		return nil, err
+		return nil, mapNotFound(err)
 	}
 	return r, nil
 }

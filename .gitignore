@@ -1,15 +1,15 @@
 # Go binary
-testhooks
-hookstest
+/testhooks
+/hookstest
 
 # Dependencies
 web/node_modules/
 
 # Build output
-web/dist/
+web/dist/*
 !web/dist/.gitkeep
 web/.svelte-kit/
-dist/
+/dist/
 
 # IDE
 .idea/

@@ -235,3 +235,37 @@ func TestWaitForResponse_Cleanup(t *testing.T) {
 		t.Error("DeliverResponse returned true after cleanup")
 	}
 }
+
+func TestRingBuffer_DrainSkipsSweptEntries(t *testing.T) {
+	rb := newRingBuffer(4)
+	rb.push(Message{Type: "old"})
+	rb.msgs[0].createdAt = time.Now().Add(-time.Hour)
+	rb.push(Message{Type: "fresh"})
+
+	if empty := rb.sweepExpired(time.Minute); empty {
+		t.Fatal("buffer with a fresh entry reported empty")
+	}
+	msgs := rb.drain()
+	if len(msgs) != 1 || msgs[0].Type != "fresh" {
+		t.Fatalf("drain after sweep = %+v, want only the fresh message", msgs)
+	}
+}
+
+func TestSweepRingBuffers_DropsExpiredBuffers(t *testing.T) {
+	h := New(4, 300, 10)
+	defer h.Stop()
+	h.Publish("gone", Message{Type: "request"}, true)
+	h.buffers["gone"].msgs[0].createdAt = time.Now().Add(-time.Hour)
+
+	h.sweepRingBuffers()
+
+	if _, ok := h.buffers["gone"]; ok {
+		t.Fatal("fully expired buffer was not removed")
+	}
+}
+
+func TestStop_Idempotent(t *testing.T) {
+	h := New(4, 300, 10)
+	h.Stop()
+	h.Stop()
+}

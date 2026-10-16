@@ -94,6 +94,14 @@
 								{req.content_type.split(';')[0]}
 							</span>
 						{/if}
+						{#if req.signature}
+							<span
+								class="text-[10px] font-medium {req.signature.status === 'verified' ? 'text-[var(--green)]' : 'text-[var(--red)]'}"
+								title={req.signature.error ?? 'Standard Webhooks signature verified'}
+							>
+								{req.signature.status === 'verified' ? 'signed' : `sig ${req.signature.status}`}
+							</span>
+						{/if}
 						{#if req.size > 0}
 							<span class="text-[10px] text-[var(--text-muted)]">
 								{req.size}B

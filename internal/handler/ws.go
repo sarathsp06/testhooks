@@ -3,10 +3,12 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"time"
 
 	"github.com/rs/zerolog"
+	"github.com/sarathsp06/testhooks/internal/db"
 	"github.com/sarathsp06/testhooks/internal/hub"
 	"nhooyr.io/websocket"
 	"nhooyr.io/websocket/wsjson"
@@ -49,7 +51,12 @@ func (ws *WS) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Verify endpoint exists.
 	_, err := ws.db.GetEndpointBySlug(r.Context(), slug)
 	if err != nil {
-		http.Error(w, "endpoint not found", http.StatusNotFound)
+		if errors.Is(err, db.ErrNotFound) {
+			http.Error(w, "endpoint not found", http.StatusNotFound)
+			return
+		}
+		ws.log.Error().Err(err).Str("slug", slug).Msg("endpoint lookup failed")
+		http.Error(w, "service unavailable", http.StatusServiceUnavailable)
 		return
 	}
 

@@ -2,10 +2,12 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 
 	"github.com/rs/zerolog"
+	"github.com/sarathsp06/testhooks/internal/config"
 	"github.com/sarathsp06/testhooks/internal/db"
 )
 
@@ -116,7 +118,7 @@ func (a *API) GetEndpoint(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	ep, err := a.db.GetEndpointByID(r.Context(), id)
 	if err != nil {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "endpoint not found"})
+		a.writeLookupError(w, err, "endpoint")
 		return
 	}
 	writeJSON(w, http.StatusOK, ep)
@@ -127,7 +129,7 @@ func (a *API) GetEndpointBySlug(w http.ResponseWriter, r *http.Request) {
 	slug := r.PathValue("slug")
 	ep, err := a.db.GetEndpointBySlug(r.Context(), slug)
 	if err != nil {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "endpoint not found"})
+		a.writeLookupError(w, err, "endpoint")
 		return
 	}
 	writeJSON(w, http.StatusOK, ep)
@@ -140,7 +142,7 @@ func (a *API) UpdateEndpoint(w http.ResponseWriter, r *http.Request) {
 	// Get current endpoint first.
 	existing, err := a.db.GetEndpointByID(r.Context(), id)
 	if err != nil {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "endpoint not found"})
+		a.writeLookupError(w, err, "endpoint")
 		return
 	}
 
@@ -195,7 +197,7 @@ func (a *API) DeleteEndpoint(w http.ResponseWriter, r *http.Request) {
 	// Look up the endpoint first to get the slug for ring buffer cleanup.
 	ep, err := a.db.GetEndpointByID(r.Context(), id)
 	if err != nil {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "endpoint not found"})
+		a.writeLookupError(w, err, "endpoint")
 		return
 	}
 
@@ -220,8 +222,9 @@ func (a *API) ListRequests(w http.ResponseWriter, r *http.Request) {
 	endpointID := r.PathValue("id")
 
 	// Verify endpoint exists.
-	if _, err := a.db.GetEndpointByID(r.Context(), endpointID); err != nil {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "endpoint not found"})
+	ep, err := a.db.GetEndpointByID(r.Context(), endpointID)
+	if err != nil {
+		a.writeLookupError(w, err, "endpoint")
 		return
 	}
 
@@ -247,6 +250,10 @@ func (a *API) ListRequests(w http.ResponseWriter, r *http.Request) {
 	if reqs == nil {
 		reqs = []db.CapturedRequest{}
 	}
+	epConfig := config.ParseEndpointConfig(ep.Config)
+	for i := range reqs {
+		annotateSignatures(epConfig, &reqs[i])
+	}
 
 	// Also return total count.
 	total, _ := a.db.CountRequests(r.Context(), endpointID)
@@ -264,8 +271,11 @@ func (a *API) GetRequest(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("reqId")
 	req, err := a.db.GetRequest(r.Context(), id)
 	if err != nil {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "request not found"})
+		a.writeLookupError(w, err, "request")
 		return
+	}
+	if ep, err := a.db.GetEndpointByID(r.Context(), req.EndpointID); err == nil {
+		annotateSignatures(config.ParseEndpointConfig(ep.Config), req)
 	}
 	writeJSON(w, http.StatusOK, req)
 }
@@ -298,4 +308,15 @@ func writeJSON(w http.ResponseWriter, status int, v interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	json.NewEncoder(w).Encode(v)
+}
+
+// writeLookupError responds 404 when the record doesn't exist and 500 for any
+// other failure, so a database outage isn't reported to clients as "not found".
+func (a *API) writeLookupError(w http.ResponseWriter, err error, what string) {
+	if errors.Is(err, db.ErrNotFound) {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": what + " not found"})
+		return
+	}
+	a.log.Error().Err(err).Str("lookup", what).Msg("lookup failed")
+	writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
 }

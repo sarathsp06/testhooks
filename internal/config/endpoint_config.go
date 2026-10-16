@@ -36,6 +36,20 @@ type EndpointConfig struct {
 	// in addition to relaying them over WebSocket. Processing (transforms, forwarding)
 	// still happens in the browser only. Has no effect in server mode (always persisted).
 	PersistRequests bool `json:"persist_requests,omitempty"`
+
+	// Signature enables Standard Webhooks signature verification (the scheme
+	// Sparrow, Svix and others use) on captured requests.
+	Signature *SignatureConfig `json:"signature,omitempty"`
+}
+
+// SignatureConfig holds the keys used to verify Standard Webhooks signatures.
+// Set Secret, PublicKey, or both; a request verifies if either matches.
+type SignatureConfig struct {
+	Secret    string `json:"secret,omitempty"`     // HMAC secret ("whsec_..." or raw) for v1 signatures
+	PublicKey string `json:"public_key,omitempty"` // hex Ed25519 public key for v1a signatures
+	// Enforce rejects requests that fail verification with 401, as a real
+	// receiver should. Senders like Sparrow treat 401 as permanent (no retry).
+	Enforce bool `json:"enforce,omitempty"`
 }
 
 // CustomResponseConfig allows users to define a programmable response handler.

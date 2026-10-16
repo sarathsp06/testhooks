@@ -489,8 +489,8 @@ func TestWS_GetEndpointBySlug_DBError(t *testing.T) {
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 
-	// DB error should return 404 (endpoint not found).
-	if w.Code != http.StatusNotFound {
-		t.Errorf("expected 404 on DB error, got %d", w.Code)
+	// A DB failure is not "not found": report 503 so clients retry.
+	if w.Code != http.StatusServiceUnavailable {
+		t.Errorf("expected 503 on DB error, got %d", w.Code)
 	}
 }

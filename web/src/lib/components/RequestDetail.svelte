@@ -2,7 +2,7 @@
 	import type { CapturedRequest, CapturedResponse, ForwardResult, ForwardResultData } from '$lib/types';
 	import { methodColor, formatFullTime, formatBytes, tryFormatJSON, copyToClipboard, getWebhookURL } from '$lib/utils';
 	import { forwardRequest } from '$lib/forward';
-	import { Copy, Trash2, Send, ChevronDown, ChevronRight, RotateCcw, Download, ArrowDownLeft, ArrowUpRight } from 'lucide-svelte';
+	import { Copy, Trash2, Send, ChevronDown, ChevronRight, RotateCcw, Download, ArrowDownLeft, ArrowUpRight, ShieldCheck, ShieldAlert } from 'lucide-svelte';
 
 	let {
 		request,
@@ -252,6 +252,23 @@
 			<span>{request.content_type}</span>
 		{/if}
 	</div>
+
+	<!-- Standard Webhooks signature -->
+	{#if request.signature}
+		{@const sig = request.signature}
+		<div class="flex items-start gap-2 text-xs rounded px-3 py-2 border {sig.status === 'verified' ? 'border-[var(--green)]/30 text-[var(--green)]' : 'border-[var(--red)]/30 text-[var(--red)]'}">
+			{#if sig.status === 'verified'}
+				<ShieldCheck class="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+				<span>Signature verified ({sig.scheme === 'v1a' ? 'Ed25519' : 'HMAC-SHA256'})</span>
+			{:else}
+				<ShieldAlert class="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+				<span>Signature {sig.status}{sig.error ? `: ${sig.error}` : ''}</span>
+			{/if}
+			{#if sig.webhook_id}
+				<span class="ml-auto font-mono text-[var(--text-muted)] truncate" title="webhook-id stays the same across sender retries">{sig.webhook_id}</span>
+			{/if}
+		</div>
+	{/if}
 
 	<!-- Forward result -->
 	{#if forwardResult}

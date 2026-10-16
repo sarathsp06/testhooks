@@ -17,7 +17,23 @@ export interface EndpointConfig {
 	transform_language?: 'javascript' | 'lua' | 'jsonnet';
 	custom_response?: CustomResponse;
 	persist_requests?: boolean;
+	signature?: SignatureConfig;
 	[key: string]: unknown;
+}
+
+/** Standard Webhooks verification keys (as sent by Sparrow, Svix, etc). */
+export interface SignatureConfig {
+	secret?: string;
+	public_key?: string;
+	enforce?: boolean;
+}
+
+/** Server-side Standard Webhooks verification result for a captured request. */
+export interface SignatureResult {
+	status: 'verified' | 'invalid' | 'missing';
+	scheme?: 'v1' | 'v1a';
+	error?: string;
+	webhook_id?: string;
 }
 
 export interface CustomResponse {
@@ -39,6 +55,7 @@ export interface CapturedRequest {
 	ip: string;
 	size: number;
 	created_at: string;
+	signature?: SignatureResult;
 }
 
 export interface PaginatedRequests {
