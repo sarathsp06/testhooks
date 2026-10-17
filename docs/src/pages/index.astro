@@ -1,0 +1,593 @@
+---
+// Landing page. A standalone page (not Starlight's splash template) so it can
+// have its own nav and footer; the rest of the docs stay on Starlight. It
+// follows the same light/dark setting as the docs (localStorage
+// "starlight-theme"), with system preference as the fallback.
+const base = import.meta.env.BASE_URL.replace(/\/?$/, '/');
+const docs = `${base}getting-started/quickstart/`;
+const github = 'https://github.com/sarathsp06/testhooks';
+
+// Keep these identical to the README quick start.
+const installs = [
+	{
+		id: 'binary',
+		label: 'Binary',
+		cmd: 'curl -fsSL https://raw.githubusercontent.com/sarathsp06/testhooks/main/install.sh | sh && DATABASE_URL=memory testhooks',
+		note: 'No database needed. Linux, macOS, Windows; checks the SHA-256.',
+	},
+	{
+		id: 'docker',
+		label: 'Docker',
+		cmd: 'docker run -d --name testhooks -p 8080:8080 -e DATABASE_URL=memory ghcr.io/sarathsp06/testhooks',
+		note: 'No database. Data lives in memory.',
+	},
+	{
+		id: 'snapshot',
+		label: 'Docker + snapshot',
+		cmd: 'docker run -d --name testhooks -p 8080:8080 -v testhooks-data:/data -e DATABASE_URL=memory -e SNAPSHOT_PATH=/data/testhooks.snapshot ghcr.io/sarathsp06/testhooks',
+		note: 'In memory, saved to a volume every 30 s and on shutdown.',
+	},
+	{
+		id: 'compose',
+		label: 'Compose + PostgreSQL',
+		cmd: 'curl -fsSL https://raw.githubusercontent.com/sarathsp06/testhooks/main/deploy/docker-compose.yml | docker compose -p testhooks -f - up -d',
+		note: 'For shared or long-running instances.',
+	},
+];
+const first = installs[0];
+
+const check = '<path d="M5 12l5 5L20 7"></path>';
+const arrow = '<path d="M1 6h37M33 1l5 5-5 5"></path>';
+---
+
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Testhooks: self-hosted webhook inspector</title>
+		<meta name="description" content="Capture, inspect and forward webhooks on your own machine. A self-hosted webhook.site replacement that also replaces ngrok." />
+		<link rel="icon" href={`${base}favicon.svg`} type="image/svg+xml" />
+		<link rel="preconnect" href="https://fonts.googleapis.com" />
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+		<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" />
+		<script is:inline>
+			// Same theme as the docs pages, applied before paint to avoid a flash.
+			(() => {
+				let t = '';
+				try { t = localStorage.getItem('starlight-theme') || ''; } catch {}
+				if (t !== 'light' && t !== 'dark') t = matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+				document.documentElement.dataset.theme = t;
+			})();
+		</script>
+	</head>
+	<body>
+		<header class="nav-bar">
+			<nav class="wrap nav">
+				<a href="#top" class="brand">
+					<span class="brand-mark">
+						<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#5BD08F" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12h5l2-5 3 10 2-5h4"></path></svg>
+					</span>
+					<span class="brand-name">testhooks</span>
+				</a>
+				<div class="nav-links">
+					<a href="#install" class="nav-link section">Install</a>
+					<a href="#why" class="nav-link section">Why</a>
+					<a href="#features" class="nav-link section">Features</a>
+					<a href="#standard" class="nav-link section">Signatures</a>
+					<a href="#modes" class="nav-link section">Modes</a>
+					<a href={docs} class="nav-link">Docs</a>
+					<a href={github} class="nav-gh">
+						<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12.3 12.3 0 0 0-6.2 0C6.5 2.8 5.4 3.1 5.4 3.1a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4 9.5c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"></path></svg>
+						GitHub
+					</a>
+				</div>
+			</nav>
+		</header>
+
+		<main>
+			<!-- Hero -->
+			<section id="top" class="wrap hero">
+				<div class="pills">
+					<span class="pill"><span class="dot"></span>Open source · Apache 2.0 · Self-hosted</span>
+					<a href="#standard" class="pill pill-strong">
+						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 3v6c0 4.5-3.4 8.3-8 9-4.6-.7-8-4.5-8-9V6l8-3z"></path><path d="M8.5 12l2.5 2.5L15.5 10"></path></svg>
+						Standard Webhooks compatible
+					</a>
+				</div>
+				<h1>Capture, inspect and forward webhooks. On your own machine.</h1>
+				<p class="lede">A self-hosted webhook.site replacement. In browser mode it also replaces ngrok, with nothing to install. Runs on PostgreSQL, or entirely in memory with no database at all.</p>
+
+				<div id="install" class="install">
+					<div class="install-head">
+						<span class="eyebrow-plain">Run it in one line</span>
+						<div class="seg" role="group" aria-label="Install option" data-tabs="install">
+							{installs.map((o, i) => (
+								<button type="button" class="seg-btn" aria-pressed={i === 0 ? 'true' : 'false'} data-cmd={o.cmd} data-note={o.note}>{o.label}</button>
+							))}
+						</div>
+					</div>
+					<div class="cmd-box">
+						<div class="cmd mono"><span class="prompt">$ </span><span data-cmd-text>{first.cmd}</span></div>
+						<button type="button" class="copy" aria-label="Copy install command" data-copy>
+							<svg class="i-copy" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"></rect><path d="M5 15V6a2 2 0 0 1 2-2h9"></path></svg>
+							<svg class="i-done" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#5BD08F" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" set:html={check} />
+							<span data-copy-label>Copy</span>
+						</button>
+					</div>
+					<p class="install-note">Then open <a href="http://localhost:8080" class="mono kbd">localhost:8080</a> · <span data-note-text>{first.note}</span></p>
+				</div>
+			</section>
+
+			<!-- Why use it -->
+			<section id="why" class="wrap why">
+				<div class="section-head narrow">
+					<span class="eyebrow mono">Why use it</span>
+					<h2>Webhooks need a public URL. Your code runs on localhost.</h2>
+					<p class="sub">Testhooks gives the sender a URL it can reach, then gets each request to wherever your code actually runs.</p>
+				</div>
+				<div class="cards">
+					<div class="card card-strong">
+						<span class="mono tag accent">browser mode · the main use</span>
+						<h3>Test webhooks against localhost</h3>
+						<p>Your receiver only runs on your laptop. Point the provider at Testhooks, set forward to localhost, and trigger real events, with no tunnel to install.</p>
+					</div>
+					<div class="card">
+						<span class="mono tag">browser mode</span>
+						<h3>Reach what only your machine can see</h3>
+						<p>Forwarding runs in your tab, so it reaches Docker containers and anything else your machine can reach but the internet can't.</p>
+					</div>
+					<div class="card">
+						<span class="mono tag">server mode</span>
+						<h3>See exactly what a sender sends</h3>
+						<p>Capture every request with headers and body, verify signatures, mock the response, and forward it on, even with no browser open.</p>
+					</div>
+				</div>
+			</section>
+
+			<!-- Modes -->
+			<section id="modes" class="wrap modes">
+				<div class="panel">
+					<div class="panel-head">
+						<div class="section-head">
+							<span class="eyebrow mono">How it works</span>
+							<h2>Two modes. Pick your trade-off.</h2>
+						</div>
+						<div class="seg seg-lg" role="group" aria-label="Mode" data-tabs="mode">
+							<button type="button" class="seg-btn" aria-pressed="false" data-panel="server">Server mode</button>
+							<button type="button" class="seg-btn" aria-pressed="true" data-panel="browser">Browser mode</button>
+						</div>
+					</div>
+
+					<div class="mode" data-mode="server" hidden>
+						<div class="mode-intro">
+							<h3>The server does the work. Always on.</h3>
+							<p>Every request is stored, transformed and forwarded on the server. Your browser is only a viewer, so it keeps working with no tab open.</p>
+						</div>
+						<div class="flow">
+							<div class="step"><span class="mono tag">01</span><b>Webhook sender</b><span>Any service that sends webhooks.</span></div>
+							<div class="hop"><span class="mono">HTTP POST</span><svg width="40" height="12" viewBox="0 0 40 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" set:html={arrow} /></div>
+							<div class="step step-dark"><span class="mono tag bright">02 · does the work</span><b>Testhooks server</b><span>Receives at <span class="mono sm">/h/:slug</span>, stores it, runs the transform.</span></div>
+							<div class="hop"><span class="mono">forward</span><svg width="40" height="12" viewBox="0 0 40 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" set:html={arrow} /></div>
+							<div class="step step-accent"><span class="mono tag accent">03</span><b>Any URL</b><span>Sync or async, with retries.</span></div>
+							<div class="hop"><span class="mono">view</span><svg width="40" height="12" viewBox="0 0 40 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="3 3" aria-hidden="true" set:html={arrow} /></div>
+							<div class="step step-dashed"><span class="mono tag">optional</span><b>Your browser</b><span>Only a viewer. Close it and nothing stops.</span></div>
+						</div>
+						<div class="facts">
+							<div><h4>Stored on the server</h4><p>In PostgreSQL, or in memory with an optional snapshot file saved every 30 s and on shutdown.</p></div>
+							<div><h4>Headless transforms and forwarding</h4><p>JavaScript transforms run on the server, then the request is forwarded to the configured URL.</p></div>
+							<div><h4>Custom responses</h4><p>The sender gets back the exact response you scripted.</p></div>
+						</div>
+						<p class="use-for"><b>Use it for</b> shared or long-running instances, and anything that must keep working with no tab open.</p>
+					</div>
+
+					<div class="mode" data-mode="browser">
+						<div class="mode-intro">
+							<h3>Your browser is the tunnel.</h3>
+							<p>Webhooks hit the Testhooks server, which streams them to your open tab over WebSocket. Your tab runs the transform and calls fetch() to deliver them to localhost. No CLI, daemon or tunnel to install.</p>
+						</div>
+						<div class="flow">
+							<div class="step"><span class="mono tag">01</span><b>Webhook sender</b><span>Any service that sends webhooks.</span></div>
+							<div class="hop"><span class="mono">HTTP POST</span><svg width="40" height="12" viewBox="0 0 40 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" set:html={arrow} /></div>
+							<div class="step"><span class="mono tag">02</span><b>Testhooks server</b><span>Receives at <span class="mono sm">/h/:slug</span> and relays it. Keeps only a short in-memory buffer.</span></div>
+							<div class="hop"><span class="mono">WebSocket</span><svg width="40" height="12" viewBox="0 0 40 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" set:html={arrow} /></div>
+							<div class="step step-dark"><span class="mono tag bright">03 · the tunnel</span><b>Your browser tab</b><span>Runs the transform, then delivers with fetch().</span></div>
+							<div class="hop"><span class="mono">fetch()</span><svg width="40" height="12" viewBox="0 0 40 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" set:html={arrow} /></div>
+							<div class="step step-accent"><span class="mono tag accent">04</span><b class="mono">localhost</b><span>Your app, Docker, anything your machine can reach.</span></div>
+						</div>
+						<div class="facts">
+							<div><h4>The server only relays</h4><p>It receives the webhook and streams it over WebSocket. Transforms and forwarding run in your tab, which is how it reaches localhost.</p></div>
+							<div><h4>Reconnects catch up</h4><p>The server keeps a short in-memory buffer, so a tab that drops and reconnects gets the requests it missed.</p></div>
+							<div><h4>Nothing stored unless you ask</h4><p>Turn on <b class="ink">Persist requests</b> to also keep a server-side copy.</p></div>
+						</div>
+						<div class="example">
+							<h4>Example: your receiver only runs on localhost</h4>
+							<ol>
+								<li><span class="num mono">1</span><span>Create an endpoint and paste its <span class="mono sm ink">/h/:slug</span> URL into the provider's webhook settings.</span></li>
+								<li><span class="num mono">2</span><span>Switch the endpoint to browser mode and set forward to <span class="mono sm ink">http://localhost:[port]/[path]</span>.</span></li>
+								<li><span class="num mono">3</span><span>Trigger the event. Your tab receives it and delivers it to your local server, and you see both sides.</span></li>
+							</ol>
+						</div>
+					</div>
+				</div>
+			</section>
+
+			<!-- Standard Webhooks -->
+			<section id="standard" class="band">
+				<div class="wrap standard">
+					<div class="standard-copy">
+						<span class="eyebrow mono">Standard Webhooks</span>
+						<h2>Verify signatures like a real receiver.</h2>
+						<p class="sub">Testhooks checks Standard Webhooks signatures from Sparrow, Svix and other senders that follow the spec. Turn on enforcement and bad signatures are rejected, so you test the same path production takes.</p>
+						<ul class="checks">
+							<li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" set:html={check} /><span>Reads the spec headers: <span class="mono chip">webhook-id</span> <span class="mono chip">webhook-timestamp</span> <span class="mono chip">webhook-signature</span></span></li>
+							<li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" set:html={check} /><span>Can reject invalid signatures with 401 instead of accepting everything</span></li>
+							<li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" set:html={check} /><span>Works with Sparrow, Svix and other compliant senders</span></li>
+						</ul>
+					</div>
+					<div class="request">
+						<div class="request-head"><span class="mono"><span class="bright">POST</span> /h/[your-slug]</span><span class="mono dim">example request</span></div>
+						<div class="request-body mono">
+							<div><span class="key">webhook-id:</span> msg_[id]</div>
+							<div><span class="key">webhook-timestamp:</span> [unix-seconds]</div>
+							<div><span class="key">webhook-signature:</span> v1,[base64-signature]</div>
+						</div>
+						<div class="verdicts">
+							<div class="verdict ok"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#5BD08F" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" set:html={check} />Signature valid: accepted and forwarded</div>
+							<div class="verdict bad"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#F87171" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>Signature mismatch: rejected, like a real receiver</div>
+						</div>
+					</div>
+				</div>
+			</section>
+
+			<!-- Features -->
+			<section id="features" class="band band-surface">
+				<div class="wrap features">
+					<div class="features-head">
+						<h2>Everything for webhook development</h2>
+						<p class="sub">One Go binary with the UI embedded. Storage is PostgreSQL, or memory for local testing.</p>
+					</div>
+					<div class="grid">
+						<div class="feature"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"></rect><path d="M8 20h8M12 16v4"></path></svg><h3>Reach localhost</h3><p>Browser mode forwards with fetch() from your tab, so it reaches localhost, Docker and anything else your machine can see. No CLI, daemon or tunnel.</p></div>
+						<div class="feature"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"></rect><path d="M8 11V7a4 4 0 0 1 8 0v4"></path></svg><h3>Private by default</h3><p>In browser mode, payloads are relayed over WebSocket and never written to the server's disk.</p></div>
+						<div class="feature"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"></path><circle cx="12" cy="12" r="3"></circle></svg><h3>Live inspection</h3><p>Every request appears the instant it arrives: headers, query, body with syntax highlighting. Copy as cURL, export as JSON or CSV.</p></div>
+						<div class="feature"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6l-6 6 6 6M16 6l6 6-6 6"></path></svg><h3>Script transforms</h3><p>Reshape payloads with JavaScript, Lua or Jsonnet, sandboxed in WASM, before they are forwarded.</p></div>
+						<div class="feature"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12h12M12 6l6 6-6 6M20 5v14"></path></svg><h3>Forward and mock</h3><p>Forward to any URL, sync or async with retries, and script the exact response the sender gets back.</p></div>
+						<div class="feature"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 3v6c0 4.5-3.4 8.3-8 9-4.6-.7-8-4.5-8-9V6l8-3z"></path><path d="M8.5 12l2.5 2.5L15.5 10"></path></svg><h3>Verify signatures</h3><p>Check Standard Webhooks signatures from Sparrow, Svix and others, and reject bad ones like a real receiver.</p></div>
+					</div>
+				</div>
+			</section>
+
+			<!-- Closing call to action -->
+			<section class="band band-surface">
+				<div class="wrap cta">
+					<div>
+						<h2>Start catching webhooks.</h2>
+						<p>One command. Then open localhost:8080.</p>
+					</div>
+					<div class="cta-actions">
+						<a href="#install" class="btn btn-primary">Copy the one-liner</a>
+						<a href={docs} class="btn btn-secondary">Read the docs</a>
+					</div>
+				</div>
+			</section>
+		</main>
+
+		<footer class="band">
+			<div class="wrap footer">
+				<span>testhooks · Apache 2.0</span>
+				<span class="footer-links"><a href={github}>GitHub</a><a href={docs}>Docs</a></span>
+			</div>
+		</footer>
+
+		<script>
+			// Segmented controls: one pressed button per group.
+			function select(group: Element, btn: HTMLElement) {
+				group.querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b === btn)));
+			}
+
+			const cmdText = document.querySelector('[data-cmd-text]')!;
+			const noteText = document.querySelector('[data-note-text]')!;
+			const copyBtn = document.querySelector<HTMLButtonElement>('[data-copy]')!;
+			const copyLabel = copyBtn.querySelector('[data-copy-label]')!;
+			let resetTimer: number | undefined;
+
+			function setCopied(on: boolean) {
+				copyBtn.classList.toggle('copied', on);
+				copyLabel.textContent = on ? 'Copied' : 'Copy';
+			}
+
+			document.querySelector('[data-tabs="install"]')!.addEventListener('click', (e) => {
+				const btn = (e.target as Element).closest<HTMLElement>('button[data-cmd]');
+				if (!btn) return;
+				select(e.currentTarget as Element, btn);
+				cmdText.textContent = btn.dataset.cmd!;
+				noteText.textContent = btn.dataset.note!;
+				clearTimeout(resetTimer);
+				setCopied(false);
+			});
+
+			copyBtn.addEventListener('click', async () => {
+				try {
+					await navigator.clipboard.writeText(cmdText.textContent ?? '');
+				} catch {
+					// Clipboard blocked: select the command so it can be copied by hand.
+					getSelection()?.selectAllChildren(cmdText);
+					return;
+				}
+				setCopied(true);
+				clearTimeout(resetTimer);
+				resetTimer = window.setTimeout(() => setCopied(false), 1800);
+			});
+
+			document.querySelector('[data-tabs="mode"]')!.addEventListener('click', (e) => {
+				const btn = (e.target as Element).closest<HTMLElement>('button[data-panel]');
+				if (!btn) return;
+				select(e.currentTarget as Element, btn);
+				document.querySelectorAll<HTMLElement>('[data-mode]').forEach((p) => (p.hidden = p.dataset.mode !== btn.dataset.panel));
+			});
+		</script>
+
+		<style is:global>
+			:root {
+				--bg: #f7f7f4;
+				--surface: #ffffff;
+				--ink: #111613;
+				--text: #4a5550;
+				--text-2: #3b4540;
+				--faint: #55605a;
+				--line: #e2e4df;
+				--line-2: #d5d8d2;
+				--dashed: #c9cdc6;
+				--chip: #eceee9;
+				--accent: #1a7f4b;
+				--arrow: #9aa39e;
+				--dark: #0e1210;
+				--dark-line: #222a26;
+				--dark-btn: #161c19;
+				--dark-text: #b9c2bd;
+				--bright: #5bd08f;
+				--btn-bg: #111613;
+				--btn-ink: #ffffff;
+				--seg-on: #ffffff;
+				--shadow: 0 12px 32px -12px rgba(17, 22, 19, 0.28);
+				color-scheme: light;
+			}
+			:root[data-theme='dark'] {
+				--bg: #0b0f0d;
+				--surface: #121815;
+				--ink: #e8ede9;
+				--text: #a7b1ab;
+				--text-2: #c2cac5;
+				--faint: #8e9893;
+				--line: #232b27;
+				--line-2: #313b36;
+				--dashed: #3a4540;
+				--chip: #1b231f;
+				--accent: #5bd08f;
+				--arrow: #66716b;
+				--dark: #060908;
+				--dark-line: #1f2723;
+				--dark-btn: #0f1412;
+				--btn-bg: #e8ede9;
+				--btn-ink: #0b0f0d;
+				--seg-on: #2a332e;
+				--shadow: 0 12px 32px -12px rgba(0, 0, 0, 0.6);
+				color-scheme: dark;
+			}
+
+			*, *::before, *::after { box-sizing: border-box; }
+			html { scroll-behavior: smooth; }
+			body {
+				margin: 0;
+				background: var(--bg);
+				color: var(--ink);
+				font-family: 'Geist', system-ui, sans-serif;
+				-webkit-font-smoothing: antialiased;
+			}
+			a { color: var(--ink); }
+			a:hover { color: var(--accent); }
+			.mono { font-family: 'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace; }
+			.sm { font-size: 13px; }
+			.ink { color: var(--ink); font-weight: 500; }
+			.accent { color: var(--accent); }
+			.bright { color: var(--bright); }
+			.dim { color: var(--arrow); }
+			h1, h2, h3, h4, p { margin: 0; }
+			h2 { font-size: clamp(30px, 4vw, 42px); line-height: 1.1; letter-spacing: -0.025em; font-weight: 600; }
+			.sub { font-size: 17px; line-height: 1.55; color: var(--text); }
+			.wrap { max-width: 1160px; margin: 0 auto; padding-left: 24px; padding-right: 24px; }
+			.band { border-top: 1px solid var(--line); }
+			.band-surface { background: var(--surface); }
+			:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+			/* Nav */
+			.nav-bar { border-bottom: 1px solid var(--line); background: var(--bg); }
+			.nav { min-height: 64px; display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+			.brand { display: flex; align-items: center; gap: 10px; text-decoration: none; color: var(--ink); }
+			.brand-mark { width: 28px; height: 28px; border-radius: 7px; background: #111613; display: flex; align-items: center; justify-content: center; }
+			:root[data-theme='dark'] .brand-mark { box-shadow: inset 0 0 0 1px var(--line-2); }
+			.brand-name { font-weight: 600; font-size: 17px; letter-spacing: -0.01em; }
+			.nav-links { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+			.nav-link { text-decoration: none; font-size: 14px; color: var(--text-2); padding: 10px 12px; }
+			.nav-gh {
+				text-decoration: none; font-size: 14px; font-weight: 500; color: var(--ink);
+				padding: 9px 14px; border: 1px solid var(--line-2); border-radius: 8px; background: var(--surface);
+				display: flex; align-items: center; gap: 8px; margin-left: 6px;
+			}
+
+			/* Hero */
+			.hero { padding-top: 88px; padding-bottom: 40px; }
+			.pills { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+			.pill {
+				display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-2);
+				border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 6px 12px 6px 10px; text-decoration: none;
+			}
+			.pill-strong { font-weight: 500; color: var(--ink); border-color: var(--ink); }
+			.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+			.hero h1 { margin-top: 24px; font-size: clamp(40px, 6vw, 68px); line-height: 1.04; letter-spacing: -0.035em; font-weight: 600; max-width: 860px; }
+			.lede { margin-top: 22px; font-size: 19px; line-height: 1.55; color: var(--text); max-width: 640px; }
+
+			/* Install box */
+			.install { margin-top: 40px; max-width: 920px; scroll-margin-top: 24px; }
+			.install-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; flex-wrap: wrap; }
+			.eyebrow-plain { font-size: 13px; font-weight: 500; color: var(--text-2); letter-spacing: 0.02em; text-transform: uppercase; }
+			.seg { display: flex; gap: 4px; flex-wrap: wrap; background: var(--chip); border-radius: 10px; padding: 4px; }
+			.seg-btn {
+				border: 0; border-radius: 7px; font-family: inherit; font-size: 13px; font-weight: 500;
+				padding: 8px 12px; min-height: 36px; cursor: pointer; background: transparent; color: var(--text);
+			}
+			.seg-btn[aria-pressed='true'] { background: var(--seg-on); color: var(--ink); box-shadow: 0 1px 2px rgba(17, 22, 19, 0.12); }
+			.seg-lg { border-radius: 12px; flex-wrap: nowrap; }
+			.seg-lg .seg-btn { border-radius: 9px; font-size: 15px; padding: 10px 18px; min-height: 44px; }
+			.cmd-box {
+				display: flex; align-items: stretch; background: var(--dark); border-radius: 12px; border: 1px solid var(--dark);
+				overflow: hidden; box-shadow: 0 1px 0 rgba(17, 22, 19, 0.04), var(--shadow);
+			}
+			:root[data-theme='dark'] .cmd-box { border-color: var(--line-2); }
+			.cmd { flex: 1 1 auto; min-width: 0; overflow-x: auto; white-space: nowrap; padding: 18px 20px; font-size: 14px; line-height: 1.6; color: #e8ede9; }
+			.cmd::-webkit-scrollbar { height: 6px; }
+			.cmd::-webkit-scrollbar-thumb { background: #2a332e; border-radius: 3px; }
+			.prompt { color: var(--bright); user-select: none; }
+			.copy {
+				flex: 0 0 auto; min-width: 104px; border: 0; border-left: 1px solid var(--dark-line); background: var(--dark-btn);
+				color: #e8ede9; font-family: inherit; font-size: 14px; font-weight: 500;
+				display: flex; align-items: center; justify-content: center; gap: 8px; padding: 0 18px; cursor: pointer;
+			}
+			.copy .i-done, .copy.copied .i-copy { display: none; }
+			.copy.copied .i-done { display: block; }
+			.install-note { margin-top: 14px; font-size: 15px; color: var(--text); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+			.kbd { font-size: 14px; color: var(--ink); background: var(--chip); border-radius: 6px; padding: 3px 8px; text-decoration: none; }
+
+			/* Section heads */
+			.section-head { display: flex; flex-direction: column; gap: 12px; }
+			.narrow { max-width: 720px; }
+			.eyebrow { font-size: 12px; font-weight: 500; letter-spacing: 0.04em; text-transform: uppercase; color: var(--accent); }
+
+			/* Why */
+			.why { padding-top: 48px; padding-bottom: 24px; }
+			.cards { margin-top: 36px; display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+			.card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 28px; display: flex; flex-direction: column; gap: 10px; }
+			.card-strong { border-color: var(--ink); }
+			.card h3 { font-size: 18px; font-weight: 600; }
+			.card p { font-size: 15px; line-height: 1.55; color: var(--text); }
+			.tag { font-size: 12px; color: var(--faint); }
+			.tag.accent { color: var(--accent); }
+			.tag.bright { color: var(--bright); }
+
+			/* Modes */
+			.modes { padding-top: 40px; padding-bottom: 88px; }
+			.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 40px; display: flex; flex-direction: column; gap: 32px; }
+			.panel-head { display: flex; flex-wrap: wrap; gap: 20px 40px; align-items: flex-end; justify-content: space-between; }
+			.mode { display: flex; flex-direction: column; gap: 32px; }
+			.mode[hidden] { display: none; }
+			.mode-intro { display: flex; flex-wrap: wrap; gap: 16px 56px; align-items: baseline; justify-content: space-between; }
+			.mode-intro h3 { font-size: 24px; letter-spacing: -0.015em; font-weight: 600; }
+			.mode-intro p { flex: 1 1 420px; min-width: 0; font-size: 16px; line-height: 1.55; color: var(--text); }
+			.flow { display: flex; flex-wrap: wrap; align-items: stretch; gap: 12px; }
+			.step {
+				flex: 1 1 190px; min-width: 0; border: 1px solid var(--line); border-radius: 12px; background: var(--bg);
+				padding: 20px; display: flex; flex-direction: column; gap: 8px;
+			}
+			.step b { font-size: 16px; font-weight: 600; }
+			.step b.mono { font-weight: 500; }
+			.step > span:last-child { font-size: 14px; line-height: 1.5; color: var(--text); }
+			.step-dark { background: var(--dark); border-color: var(--dark); color: #e8ede9; }
+			:root[data-theme='dark'] .step-dark { border-color: var(--bright); }
+			.step-dark > span:last-child { color: #b9c2bd; }
+			.step-accent { border-color: var(--accent); background: var(--surface); }
+			.step-dashed { border-style: dashed; border-color: var(--dashed); background: var(--surface); }
+			.hop { flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 0 4px; color: var(--arrow); }
+			.hop span { font-size: 11px; color: var(--faint); }
+			.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 24px; border-top: 1px solid var(--line); padding-top: 28px; }
+			.facts > div { display: flex; flex-direction: column; gap: 6px; }
+			.facts h4, .example h4 { font-size: 15px; font-weight: 600; }
+			.facts p { font-size: 14px; line-height: 1.55; color: var(--text); }
+			.use-for { font-size: 14px; color: var(--text); }
+			.use-for b { font-weight: 600; color: var(--ink); }
+			.example { background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 24px; display: flex; flex-direction: column; gap: 16px; }
+			.example ol { margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
+			.example li { display: flex; gap: 12px; align-items: flex-start; font-size: 14px; line-height: 1.5; color: var(--text); }
+			.num {
+				flex: 0 0 auto; width: 24px; height: 24px; border-radius: 50%; background: var(--btn-bg); color: var(--btn-ink);
+				font-size: 12px; display: flex; align-items: center; justify-content: center;
+			}
+
+			/* Standard Webhooks */
+			.standard { padding-top: 88px; padding-bottom: 88px; display: flex; flex-wrap: wrap; gap: 56px; align-items: center; }
+			.standard-copy { flex: 1 1 380px; min-width: 0; display: flex; flex-direction: column; gap: 18px; }
+			.checks { margin: 4px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 12px; font-size: 15px; color: var(--ink); }
+			.checks li { display: flex; gap: 10px; align-items: center; }
+			.checks svg { flex: 0 0 auto; color: var(--accent); }
+			.chip { font-size: 13px; background: var(--chip); border-radius: 5px; padding: 2px 6px; white-space: nowrap; }
+			.request { flex: 1 1 440px; min-width: 0; background: var(--dark); border-radius: 14px; overflow: hidden; box-shadow: var(--shadow); }
+			:root[data-theme='dark'] .request { border: 1px solid var(--line-2); }
+			.request-head {
+				display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 20px;
+				border-bottom: 1px solid var(--dark-line); flex-wrap: wrap; font-size: 13px; color: #e8ede9;
+			}
+			.request-head .dim { font-size: 12px; }
+			.request-body { padding: 18px 20px; font-size: 13px; line-height: 1.9; color: #b9c2bd; overflow-x: auto; white-space: nowrap; }
+			.key { color: #e8ede9; }
+			.verdicts { display: flex; flex-direction: column; gap: 10px; padding: 0 20px 20px; }
+			.verdict { display: flex; align-items: center; gap: 10px; border-radius: 8px; padding: 10px 14px; font-size: 14px; color: #e8ede9; }
+			.verdict svg { flex: 0 0 auto; }
+			.verdict.ok { background: rgba(91, 208, 143, 0.12); border: 1px solid rgba(91, 208, 143, 0.35); }
+			.verdict.bad { background: rgba(248, 113, 113, 0.1); border: 1px solid rgba(248, 113, 113, 0.35); }
+
+			/* Features */
+			.features { padding-top: 88px; padding-bottom: 88px; }
+			.features-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 24px; flex-wrap: wrap; }
+			.features-head h2 { max-width: 560px; }
+			.features-head .sub { font-size: 16px; max-width: 400px; }
+			.grid {
+				margin-top: 48px; display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1px;
+				background: var(--line); border: 1px solid var(--line); border-radius: 14px; overflow: hidden;
+			}
+			.feature { background: var(--surface); padding: 32px; display: flex; flex-direction: column; gap: 12px; }
+			.feature svg { color: var(--ink); }
+			.feature h3 { margin-top: 4px; font-size: 17px; font-weight: 600; }
+			.feature p { font-size: 15px; line-height: 1.55; color: var(--text); }
+
+			/* Closing CTA */
+			.cta { padding-top: 72px; padding-bottom: 72px; display: flex; align-items: center; justify-content: space-between; gap: 24px; flex-wrap: wrap; }
+			.cta h2 { font-size: 28px; letter-spacing: -0.02em; }
+			.cta p { margin-top: 8px; font-size: 15px; color: var(--text); }
+			.cta-actions { display: flex; gap: 12px; flex-wrap: wrap; }
+			.btn { text-decoration: none; font-size: 15px; font-weight: 500; border-radius: 10px; }
+			.btn-primary { color: var(--btn-ink); background: var(--btn-bg); padding: 13px 20px; }
+			.btn-primary:hover { color: var(--btn-ink); opacity: 0.9; }
+			.btn-secondary { color: var(--ink); background: var(--surface); border: 1px solid var(--line-2); padding: 12px 20px; }
+
+			/* Footer */
+			.footer { padding-top: 28px; padding-bottom: 28px; display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; font-size: 13px; color: var(--faint); }
+			.footer-links { display: flex; gap: 20px; }
+			.footer a { color: var(--faint); }
+
+			/* Narrow: the flow wraps awkwardly, so stack it with downward arrows */
+			@media (max-width: 960px) {
+				.flow { flex-direction: column; }
+				.step { flex-basis: auto; }
+				.hop { flex-direction: row; padding: 0; }
+				.hop svg { transform: rotate(90deg); }
+			}
+
+			/* Phones */
+			@media (max-width: 720px) {
+				.nav-link.section { display: none; }
+				.hero { padding-top: 48px; }
+				.lede { font-size: 17px; }
+				.panel { padding: 24px 20px; }
+				.seg-lg { width: 100%; }
+				.seg-lg .seg-btn { flex: 1; padding: 10px 12px; }
+				.standard, .features { padding-top: 56px; padding-bottom: 56px; gap: 40px; }
+				.checks li { align-items: flex-start; }
+				.checks li span { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+				.grid { grid-template-columns: 1fr; }
+				.feature { padding: 24px; }
+				.cmd { padding: 16px; font-size: 13px; }
+				.copy { min-width: 0; padding: 0 14px; }
+			}
+		</style>
+	</body>
+</html>
