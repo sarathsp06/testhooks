@@ -49,7 +49,16 @@ Downloads the right build for your OS and architecture from GitHub Releases and 
 curl -fsSL https://raw.githubusercontent.com/sarathsp06/testhooks/main/install.sh | sh
 ```
 
-It installs to `/usr/local/bin` when that's writable, otherwise `~/.local/bin`. Use `TESTHOOKS_VERSION=v1.1.0` to pin a release and `TESTHOOKS_INSTALL_DIR=…` to choose the directory. The binary needs PostgreSQL:
+It installs to `/usr/local/bin` when that's writable, otherwise `~/.local/bin`. Use `TESTHOOKS_VERSION=v1.1.0` to pin a release and `TESTHOOKS_INSTALL_DIR=…` to choose the directory.
+
+For local testing, run it with no database at all:
+
+```bash
+DATABASE_URL=memory testhooks                                  # data lives in memory, gone on restart
+DATABASE_URL=memory SNAPSHOT_PATH=./testhooks.snapshot testhooks  # kept in a file across restarts
+```
+
+For anything shared or long-running, use PostgreSQL:
 
 ```bash
 docker run -d --name testhooks-pg -p 127.0.0.1:5432:5432 \
@@ -81,7 +90,7 @@ make build && ./testhooks        # single binary with the SPA embedded
 - **Test webhooks against localhost without ngrok.** Webhooks hit the public server, stream to your browser over WebSocket, and your browser forwards them to `localhost` with `fetch()`. No CLI, daemon or tunnel.
 - **Private when you need it.** In browser mode, payloads are relayed and never written to the server's disk.
 - **Always on when you need it.** In server mode, everything is stored in Postgres, and transforms and forwarding run headlessly with no browser open.
-- **Small footprint.** One Go binary with the Svelte UI embedded. PostgreSQL is the only dependency.
+- **Small footprint.** One Go binary with the Svelte UI embedded. PostgreSQL is the only dependency, and for local testing even that is optional.
 
 ---
 
@@ -162,7 +171,8 @@ Everything is configured with environment variables. A `.env` file in the workin
 
 | Variable | Default | Description |
 |---|---|---|
-| `DATABASE_URL` | `postgres://testhooks:testhooks@localhost:5432/testhooks?sslmode=disable` | PostgreSQL connection string |
+| `DATABASE_URL` | `postgres://testhooks:testhooks@localhost:5432/testhooks?sslmode=disable` | PostgreSQL connection string, or `memory` to run without a database (local testing) |
+| `SNAPSHOT_PATH` | | With `DATABASE_URL=memory`: file the data is saved to every 30 s and on shutdown, and loaded from on start |
 | `LISTEN` | `:8080` | Bind address |
 | `PORT` | | Overrides `LISTEN` with `:<PORT>` (PaaS convention) |
 | `AUTH_TOKEN` | | When set, the API and WebSocket require this token and the UI prompts for it. `/h/*` and `/healthz` stay public |

@@ -171,8 +171,8 @@ func (m *mockStore) ListRequests(_ context.Context, endpointID string, limit, of
 	}
 	var result []db.CapturedRequest
 	for _, id := range m.reqOrder {
-		r := m.requests[id]
-		if r.EndpointID == endpointID {
+		r, ok := m.requests[id] // reqOrder keeps IDs that DeleteRequest removed
+		if ok && r.EndpointID == endpointID {
 			result = append(result, *r)
 		}
 	}

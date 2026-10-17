@@ -20,7 +20,13 @@ type Config struct {
 
 	// PostgreSQL connection string. Required in production.
 	// WARNING: The default value includes credentials and should NOT be used in production.
+	// Set to "memory" to run without a database (local testing).
 	DatabaseURL string `env:"DATABASE_URL" envDefault:"postgres://testhooks:testhooks@localhost:5432/testhooks?sslmode=disable"`
+
+	// SnapshotPath, with DATABASE_URL=memory, is a file the in-memory store is
+	// saved to every 30s and on shutdown, and loaded from on start. Empty keeps
+	// data in memory only.
+	SnapshotPath string `env:"SNAPSHOT_PATH"`
 
 	// Dev mode: proxy SPA requests to the Vite dev server.
 	Dev bool `env:"DEV" envDefault:"false"`

@@ -92,7 +92,8 @@ case ":$PATH:" in
 esac
 
 say ""
-say "testhooks needs PostgreSQL. To try it locally:"
-say "  docker run -d --name testhooks-pg -e POSTGRES_USER=testhooks -e POSTGRES_PASSWORD=testhooks -e POSTGRES_DB=testhooks -p 127.0.0.1:5432:5432 postgres:17-alpine"
-say "  ${BIN}    # uses postgres://testhooks:testhooks@localhost:5432/testhooks by default"
+say "Try it now with no database (data kept in memory):"
+say "  DATABASE_URL=memory ${BIN}"
 say "Then open http://localhost:8080"
+say ""
+say "For persistent storage, point DATABASE_URL at PostgreSQL. Docs: https://sarathsp06.github.io/testhooks/"

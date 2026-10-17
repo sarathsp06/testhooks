@@ -20,6 +20,7 @@ import (
 	"github.com/sarathsp06/testhooks/internal/cleanup"
 	"github.com/sarathsp06/testhooks/internal/config"
 	"github.com/sarathsp06/testhooks/internal/db"
+	"github.com/sarathsp06/testhooks/internal/db/memstore"
 	"github.com/sarathsp06/testhooks/internal/forward"
 	"github.com/sarathsp06/testhooks/internal/handler"
 	"github.com/sarathsp06/testhooks/internal/hub"
@@ -61,14 +62,35 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	// Connect to Postgres and run migrations, retrying while the database comes
-	// up (common in container orchestration where start order isn't guaranteed).
-	pool, err := connectWithRetry(ctx, cfg.DatabaseURL, 60*time.Second, log)
-	if err != nil {
-		log.Fatal().Err(err).Msg("failed to connect to database")
+	// Storage: Postgres by default, or in memory (with an optional snapshot
+	// file) when DATABASE_URL=memory, for local testing without a database.
+	var store interface {
+		handler.Store
+		Ping(context.Context) error
+		Close()
 	}
-	defer pool.Close()
-	log.Info().Msg("database connected and migrations applied")
+	if cfg.DatabaseURL == "memory" {
+		mem, err := memstore.New(cfg.SnapshotPath, log)
+		if err != nil {
+			log.Fatal().Err(err).Msg("failed to open in-memory store")
+		}
+		store = mem
+		if cfg.SnapshotPath == "" {
+			log.Warn().Msg("in-memory storage: all data is lost on restart (set SNAPSHOT_PATH to keep it)")
+		} else {
+			log.Info().Str("snapshot", cfg.SnapshotPath).Msg("in-memory storage with snapshot file")
+		}
+	} else {
+		// Connect to Postgres and run migrations, retrying while the database comes
+		// up (common in container orchestration where start order isn't guaranteed).
+		pool, err := connectWithRetry(ctx, cfg.DatabaseURL, 60*time.Second, log)
+		if err != nil {
+			log.Fatal().Err(err).Msg("failed to connect to database")
+		}
+		store = pool
+		log.Info().Msg("database connected and migrations applied")
+	}
+	defer store.Close()
 
 	// In-memory pub/sub hub with TTL sweep and subscriber limits.
 	h := hub.New(cfg.RingBufferSize, cfg.RingBufferTTLSeconds, cfg.MaxSubscribersPerSlug)
@@ -89,9 +111,9 @@ func main() {
 	// Create handlers.
 	allowedOrigins := cfg.ParsedAllowedOrigins()
 	trustedProxies := cfg.ParsedTrustedProxies()
-	capture := handler.NewCapture(pool, h, fwd, wasmRunner, cfg.MaxBodySize, trustedProxies, log)
-	api := handler.NewAPI(pool, h, log)
-	ws := handler.NewWS(pool, h, log, allowedOrigins)
+	capture := handler.NewCapture(store, h, fwd, wasmRunner, cfg.MaxBodySize, trustedProxies, log)
+	api := handler.NewAPI(store, h, log)
+	ws := handler.NewWS(store, h, log, allowedOrigins)
 
 	// Build the HTTP router using Go 1.22+ stdlib patterns.
 	mux := http.NewServeMux()
@@ -128,7 +150,7 @@ func main() {
 	// Health check — always public, exempt from auth and rate limiting.
 	// Returns 200 with {"status":"ok"} if the DB is reachable, 503 otherwise.
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
-		if err := pool.Ping(r.Context()); err != nil {
+		if err := store.Ping(r.Context()); err != nil {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusServiceUnavailable)
 			json.NewEncoder(w).Encode(map[string]string{"status": "error", "detail": "database unreachable"})
@@ -204,7 +226,7 @@ func main() {
 	prunerCtx, prunerCancel := context.WithCancel(ctx)
 	defer prunerCancel()
 	pruner := cleanup.NewPruner(
-		pool,
+		store,
 		cfg.MaxEndpointStorageBytes,
 		cfg.MaxRequestsPerEndpoint,
 		cfg.PruneIntervalSeconds,
@@ -243,7 +265,7 @@ func main() {
 		log.Warn().Err(err).Msg("async forwards still in flight at shutdown")
 	}
 	if exitCode != 0 {
-		pool.Close()
+		store.Close() // os.Exit skips defers; flush the snapshot / close the pool first
 		os.Exit(exitCode)
 	}
 	log.Info().Msg("goodbye")

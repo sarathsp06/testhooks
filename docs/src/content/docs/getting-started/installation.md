@@ -3,7 +3,7 @@ title: Installation
 description: Docker Compose, the binary installer, the container image, or building from source.
 ---
 
-Testhooks is a single Go binary with the web UI embedded. Its only dependency is PostgreSQL 15 or newer. Database migrations run automatically on startup, and the server waits up to 60 seconds for the database to become reachable.
+Testhooks is a single Go binary with the web UI embedded. It stores data in PostgreSQL 15 or newer, or in memory for local testing. Database migrations run automatically on startup, and the server waits up to 60 seconds for the database to become reachable.
 
 ## Docker Compose
 
@@ -50,7 +50,27 @@ curl -fsSL https://raw.githubusercontent.com/sarathsp06/testhooks/main/install.s
 
 Builds are published for Linux, macOS and Windows on amd64 and arm64. You can also download them directly from the [releases page](https://github.com/sarathsp06/testhooks/releases).
 
-The binary needs PostgreSQL. For a quick local database:
+### Run without a database
+
+For local testing, keep everything in memory:
+
+```bash
+DATABASE_URL=memory testhooks
+```
+
+Data is lost when the process stops. To keep it across restarts, add a snapshot file. The store is written to it every 30 seconds when something changed, and on shutdown, then loaded on the next start:
+
+```bash
+DATABASE_URL=memory SNAPSHOT_PATH=./testhooks.snapshot testhooks
+```
+
+A clean shutdown loses nothing; a crash loses at most the last 30 seconds. If the snapshot file is unreadable, Testhooks refuses to start rather than overwrite it.
+
+In-memory mode is meant for one person testing locally. For a shared or public instance, use PostgreSQL.
+
+### With PostgreSQL
+
+For a quick local database:
 
 ```bash
 docker run -d --name testhooks-pg -p 127.0.0.1:5432:5432 \

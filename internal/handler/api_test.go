@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -494,5 +495,21 @@ func TestGenerateSlug(t *testing.T) {
 	}
 	if slug1 == slug2 {
 		t.Error("two slugs should not be equal")
+	}
+}
+
+// Regression: the mock's ListRequests dereferenced deleted requests and panicked.
+func TestMockStore_ListAfterDelete(t *testing.T) {
+	store := newMockStore()
+	store.seedEndpoint("ep-1", "slug", "Test", "server", nil)
+	r1 := &db.CapturedRequest{EndpointID: "ep-1"}
+	r2 := &db.CapturedRequest{EndpointID: "ep-1"}
+	store.InsertRequest(context.Background(), r1)
+	store.InsertRequest(context.Background(), r2)
+	store.DeleteRequest(context.Background(), r1.ID)
+
+	reqs, err := store.ListRequests(context.Background(), "ep-1", 50, 0)
+	if err != nil || len(reqs) != 1 || reqs[0].ID != r2.ID {
+		t.Fatalf("ListRequests after delete = %+v, %v", reqs, err)
 	}
 }

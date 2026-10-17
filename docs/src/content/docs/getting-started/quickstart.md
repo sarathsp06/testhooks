@@ -18,7 +18,12 @@ curl http://localhost:8080/healthz
 # {"status":"ok"}
 ```
 
-No Docker? Use the [binary installer](../../getting-started/installation/#install-the-binary) instead.
+No Docker? Install the binary and run it with no database at all:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/sarathsp06/testhooks/main/install.sh | sh
+DATABASE_URL=memory testhooks
+```
 
 ## 2. Create an endpoint
 
