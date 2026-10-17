@@ -5,7 +5,13 @@ description: Run Testhooks and capture your first webhook in a couple of minutes
 
 ## 1. Start Testhooks
 
-You need Docker. This runs Testhooks and PostgreSQL from the published image:
+You need Docker. For local testing, one container with no database is enough:
+
+```bash
+docker run -d --name testhooks -p 8080:8080 -e DATABASE_URL=memory ghcr.io/sarathsp06/testhooks
+```
+
+For a shared instance, run it with PostgreSQL instead:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/sarathsp06/testhooks/main/deploy/docker-compose.yml | docker compose -p testhooks -f - up -d
@@ -64,4 +70,4 @@ Providers such as Stripe, GitHub or Slack need a public URL. Run Testhooks somew
 - Reshape payloads or script the response: [Transforms and custom responses](../../guides/scripts/)
 - Check signatures from Sparrow, Svix and others: [Verifying signed webhooks](../../guides/signatures/)
 
-Stop everything with `docker compose -p testhooks down`. Add `-v` to delete the stored data too.
+Stop the single container with `docker rm -f testhooks`, or the Compose setup with `docker compose -p testhooks down` (add `-v` to delete the stored data too).

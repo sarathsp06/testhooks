@@ -39,6 +39,7 @@ internal/
   db/
     db.go                        PostgreSQL pool + auto-migration
     queries.go                   All SQL queries (pgx, no ORM)
+    memstore/memstore.go         In-memory store (DATABASE_URL=memory) + snapshot file
     migrations/
       001_init.up.sql            Schema: endpoints + requests tables
       001_init.down.sql          Drop migration
@@ -97,9 +98,9 @@ Stores use `.svelte.ts` files with `$state` and `$derived` runes instead of Svel
 
 ### Prerequisites
 
-- **Go 1.22+** — `go version`
-- **Node 20+** — `node --version`
-- **PostgreSQL 15+** — local or via Docker
+- **Go 1.26+** — `go version`
+- **Node 22+** — `node --version`
+- **PostgreSQL 15+** — optional for development; `DATABASE_URL=memory` runs without it
 
 ### First time setup
 
@@ -107,10 +108,11 @@ Stores use `.svelte.ts` files with `$state` and `$derived` runes instead of Svel
 # Install frontend dependencies
 cd web && npm ci && cd ..
 
-# Start Postgres (easiest via Docker)
-docker compose up -d postgres
+# Start dev servers (Go + Vite hot reload) with in-memory storage
+DATABASE_URL=memory make dev
 
-# Start dev servers (Go + Vite hot reload)
+# Or against Postgres (easiest via Docker)
+docker compose up -d postgres
 make dev
 ```
 

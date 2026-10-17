@@ -26,6 +26,14 @@ import { Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
 
 ## Run it in one line
 
+Locally, with no database:
+
+```bash
+docker run -d --name testhooks -p 8080:8080 -e DATABASE_URL=memory ghcr.io/sarathsp06/testhooks
+```
+
+With PostgreSQL, for shared or long-running instances:
+
 ```bash
 curl -fsSL https://raw.githubusercontent.com/sarathsp06/testhooks/main/deploy/docker-compose.yml | docker compose -p testhooks -f - up -d
 ```
@@ -60,7 +68,7 @@ Then open `http://localhost:8080`. See [Installation](getting-started/installati
 <CardGrid>
 	<LinkCard
 		title="Server mode"
-		description="Requests stored in PostgreSQL; transforms and forwarding run on the server, always on, even with no browser open."
+		description="Requests stored in PostgreSQL or in memory; transforms and forwarding run on the server, always on, even with no browser open."
 		href="guides/modes/"
 	/>
 	<LinkCard
@@ -70,4 +78,4 @@ Then open `http://localhost:8080`. See [Installation](getting-started/installati
 	/>
 </CardGrid>
 
-One Go binary with the UI embedded, plus PostgreSQL. Open source under the Apache 2.0 license.
+One Go binary with the UI embedded. Storage is PostgreSQL, or memory for local testing. Open source under the Apache 2.0 license.

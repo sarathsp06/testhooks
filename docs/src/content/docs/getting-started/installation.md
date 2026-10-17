@@ -1,13 +1,29 @@
 ---
 title: Installation
-description: Docker Compose, the binary installer, the container image, or building from source.
+description: One-line Docker and binary installs, with PostgreSQL or in-memory storage.
 ---
 
-Testhooks is a single Go binary with the web UI embedded. It stores data in PostgreSQL 15 or newer, or in memory for local testing. Database migrations run automatically on startup, and the server waits up to 60 seconds for the database to become reachable.
+Testhooks is a single Go binary with the web UI embedded. It stores data in PostgreSQL 15 or newer, or in memory for local testing.
 
-## Docker Compose
+## Docker, no database
 
-Runs Testhooks and PostgreSQL together from the published image. Nothing to clone or build:
+For local testing. One container, data kept in memory:
+
+```bash
+docker run -d --name testhooks -p 8080:8080 -e DATABASE_URL=memory ghcr.io/sarathsp06/testhooks
+```
+
+To keep the data across restarts, add a volume and a [snapshot file](#run-without-a-database):
+
+```bash
+docker run -d --name testhooks -p 8080:8080 -v testhooks-data:/data -e DATABASE_URL=memory -e SNAPSHOT_PATH=/data/testhooks.snapshot ghcr.io/sarathsp06/testhooks
+```
+
+Remove it with `docker rm -f testhooks` (and `docker volume rm testhooks-data` for the snapshot).
+
+## Docker Compose with PostgreSQL
+
+For shared or long-running instances. Runs Testhooks and PostgreSQL together from the published image; migrations run on startup and the server waits up to 60 seconds for the database:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/sarathsp06/testhooks/main/deploy/docker-compose.yml | docker compose -p testhooks -f - up -d
@@ -88,16 +104,16 @@ Point it at another database with `DATABASE_URL`. See [Configuration](../../refe
 Multi-arch images (amd64, arm64) are published to the GitHub Container Registry:
 
 ```bash
-docker run -d -p 8080:8080 \
-  -e DATABASE_URL='postgres://user:pass@db-host:5432/testhooks?sslmode=disable' \
-  ghcr.io/sarathsp06/testhooks:latest
+docker run -d -p 8080:8080 -e DATABASE_URL='postgres://user:pass@db-host:5432/testhooks?sslmode=disable' ghcr.io/sarathsp06/testhooks
 ```
+
+Use `DATABASE_URL=memory` instead to run [without a database](#docker-no-database).
 
 The image is built `FROM scratch`: it holds only the binary, CA certificates and time zone data.
 
 ## From source
 
-Prerequisites: Go 1.26+, Node 22+ and PostgreSQL.
+Prerequisites: Go 1.26+ and Node 22+. PostgreSQL is optional: `DATABASE_URL=memory ./testhooks` runs without it.
 
 ```bash
 git clone https://github.com/sarathsp06/testhooks.git

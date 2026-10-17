@@ -11,7 +11,7 @@ Testhooks has to be reachable from the internet for webhook providers to deliver
 - **Set `ALLOWED_ORIGINS`** to the origin you serve the UI from, such as `https://hooks.example.com`.
 - **Terminate TLS** in a reverse proxy or load balancer in front of Testhooks.
 - **Set `TRUSTED_PROXIES`** to that proxy's CIDR so rate limiting and the captured client IP use the real client address.
-- **Use a managed or backed-up PostgreSQL** if you need to keep server-mode requests.
+- **Use PostgreSQL**, managed or backed up, if you need to keep server-mode requests. In-memory storage (`DATABASE_URL=memory`) is for local testing: one process, data in RAM, no shared access.
 
 ## Authentication
 

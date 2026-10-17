@@ -7,7 +7,7 @@ Every endpoint runs in one of two modes. You can switch at any time from the end
 
 | | Server mode | Browser mode |
 |---|---|---|
-| Requests stored | In PostgreSQL | Not stored (optional *Persist requests*) |
+| Requests stored | In the database (PostgreSQL or memory) | Not stored (optional *Persist requests*) |
 | Transforms run | On the server (JavaScript) | In your browser (JavaScript, Lua, Jsonnet) |
 | Forwarding runs | On the server, public URLs only | In your browser, any URL including `localhost` |
 | Custom responses | Scripted on the server | Scripted in your browser while a tab is open |
@@ -16,7 +16,7 @@ Every endpoint runs in one of two modes. You can switch at any time from the end
 
 ## Server mode
 
-The default. Every request is written to PostgreSQL, then the server runs the pipeline:
+The default. Every request is stored (in PostgreSQL, or in memory with `DATABASE_URL=memory`), then the server runs the pipeline:
 
 1. **Capture** the request.
 2. **Store** it.

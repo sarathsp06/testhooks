@@ -16,7 +16,7 @@ It then:
 2. Attaches the binaries and a `checksums.txt` to the GitHub release, creating the release with generated notes if it doesn't exist.
 3. Builds and pushes a multi-arch image to `ghcr.io/sarathsp06/testhooks:<version>` and `:latest`.
 
-The [installer script](../../getting-started/installation/#install-the-binary) and the [standalone Compose file](../../getting-started/installation/#docker-compose) download from these.
+The [installer script](../../getting-started/installation/#install-the-binary) and the [standalone Compose file](../../getting-started/installation/#docker-compose-with-postgresql) download from these.
 
 To republish an existing tag, run the workflow manually from the Actions tab and enter the tag.
 
