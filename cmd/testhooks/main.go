@@ -53,6 +53,10 @@ func main() {
 		log.Fatal().Err(err).Msg("failed to load config")
 	}
 
+	if cfg.TrustedProxiesAuto {
+		log.Info().Str("trusted_proxies", cfg.TrustedProxies).Msg("running on Vercel: trusting its proxy for client IPs (set TRUSTED_PROXIES to override)")
+	}
+
 	log.Info().
 		Str("version", version).
 		Str("listen", cfg.Listen).

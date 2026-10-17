@@ -84,6 +84,14 @@ type Config struct {
 	// NOT trusted and RemoteAddr is always used.
 	TrustedProxies string `env:"TRUSTED_PROXIES" envDefault:""`
 
+	// OnVercel is set by Vercel's runtime (VERCEL=1). Vercel's proxy reaches
+	// the app over loopback and sets X-Forwarded-For / X-Real-Ip itself, so
+	// loopback is trusted automatically when TRUSTED_PROXIES is unset.
+	OnVercel bool `env:"VERCEL"`
+
+	// TrustedProxiesAuto reports that TrustedProxies was filled in for Vercel.
+	TrustedProxiesAuto bool
+
 	// API route timeout in seconds (for non-WebSocket HTTP routes).
 	APITimeoutSeconds int `env:"API_TIMEOUT_SECONDS" envDefault:"30"`
 
@@ -153,6 +161,13 @@ func Load() (*Config, error) {
 		cfg.DatabaseURL = "memory"
 	}
 	cfg.SnapshotPath = strings.TrimSpace(cfg.SnapshotPath)
+
+	// On Vercel every request arrives from loopback; without trusting it,
+	// all clients look like 127.0.0.1 and share one rate-limit bucket.
+	if cfg.OnVercel && strings.TrimSpace(cfg.TrustedProxies) == "" {
+		cfg.TrustedProxies = "127.0.0.1/32,::1/128"
+		cfg.TrustedProxiesAuto = true
+	}
 
 	// L-04: Validate configuration bounds.
 	if cfg.MaxBodySize < 1024 || cfg.MaxBodySize > 10*1024*1024 {

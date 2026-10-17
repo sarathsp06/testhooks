@@ -22,7 +22,7 @@ Testhooks is configured entirely with environment variables. A `.env` file in th
 | `AUTH_TOKEN` | | Require this token for the API and WebSocket. The UI prompts for it; capture URLs and `/healthz` stay public. See [Authentication](../../deployment/production/#authentication) |
 | `ALLOWED_ORIGINS` | `*` | Comma-separated origins allowed for CORS and WebSocket connections |
 | `ALLOWED_HEADERS` | `Content-Type,Authorization,X-Requested-With` | Comma-separated CORS request headers |
-| `TRUSTED_PROXIES` | | Comma-separated CIDRs allowed to set `X-Forwarded-For` and `X-Real-IP` |
+| `TRUSTED_PROXIES` | | Comma-separated CIDRs allowed to set `X-Forwarded-For` and `X-Real-IP`. On Vercel (`VERCEL=1`) it defaults to loopback, `127.0.0.1/32,::1/128` |
 | `RATE_LIMIT_RPS` | `20` | Sustained requests per second per client IP on capture and API routes. `0` disables rate limiting |
 | `RATE_LIMIT_BURST` | `40` | Burst size per client IP |
 

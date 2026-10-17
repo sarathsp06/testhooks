@@ -198,3 +198,36 @@ func TestLoad_TrimsDatabaseURL(t *testing.T) {
 		t.Errorf("blank DATABASE_URL = %q, want memory", cfg.DatabaseURL)
 	}
 }
+
+func TestLoad_VercelTrustsLoopback(t *testing.T) {
+	t.Setenv("VERCEL", "1")
+	t.Setenv("TRUSTED_PROXIES", "")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cfg.TrustedProxiesAuto || cfg.TrustedProxies != "127.0.0.1/32,::1/128" {
+		t.Errorf("on Vercel: TrustedProxies = %q (auto=%v), want loopback", cfg.TrustedProxies, cfg.TrustedProxiesAuto)
+	}
+
+	// An explicit setting always wins.
+	t.Setenv("TRUSTED_PROXIES", "10.0.0.0/8")
+	cfg, err = Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.TrustedProxiesAuto || cfg.TrustedProxies != "10.0.0.0/8" {
+		t.Errorf("explicit TRUSTED_PROXIES overridden: %q (auto=%v)", cfg.TrustedProxies, cfg.TrustedProxiesAuto)
+	}
+
+	// Off Vercel nothing is trusted by default.
+	t.Setenv("VERCEL", "")
+	t.Setenv("TRUSTED_PROXIES", "")
+	cfg, err = Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.TrustedProxies != "" {
+		t.Errorf("off Vercel: TrustedProxies = %q, want empty", cfg.TrustedProxies)
+	}
+}

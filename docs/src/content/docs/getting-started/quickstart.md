@@ -3,6 +3,8 @@ title: Quickstart
 description: Run Testhooks and capture your first webhook in a couple of minutes.
 ---
 
+Just want to look around first? Try the [live demo](https://testhooks.vercel.app/), no install needed.
+
 ## 1. Install testhooks
 
 ```bash

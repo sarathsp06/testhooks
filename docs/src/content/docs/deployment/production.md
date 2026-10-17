@@ -38,6 +38,14 @@ Testhooks reads `X-Forwarded-For` and `X-Real-IP` only from peers listed in `TRU
 TRUSTED_PROXIES=10.0.0.0/8,172.16.0.0/12
 ```
 
+If every captured request shows `127.0.0.1` (or `::1`) as its IP, your platform's proxy connects to Testhooks over loopback. On Vercel this is handled automatically: when `VERCEL=1` is set and `TRUSTED_PROXIES` is empty, loopback is trusted and the startup log says so. On other platforms, trust loopback yourself:
+
+```bash
+TRUSTED_PROXIES=127.0.0.1/32,::1/128
+```
+
+Without this, rate limiting also sees every visitor as one IP, so they all share a single per-IP budget.
+
 Make sure the proxy supports WebSocket upgrades on `/ws/*` and doesn't time out idle WebSockets too quickly. Testhooks pings every 30 seconds.
 
 ## Health checks

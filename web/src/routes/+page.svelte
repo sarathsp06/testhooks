@@ -179,6 +179,14 @@
 	<!-- ===== CREATE ENDPOINT SECTION ===== -->
 	<section id="create-section" class="pt-10 pb-6 bg-[var(--bg)]">
 		<div class="max-w-3xl mx-auto px-6">
+			<div class="mb-6">
+				<h1 class="text-2xl font-semibold tracking-tight">Capture, inspect and forward webhooks</h1>
+				<p class="mt-1.5 text-sm text-[var(--text-muted)]">
+					Create an endpoint, point a webhook sender at its URL and watch each request arrive live.
+					In browser mode your tab can also forward requests to localhost.
+					<a href="https://sarathsp06.github.io/testhooks/getting-started/quickstart/" target="_blank" rel="noopener noreferrer" class="text-[var(--accent)] hover:underline">How it works</a>
+				</p>
+			</div>
 			<div class="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl overflow-hidden">
 				<div class="px-6 pt-6 pb-4">
 					<div class="flex items-center gap-3 mb-1">

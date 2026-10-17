@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="https://testhooks.sarathsadasivan.com/">
+  <a href="https://testhooks.vercel.app/">
     <img src=".github/logo.svg" alt="Testhooks" width="700" />
   </a>
 </p>
@@ -16,10 +16,10 @@
   <a href="#verifying-signed-webhooks">Signed webhooks</a> &middot;
   <a href="#configuration">Configuration</a> &middot;
   <a href="https://sarathsp06.github.io/testhooks/">Docs</a> &middot;
-  <a href="https://testhooks.sarathsadasivan.com/">Live demo</a>
+  <a href="https://testhooks.vercel.app/">Live demo</a>
 </p>
 
-Full documentation: **https://sarathsp06.github.io/testhooks/**
+Full documentation: **https://sarathsp06.github.io/testhooks/** · Try it without installing: **[live demo](https://testhooks.vercel.app/)**
 
 ---
 
@@ -172,7 +172,7 @@ Server and security:
 - `AUTH_TOKEN`: token required by the API and WebSocket; the UI prompts for it. `/h/*` and `/healthz` stay public.
 - `ALLOWED_ORIGINS`: comma-separated CORS and WebSocket origins. Default `*`; set it in production.
 - `ALLOWED_HEADERS`: CORS request headers. Default `Content-Type,Authorization,X-Requested-With`.
-- `TRUSTED_PROXIES`: comma-separated CIDRs allowed to set `X-Forwarded-For` / `X-Real-IP`.
+- `TRUSTED_PROXIES`: comma-separated CIDRs allowed to set `X-Forwarded-For` / `X-Real-IP`. If every request shows `127.0.0.1`, use `127.0.0.1/32,::1/128` (automatic on Vercel).
 - `RATE_LIMIT_RPS`: per-IP requests/second on capture and API routes; `0` disables. Default `20`.
 - `RATE_LIMIT_BURST`: per-IP burst size. Default `40`.
 - `API_TIMEOUT_SECONDS`: REST API request timeout. Default `30`.
