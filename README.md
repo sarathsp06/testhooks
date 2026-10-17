@@ -15,8 +15,11 @@
   <a href="#how-it-works">How it works</a> &middot;
   <a href="#verifying-signed-webhooks">Signed webhooks</a> &middot;
   <a href="#configuration">Configuration</a> &middot;
+  <a href="https://sarathsp06.github.io/testhooks/">Docs</a> &middot;
   <a href="https://testhooks.sarathsadasivan.com/">Live demo</a>
 </p>
+
+Full documentation: **https://sarathsp06.github.io/testhooks/**
 
 ---
 
@@ -142,7 +145,7 @@ testhooks can verify [Standard Webhooks](https://www.standardwebhooks.com) signa
 
 In an endpoint's **Settings → Signature Verification**, paste the sender's secret (`whsec_…`, or any raw secret) and/or its Ed25519 public key (hex). Each captured request then shows **verified** or **invalid**, with the reason and the `webhook-id`, which stays the same across retries so duplicates are easy to spot.
 
-Turn on **Reject invalid signatures with 401** to make the endpoint behave like a real receiver. Rejected requests are still captured so you can inspect them. The same settings are available through the API:
+Turn on **Reject invalid signatures with 401** to make the endpoint behave like a real receiver. Rejected requests are still captured so you can inspect them. The same settings are available through the API. `PATCH` replaces the whole `config`, so include any other settings you want to keep:
 
 ```bash
 curl -X PATCH http://localhost:8080/api/endpoints/<id> -H 'Content-Type: application/json' \
@@ -162,7 +165,7 @@ Everything is configured with environment variables. A `.env` file in the workin
 | `DATABASE_URL` | `postgres://testhooks:testhooks@localhost:5432/testhooks?sslmode=disable` | PostgreSQL connection string |
 | `LISTEN` | `:8080` | Bind address |
 | `PORT` | | Overrides `LISTEN` with `:<PORT>` (PaaS convention) |
-| `AUTH_TOKEN` | | When set, the UI, API and WebSocket require this bearer token. `/h/*` and `/healthz` stay public |
+| `AUTH_TOKEN` | | When set, the API and WebSocket require this token and the UI prompts for it. `/h/*` and `/healthz` stay public |
 | `ALLOWED_ORIGINS` | `*` | Comma-separated CORS and WebSocket origins. Set this in production |
 | `ALLOWED_HEADERS` | `Content-Type,Authorization,X-Requested-With` | CORS allowed headers |
 | `TRUSTED_PROXIES` | | Comma-separated CIDRs allowed to set `X-Forwarded-For` / `X-Real-IP`, such as your load balancer |
@@ -198,7 +201,7 @@ make test       # Go tests (the web package's tests need `make build-web` first)
 make lint       # go vet + svelte-check
 ```
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for more.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for more. The documentation site lives in [`docs/`](docs/) (`cd docs && npm ci && npm run dev`) and deploys to GitHub Pages from `main`.
 
 ### Releasing
 

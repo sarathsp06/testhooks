@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -40,6 +41,17 @@ type incomingMessage struct {
 	Data json.RawMessage `json:"data"`
 }
 
+// authSubprotocol returns the client's "auth.<token>" subprotocol, if any,
+// so Accept selects it in the handshake response.
+func authSubprotocol(r *http.Request) []string {
+	for _, p := range strings.Split(r.Header.Get("Sec-WebSocket-Protocol"), ",") {
+		if p = strings.TrimSpace(p); strings.HasPrefix(p, "auth.") {
+			return []string{p}
+		}
+	}
+	return nil
+}
+
 // ServeHTTP upgrades the connection to WebSocket and streams events.
 func (ws *WS) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	slug := r.PathValue("slug")
@@ -62,6 +74,10 @@ func (ws *WS) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
 		OriginPatterns: ws.allowedOrigins,
+		// Echo the "auth.<token>" subprotocol the client offered (checked by
+		// the auth middleware). Browsers fail the handshake if they offer a
+		// subprotocol and the server doesn't select one.
+		Subprotocols: authSubprotocol(r),
 	})
 	if err != nil {
 		ws.log.Error().Err(err).Msg("websocket accept failed")

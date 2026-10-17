@@ -9,8 +9,9 @@ import (
 	"github.com/rs/zerolog"
 )
 
-// TokenAuth returns middleware that validates a Bearer token on all requests
-// except the webhook capture path (/h/) which must remain publicly accessible.
+// TokenAuth returns middleware that validates the token on API (/api/) and
+// WebSocket (/ws/) requests. All other paths, including webhook capture (/h/),
+// /healthz and the SPA, remain publicly accessible.
 // If token is empty, auth is disabled and all requests pass through.
 // Auth failures are logged at Warn level with the client IP for auditing.
 func TokenAuth(token string, log zerolog.Logger, trustedProxies []*net.IPNet) func(http.Handler) http.Handler {
@@ -22,22 +23,13 @@ func TokenAuth(token string, log zerolog.Logger, trustedProxies []*net.IPNet) fu
 				return
 			}
 
-			// Webhook capture endpoints are always public — external systems
-			// sending webhooks cannot be expected to authenticate.
-			if strings.HasPrefix(r.URL.Path, "/h/") {
-				next.ServeHTTP(w, r)
-				return
-			}
-
-			// Health check endpoint is always public — container orchestrators
-			// need to probe without credentials.
-			if r.URL.Path == "/healthz" {
-				next.ServeHTTP(w, r)
-				return
-			}
-
-			// Static SPA assets don't require auth.
-			if r.URL.Path == "/" || strings.HasPrefix(r.URL.Path, "/assets/") || r.URL.Path == "/favicon.ico" {
+			// Only the API and WebSocket carry data, so only they require the
+			// token. Everything else stays public: webhook capture (/h/), which
+			// external senders can't authenticate to; /healthz, for orchestrator
+			// probes; and the SPA (/, /_app/*, client-side routes like /<slug>),
+			// whose bundle holds no data and must load to show the sign-in prompt.
+			isWS := strings.HasPrefix(r.URL.Path, "/ws/")
+			if !isWS && !strings.HasPrefix(r.URL.Path, "/api/") {
 				next.ServeHTTP(w, r)
 				return
 			}
@@ -47,7 +39,7 @@ func TokenAuth(token string, log zerolog.Logger, trustedProxies []*net.IPNet) fu
 			// WebSocket upgrade requests pass token via Sec-WebSocket-Protocol header
 			// (browsers can't set Authorization on WS). The subprotocol format is
 			// "auth.<token>" — the server selects it to echo back.
-			if strings.HasPrefix(r.URL.Path, "/ws/") {
+			if isWS {
 				protocols := r.Header.Get("Sec-WebSocket-Protocol")
 				if protocols != "" {
 					for _, proto := range strings.Split(protocols, ",") {

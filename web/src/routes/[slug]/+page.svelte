@@ -31,6 +31,8 @@
 	let endpoint: Endpoint | null = null;
 	let rightTab = $state<RightPanelTab>('requests');
 	let initError = $state<string | null>(null);
+	// True until the first endpoint lookup settles (it may wait on the sign-in prompt).
+	let initializing = $state(true);
 	let deleteError = $state<string | null>(null);
 
 	// Transform script state (synced with endpoint config)
@@ -53,6 +55,7 @@
 	// Resolve the endpoint by slug -> get ID -> load requests
 	async function init(s: string) {
 		initError = null;
+		initializing = true;
 		try {
 			const ep = await getEndpointBySlug(s);
 			if (!ep) {
@@ -304,6 +307,8 @@
 		} catch (err) {
 			initError = err instanceof Error ? err.message : 'Failed to load endpoint';
 			endpointStore.clear();
+		} finally {
+			initializing = false;
 		}
 	}
 
@@ -478,7 +483,7 @@
 	});
 </script>
 
-{#if endpointStore.loading}
+{#if endpointStore.loading || initializing}
 	<div class="flex items-center justify-center h-full py-20">
 		<div class="text-[var(--text-muted)]">Loading endpoint...</div>
 	</div>

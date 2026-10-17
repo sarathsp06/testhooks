@@ -1,12 +1,21 @@
 <script lang="ts">
 	import '../app.css';
-	import { Webhook, Sun, Moon, Monitor } from 'lucide-svelte';
+	import { Webhook, Sun, Moon, Monitor, LogOut } from 'lucide-svelte';
 	import { ModeWatcher, toggleMode, mode } from 'mode-watcher';
+	import AuthPrompt from '$lib/components/AuthPrompt.svelte';
+	import { auth } from '$lib/auth.svelte';
+
+	function signOut() {
+		auth.signOut();
+		// Drop data loaded with the old token and let the next request prompt again.
+		location.reload();
+	}
 
 	let { children } = $props();
 </script>
 
 <ModeWatcher />
+<AuthPrompt />
 
 <div class="min-h-screen flex flex-col">
 	<header class="border-b border-[var(--border)] px-4 py-3 flex items-center justify-between">
@@ -16,6 +25,16 @@
 		</a>
 		<div class="flex items-center gap-3">
 			<span class="text-xs text-[var(--text-muted)]">webhook inspector</span>
+			{#if auth.signedIn}
+				<button
+					onclick={signOut}
+					class="p-1.5 rounded hover:bg-[var(--bg-hover)] text-[var(--text-muted)] hover:text-[var(--text)] transition-colors"
+					title="Sign out (forget the access token)"
+					aria-label="Sign out"
+				>
+					<LogOut class="w-4 h-4" />
+				</button>
+			{/if}
 			<button
 				onclick={toggleMode}
 				class="p-1.5 rounded hover:bg-[var(--bg-hover)] text-[var(--text-muted)] hover:text-[var(--text)] transition-colors"

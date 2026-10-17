@@ -494,3 +494,28 @@ func TestWS_GetEndpointBySlug_DBError(t *testing.T) {
 		t.Errorf("expected 503 on DB error, got %d", w.Code)
 	}
 }
+
+// Browsers fail the handshake when they offer a subprotocol and the server
+// doesn't select one, so the auth.<token> subprotocol must be echoed back.
+func TestWS_EchoesAuthSubprotocol(t *testing.T) {
+	store := newMockStore()
+	store.seedEndpoint("ep-1", "auth-slug", "Auth", "server", nil)
+
+	wsURL, _, cleanup := setupWSTest(t, store)
+	defer cleanup()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	conn, _, err := websocket.Dial(ctx, wsURL+"/ws/auth-slug", &websocket.DialOptions{
+		Subprotocols: []string{"auth.s3cret"},
+	})
+	if err != nil {
+		t.Fatalf("dial failed: %v", err)
+	}
+	defer conn.CloseNow()
+
+	if got := conn.Subprotocol(); got != "auth.s3cret" {
+		t.Fatalf("selected subprotocol = %q, want %q", got, "auth.s3cret")
+	}
+}

@@ -8,7 +8,8 @@ web/.svelte-kit/
 .git/
 .gitignore
 
-# Docs
+# Docs (the docs/ site is built separately for GitHub Pages)
+docs/
 *.md
 LICENSE
 

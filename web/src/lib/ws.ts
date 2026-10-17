@@ -7,7 +7,8 @@
  * - Browser → Server: response_result (for browser-mode custom responses)
  */
 import type { WSMessage } from './types';
-import { getAuthToken } from './api';
+import { checkAuth, getAuthToken } from './api';
+import { AUTH_CHANGED_EVENT } from './auth.svelte';
 
 export type WSStatus = 'connecting' | 'connected' | 'disconnected';
 export type MessageHandler = (msg: WSMessage) => void;
@@ -28,6 +29,24 @@ export function createWSClient(slug: string): WSClient {
 	let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 	let reconnectDelay = 1000;
 	let intentionalClose = false;
+	let opened = false;
+	let listening = false;
+	let checkingAuth = false;
+
+	// Reconnect straight away with the new token after sign-in, instead of
+	// waiting out the backoff.
+	function onAuthChanged() {
+		if (intentionalClose) return;
+		if (reconnectTimer) clearTimeout(reconnectTimer);
+		reconnectTimer = null;
+		reconnectDelay = 1000;
+		if (ws) {
+			ws.onclose = null;
+			ws.close();
+			ws = null;
+		}
+		connect();
+	}
 
 	function setStatus(status: WSStatus) {
 		statusHandlers.forEach((h) => h(status));
@@ -35,6 +54,10 @@ export function createWSClient(slug: string): WSClient {
 
 	function connect() {
 		intentionalClose = false;
+		if (!listening) {
+			window.addEventListener(AUTH_CHANGED_EVENT, onAuthChanged);
+			listening = true;
+		}
 		if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
 			return;
 		}
@@ -49,8 +72,10 @@ export function createWSClient(slug: string): WSClient {
 		const token = getAuthToken();
 		const protocols = token ? [`auth.${token}`] : undefined;
 		ws = new WebSocket(url, protocols);
+		opened = false;
 
 		ws.onopen = () => {
+			opened = true;
 			setStatus('connected');
 			reconnectDelay = 1000; // reset backoff
 		};
@@ -67,9 +92,15 @@ export function createWSClient(slug: string): WSClient {
 		ws.onclose = () => {
 			setStatus('disconnected');
 			ws = null;
-			if (!intentionalClose) {
-				scheduleReconnect();
+			if (intentionalClose) return;
+			// A connection that never opened may have been refused for auth
+			// (the server answers the upgrade with 401). Probe the API so the
+			// sign-in prompt appears; onAuthChanged reconnects after sign-in.
+			if (!opened && !checkingAuth) {
+				checkingAuth = true;
+				void checkAuth().finally(() => (checkingAuth = false));
 			}
+			scheduleReconnect();
 		};
 
 		ws.onerror = () => {
@@ -87,6 +118,10 @@ export function createWSClient(slug: string): WSClient {
 
 	function disconnect() {
 		intentionalClose = true;
+		if (listening) {
+			window.removeEventListener(AUTH_CHANGED_EVENT, onAuthChanged);
+			listening = false;
+		}
 		if (reconnectTimer) {
 			clearTimeout(reconnectTimer);
 			reconnectTimer = null;

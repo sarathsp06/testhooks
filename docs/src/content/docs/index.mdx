@@ -1,0 +1,73 @@
+---
+title: Self-hostable webhook inspector
+description: Self-hostable webhook inspector. Capture, inspect, transform, forward and mock webhooks in real time.
+template: splash
+hero:
+  title: Testhooks
+  tagline: Capture, inspect, transform and forward webhooks in real time. A self-hosted webhook.site replacement, and browser mode replaces ngrok with nothing to install.
+  image:
+    file: ../../assets/logo.svg
+    alt: Testhooks
+  actions:
+    - text: Get started
+      link: getting-started/quickstart/
+      icon: right-arrow
+    - text: View on GitHub
+      link: https://github.com/sarathsp06/testhooks
+      icon: external
+      variant: minimal
+---
+
+import { Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+<div class="th-flow">
+	<span>webhook</span><span>→</span><span>/h/:slug</span><span>→</span><span>WebSocket</span><span>→</span><span>browser</span><span>→</span><span>localhost</span>
+</div>
+
+## Run it in one line
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/sarathsp06/testhooks/main/deploy/docker-compose.yml | docker compose -p testhooks -f - up -d
+```
+
+Then open `http://localhost:8080`. See [Installation](getting-started/installation/) for the binary installer and other options.
+
+## Everything for webhook development
+
+<CardGrid>
+	<Card title="Reach localhost" icon="laptop">
+		Browser mode forwards with `fetch()` from your tab, so it reaches localhost, Docker and anything else your machine can see. No CLI, daemon or tunnel.
+	</Card>
+	<Card title="Private by default" icon="seti:lock">
+		In browser mode, payloads are relayed over WebSocket and never written to the server's disk.
+	</Card>
+	<Card title="Live inspection" icon="rocket">
+		Every request appears the instant it arrives: headers, query, body with syntax highlighting. Copy as cURL, export as JSON or CSV.
+	</Card>
+	<Card title="Script transforms" icon="pencil">
+		Reshape payloads with JavaScript, Lua or Jsonnet, sandboxed in WASM, before they are forwarded.
+	</Card>
+	<Card title="Forward and mock" icon="random">
+		Forward to any URL, sync or async with retries, and script the exact response the sender gets back.
+	</Card>
+	<Card title="Verify signatures" icon="approve-check">
+		Check Standard Webhooks signatures from Sparrow, Svix and others, and reject bad ones like a real receiver.
+	</Card>
+</CardGrid>
+
+## Pick your trade-off
+
+<CardGrid>
+	<LinkCard
+		title="Server mode"
+		description="Requests stored in PostgreSQL; transforms and forwarding run on the server, always on, even with no browser open."
+		href="guides/modes/"
+	/>
+	<LinkCard
+		title="Browser mode"
+		description="A webhook tunnel with nothing to install. Webhooks stream to your tab, which delivers them to localhost."
+		href="guides/localhost/"
+	/>
+</CardGrid>
+
+One Go binary with the UI embedded, plus PostgreSQL. Open source under the Apache 2.0 license.

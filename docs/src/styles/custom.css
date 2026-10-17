@@ -1,0 +1,43 @@
+/* Brand colours from the Testhooks logo: Go-cyan accent, orange signal dots. */
+:root {
+	--sl-color-accent-low: #00313d;
+	--sl-color-accent: #0086a8;
+	--sl-color-accent-high: #a6ecff;
+	--th-orange: #f97316;
+}
+
+:root[data-theme='light'] {
+	--sl-color-accent-low: #c9f3ff;
+	--sl-color-accent: #007694;
+	--sl-color-accent-high: #003747;
+}
+
+:root[data-theme='dark'] {
+	--sl-color-black: #0d1117;
+	--sl-color-gray-6: #161b22;
+}
+
+.hero > img {
+	width: min(60%, 14rem);
+	filter: drop-shadow(0 0 2.5rem rgb(0 173 216 / 0.35));
+}
+
+.th-flow {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.5rem;
+	align-items: center;
+	justify-content: center;
+	font-family: var(--sl-font-mono);
+	font-size: var(--sl-text-sm);
+	padding: 1rem;
+	border: 1px solid var(--sl-color-gray-5);
+	border-radius: 0.5rem;
+	background: var(--sl-color-gray-7, var(--sl-color-gray-6));
+}
+.th-flow span:nth-child(odd) {
+	color: var(--sl-color-text-accent);
+}
+.th-flow span:nth-child(even) {
+	color: var(--th-orange);
+}
