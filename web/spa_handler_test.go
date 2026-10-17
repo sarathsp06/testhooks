@@ -70,7 +70,7 @@ func TestSPAHandler(t *testing.T) {
 		// /index.html → 301 redirect to / (standard http.FileServer behavior)
 		{"/index.html", 301, "", ""},
 		{"/favicon.svg", 200, "image/svg+xml", "<svg"},
-		{"/_app/env.js", 200, "text/javascript", ""},
+		{"/_app/version.json", 200, "application/json", "version"}, // stable, non-hashed SvelteKit output
 		// SPA fallback for non-existent paths
 		{"/some-slug", 200, "text/html", "<!DOCTYPE html>"},
 		{"/some/deep/path", 200, "text/html", "<!DOCTYPE html>"},
@@ -163,7 +163,7 @@ func TestSPAHandlerBehindMux(t *testing.T) {
 		wantBody   string
 	}{
 		// Static assets — must serve with correct MIME types (dynamically discovered)
-		{"GET", "/_app/env.js", 200, "text/javascript", ""},
+		{"GET", "/_app/version.json", 200, "application/json", ""},
 		{"GET", "/favicon.svg", 200, "image/svg+xml", ""},
 		// Root serves index.html
 		{"GET", "/", 200, "text/html", ""},
