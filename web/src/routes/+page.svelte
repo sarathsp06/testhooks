@@ -5,7 +5,6 @@
 	import { SUPPORTED_LANGUAGES, DEFAULT_SCRIPTS, DEFAULT_RESPONSE_SCRIPTS, initWasm, isWasmReady, validateResponseHandler, type TransformLanguage } from '$lib/wasm';
 	import CodeEditor from '$lib/components/CodeEditor.svelte';
 	import {
-		Plus,
 		Trash2,
 		Copy,
 		ExternalLink,
@@ -18,16 +17,6 @@
 		MessageSquare,
 		Webhook,
 		X,
-		Zap,
-		Shield,
-		Eye,
-		Globe,
-		ArrowRight,
-		Terminal,
-		GitBranch,
-		Unplug,
-		Laptop,
-		CircleCheck,
 		Check,
 		AlertTriangle,
 		Loader2
@@ -180,512 +169,17 @@
 		setTimeout(() => (copied = null), 2000);
 	}
 
-	function scrollToCreate() {
-		document.getElementById('create-section')?.scrollIntoView({ behavior: 'smooth' });
-	}
-
 	$effect(() => {
 		loadEndpoints();
 	});
 
-	// Pipeline steps for the animated diagram
-	const pipelineSteps = [
-		{ label: 'Capture', icon: 'webhook', color: 'blue', desc: 'Receive any HTTP request' },
-		{ label: 'Store', icon: 'database', color: 'purple', desc: 'Persist to PostgreSQL' },
-		{ label: 'Transform', icon: 'code', color: 'orange', desc: 'JS/Lua/Jsonnet scripts' },
-		{ label: 'Forward', icon: 'send', color: 'green', desc: 'Relay to your services' },
-		{ label: 'Respond', icon: 'reply', color: 'teal', desc: 'Custom HTTP response' }
-	];
-
-	const features = [
-		{
-			icon: Globe,
-			title: 'Localhost Friendly',
-			description: 'Browser mode forwards via fetch() — reach localhost, Docker, anything your machine can see. No CLI, no daemon.',
-			color: '#16a34a'
-		},
-		{
-			icon: Shield,
-			title: 'Privacy-first Mode',
-			description: 'Browser mode: zero server storage. Payloads never touch disk. GDPR-friendly, ideal for sensitive data.',
-			color: '#8B5CF6'
-		},
-		{
-			icon: Zap,
-			title: 'Real-time Streaming',
-			description: 'WebSocket-powered live view. See every request the instant it arrives — headers, body, timing.',
-			color: '#00ADD8'
-		},
-		{
-			icon: Code2,
-			title: 'Script Transforms',
-			description: 'JavaScript, Lua, or Jsonnet scripts transform payloads before forwarding. Runs in WASM — sandboxed and fast.',
-			color: '#F97316'
-		},
-		{
-			icon: Send,
-			title: 'Smart Forwarding',
-			description: 'Forward to any URL with sync or async mode. Sync mode captures the response for your handler scripts.',
-			color: '#3b82f6'
-		},
-		{
-			icon: Eye,
-			title: 'Full Inspection',
-			description: 'Headers, query params, body with JSON/XML syntax highlighting. Copy as cURL, replay, export as JSON/CSV.',
-			color: '#336791'
-		}
-	];
-
-	const techStack = [
-		{ name: 'Go', color: '#00ADD8' },
-		{ name: 'Svelte 5', color: '#FF3E00' },
-		{ name: 'WebSocket', color: '#8B5CF6' },
-		{ name: 'WASM', color: '#F97316' },
-		{ name: 'Postgres', color: '#336791' }
-	];
 </script>
 
 <div class="min-h-screen">
-	<!-- ===== HERO SECTION ===== -->
-	<section class="relative min-h-[85vh] flex items-center justify-center overflow-hidden bg-[var(--bg)]">
-		<!-- Radial glow -->
-		<div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full blur-[140px] bg-[#00ADD8]/[0.07] dark:bg-[#00ADD8]/[0.05] pointer-events-none"></div>
-		<div class="absolute bottom-0 right-1/4 w-[400px] h-[400px] rounded-full blur-[100px] bg-[var(--purple)]/[0.04] pointer-events-none"></div>
-
-		<div class="max-w-[1200px] mx-auto px-6 relative z-10">
-			<div class="flex flex-col items-center text-center gap-6">
-				<!-- Badge -->
-				<div class="inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm bg-[#00ADD8]/[0.08] dark:bg-[#00ADD8]/[0.1] border border-[#00ADD8]/20">
-					<Zap class="w-4 h-4 text-[#00ADD8]" />
-					<span class="text-[#00ADD8] font-medium">Self-hostable Webhook Inspector</span>
-				</div>
-
-				<!-- Hook logomark — fixed viewBox to include signal dots + broadcast arcs -->
-				<div class="relative my-2">
-					<div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-40 h-40 rounded-full bg-[#00ADD8]/[0.06] blur-3xl pointer-events-none"></div>
-					<svg class="w-32 h-32 md:w-36 md:h-36 relative" viewBox="-55 20 170 140" fill="none" xmlns="http://www.w3.org/2000/svg">
-						<defs>
-							<linearGradient id="heroHookGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-								<stop offset="0%" stop-color="#00ADD8"/>
-								<stop offset="100%" stop-color="#0086A8"/>
-							</linearGradient>
-							<style>
-								@keyframes heroFlowDot1 { 0%,100% { opacity: 0.3; } 50% { opacity: 1; } }
-								@keyframes heroFlowDot2 { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
-								@keyframes heroFlowDot3 { 0%,100% { opacity: 0.5; } 33% { opacity: 1; } 66% { opacity: 0.3; } }
-								.hero-dot1 { animation: heroFlowDot1 2s ease-in-out infinite; }
-								.hero-dot2 { animation: heroFlowDot2 2s ease-in-out infinite; }
-								.hero-dot3 { animation: heroFlowDot3 2s ease-in-out infinite; }
-							</style>
-						</defs>
-						<!-- The Hook -->
-						<path d="M 8 38 L 48 38 C 80 38, 105 50, 105 78 C 105 108, 82 120, 60 120 C 40 120, 26 108, 26 92 C 26 78, 36 70, 48 70 C 58 70, 64 78, 64 86 C 64 92, 60 96, 54 96"
-							stroke="url(#heroHookGrad)" stroke-width="7" stroke-linecap="round" fill="none"/>
-						<!-- Arrow tip -->
-						<path d="M 58 88 L 54 96 L 48 90" stroke="url(#heroHookGrad)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-						<!-- Signal dots flowing into tunnel -->
-						<circle cx="-18" cy="38" r="3.5" fill="#F97316" class="hero-dot1"/>
-						<circle cx="-34" cy="38" r="2.8" fill="#F97316" class="hero-dot2" opacity="0.6"/>
-						<circle cx="-48" cy="38" r="2"   fill="#F97316" class="hero-dot3" opacity="0.3"/>
-						<!-- Tunnel entrance -->
-						<line x1="2" y1="30" x2="2" y2="46" stroke="#00ADD8" stroke-width="2.5" stroke-linecap="round" opacity="0.5"/>
-						<!-- Broadcast arcs -->
-						<path d="M 76 120 Q 88 130, 78 142" stroke="#F97316" stroke-width="2" stroke-linecap="round" fill="none" opacity="0.5" class="hero-dot1"/>
-						<path d="M 82 116 Q 98 130, 84 148" stroke="#F97316" stroke-width="1.5" stroke-linecap="round" fill="none" opacity="0.3" class="hero-dot2"/>
-					</svg>
-				</div>
-
-				<!-- Wordmark -->
-				<h1 class="font-fira tracking-wider leading-none">
-					<span class="text-4xl md:text-5xl lg:text-6xl font-normal text-[var(--text-muted)]">TEST</span><span class="text-4xl md:text-5xl lg:text-6xl font-bold text-[var(--text)]">HOOKS</span>
-				</h1>
-
-				<!-- Tagline -->
-				<p class="text-lg md:text-xl leading-relaxed max-w-2xl text-[var(--text-muted)]">
-					Capture, inspect, transform, and forward webhooks in real time.
-				</p>
-				<p class="text-sm max-w-xl text-[var(--text-muted)]/70 -mt-3">
-					A lightweight 				<a href="https://webhook.site" target="_blank" rel="noopener noreferrer" class="underline underline-offset-2 decoration-[var(--border)] hover:text-[#00ADD8] transition-colors">webhook.site</a> replacement you own. Browser mode replaces ngrok — zero setup.
-				</p>
-
-				<!-- CTA buttons -->
-				<div class="flex flex-col sm:flex-row gap-4 mt-2">
-					<button
-						onclick={scrollToCreate}
-						class="inline-flex items-center justify-center gap-2 px-7 py-3 text-base font-medium rounded-xl bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)] transition-all shadow-lg shadow-[var(--accent)]/20"
-					>
-						<Webhook class="w-5 h-5" />
-						Create Endpoint
-					</button>
-					<a
-						href="https://github.com/sarathsp06/testhooks"
-						target="_blank"
-						rel="noopener noreferrer"
-						class="inline-flex items-center justify-center gap-2 px-7 py-3 text-base font-medium rounded-xl border border-[var(--border)] text-[var(--text)] hover:bg-[var(--bg-hover)] transition-all"
-					>
-						<GitBranch class="w-5 h-5" />
-						View on GitHub
-					</a>
-				</div>
-
-				<!-- Architecture flow — terminal style card -->
-				<div class="mt-6 w-full max-w-2xl">
-					<div class="rounded-xl border border-[var(--border)] bg-[var(--bg-card)] px-5 py-4 shadow-sm">
-						<div class="flex items-center gap-1.5 mb-3">
-							<div class="w-2.5 h-2.5 rounded-full bg-[var(--red)]/60"></div>
-							<div class="w-2.5 h-2.5 rounded-full bg-[var(--yellow)]/60"></div>
-							<div class="w-2.5 h-2.5 rounded-full bg-[var(--green)]/60"></div>
-							<span class="ml-2 text-[10px] font-fira text-[var(--text-muted)]/60 uppercase tracking-wider">request flow</span>
-						</div>
-						<div class="flex items-center justify-center gap-1.5 md:gap-2 font-fira text-xs md:text-sm flex-wrap">
-							<span class="text-[var(--text-muted)]">webhook</span>
-							<span class="text-[var(--text-muted)]/40">──►</span>
-							<span class="text-[#00ADD8] font-semibold">/h/:slug</span>
-							<span class="text-[var(--text-muted)]/40">──►</span>
-							<span class="text-[#8B5CF6] font-semibold">WS</span>
-							<span class="text-[var(--text-muted)]/40">──►</span>
-							<span class="text-[var(--text)] font-semibold">browser</span>
-							<span class="text-[var(--text-muted)]/40">──►</span>
-							<span class="text-[#F97316] font-semibold">localhost</span>
-						</div>
-					</div>
-				</div>
-
-				<!-- Tech stack pills -->
-				<div class="flex flex-wrap justify-center gap-2 mt-2">
-					{#each techStack as tech}
-						<span
-							class="px-3 py-1.5 text-[11px] font-semibold font-fira rounded-full border"
-							style="color: {tech.color}; background-color: {tech.color}0D; border-color: {tech.color}30;"
-						>
-							{tech.name}
-						</span>
-					{/each}
-				</div>
-			</div>
-		</div>
-	</section>
-
-	<!-- ===== PIPELINE DIAGRAM ===== -->
-	<section class="py-20 bg-[var(--bg)]">
-		<div class="max-w-[1200px] mx-auto px-6">
-			<div class="text-center mb-14">
-				<div class="inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm mb-6 bg-blue-50 dark:bg-blue-500/10 border border-blue-200/60 dark:border-blue-500/20">
-					<span class="text-[var(--accent)] font-medium">How It Works</span>
-				</div>
-				<h2 class="text-3xl md:text-4xl font-bold font-fira mb-4">
-					The <span class="bg-gradient-to-r from-[var(--accent)] to-purple-500 bg-clip-text text-transparent">Pipeline</span>
-				</h2>
-				<p class="text-lg max-w-3xl mx-auto text-[var(--text-muted)]">
-					Every webhook flows through a composable pipeline. Enable only what you need.
-				</p>
-			</div>
-
-			<!-- Pipeline visual -->
-			<div class="relative max-w-4xl mx-auto">
-				<!-- Connection line (desktop) -->
-				<div class="hidden md:block absolute left-0 right-0 h-0.5 opacity-20" style="top: 36px; background: linear-gradient(to right, #60a5fa, #a78bfa, #fb923c, #4ade80, #2dd4bf);"></div>
-
-				<div class="grid grid-cols-1 md:grid-cols-5 gap-4 md:gap-3">
-					{#each pipelineSteps as step, i}
-						<div class="flex flex-col items-center text-center group">
-							<!-- Step circle -->
-							<div class="relative w-[72px] h-[72px] rounded-2xl flex items-center justify-center mb-4 transition-all duration-300 group-hover:-translate-y-1 group-hover:shadow-lg
-								{step.color === 'blue' ? 'bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/30 group-hover:shadow-blue-500/10' : ''}
-								{step.color === 'purple' ? 'bg-purple-50 dark:bg-purple-500/10 border border-purple-200 dark:border-purple-500/30 group-hover:shadow-purple-500/10' : ''}
-								{step.color === 'orange' ? 'bg-orange-50 dark:bg-orange-500/10 border border-orange-200 dark:border-orange-500/30 group-hover:shadow-orange-500/10' : ''}
-								{step.color === 'green' ? 'bg-green-50 dark:bg-green-500/10 border border-green-200 dark:border-green-500/30 group-hover:shadow-green-500/10' : ''}
-								{step.color === 'teal' ? 'bg-teal-50 dark:bg-teal-500/10 border border-teal-200 dark:border-teal-500/30 group-hover:shadow-teal-500/10' : ''}
-							">
-								{#if step.icon === 'webhook'}
-									<Webhook class="w-6 h-6 text-blue-500" />
-								{:else if step.icon === 'database'}
-									<svg class="w-6 h-6 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-										<ellipse cx="12" cy="5" rx="9" ry="3" />
-										<path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3" />
-										<path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5" />
-									</svg>
-								{:else if step.icon === 'code'}
-									<Code2 class="w-6 h-6 text-orange-500" />
-								{:else if step.icon === 'send'}
-									<Send class="w-6 h-6 text-green-500" />
-								{:else if step.icon === 'reply'}
-									<MessageSquare class="w-6 h-6 text-teal-500" />
-								{/if}
-
-								<!-- Arrow connector (mobile: vertical, desktop: hidden since line) -->
-								{#if i < pipelineSteps.length - 1}
-									<div class="md:hidden absolute -bottom-5 left-1/2 -translate-x-1/2 text-[var(--text-muted)]">
-										<ArrowRight class="w-4 h-4 rotate-90" />
-									</div>
-								{/if}
-							</div>
-
-							<!-- Label -->
-							<h3 class="text-sm font-semibold font-fira mb-1 text-[var(--text)]">{step.label}</h3>
-							<p class="text-xs text-[var(--text-muted)] leading-relaxed">{step.desc}</p>
-						</div>
-					{/each}
-				</div>
-
-				<!-- Example flow card -->
-				<div class="mt-12 p-6 rounded-xl border border-[var(--border)] bg-[var(--bg-card)]">
-					<div class="flex items-center gap-2 mb-4">
-						<Terminal class="w-4 h-4 text-[var(--text-muted)]" />
-						<span class="text-xs font-fira font-medium text-[var(--text-muted)] uppercase tracking-wider">Example Pipeline</span>
-					</div>
-					<div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-						<div class="p-4 rounded-lg bg-[var(--bg)] border border-[var(--border)]">
-							<div class="flex items-center gap-2 mb-2">
-								<span class="text-xs font-fira font-bold text-blue-500">1. CAPTURE</span>
-							</div>
-							<code class="text-xs text-[var(--text-muted)] font-fira block">
-								POST /h/abc123<br />
-								{`{"event": "order.created"}`}
-							</code>
-						</div>
-						<div class="p-4 rounded-lg bg-[var(--bg)] border border-[var(--border)]">
-							<div class="flex items-center gap-2 mb-2">
-								<span class="text-xs font-fira font-bold text-orange-500">2. TRANSFORM</span>
-							</div>
-							<code class="text-xs text-[var(--text-muted)] font-fira block">
-								function transform(req) {"{"}<br />
-								&nbsp;&nbsp;req.body.ts = Date.now();<br />
-								&nbsp;&nbsp;return req;<br />
-								{"}"}
-							</code>
-						</div>
-						<div class="p-4 rounded-lg bg-[var(--bg)] border border-[var(--border)]">
-							<div class="flex items-center gap-2 mb-2">
-								<span class="text-xs font-fira font-bold text-green-500">3. FORWARD</span>
-							</div>
-							<code class="text-xs text-[var(--text-muted)] font-fira block">
-								POST https://api.yourapp.com<br />
-								{`{"event": "order.created",`}<br />
-								{` "ts": 1711234567890}`}
-							</code>
-						</div>
-					</div>
-				</div>
-			</div>
-		</div>
-	</section>
-
-	<!-- ===== FEATURES GRID ===== -->
-	<section class="py-20 bg-[var(--bg-card)]">
-		<div class="max-w-[1200px] mx-auto px-6">
-			<div class="text-center mb-14">
-				<div class="inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm mb-6 bg-blue-50 dark:bg-blue-500/10 border border-blue-200/60 dark:border-blue-500/20">
-					<span class="text-[var(--accent)] font-medium">Core Features</span>
-				</div>
-				<h2 class="text-3xl md:text-4xl font-bold font-fira mb-4">
-					Everything You Need for <span class="bg-gradient-to-r from-[var(--accent)] to-purple-500 bg-clip-text text-transparent">Webhook Development</span>
-				</h2>
-				<p class="text-lg max-w-3xl mx-auto text-[var(--text-muted)]">
-					From live inspection to programmable transforms — one tool for the full webhook lifecycle.
-				</p>
-			</div>
-
-			<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-				{#each features as feature}
-					<div class="group p-8 rounded-xl border border-[var(--border)] bg-[var(--bg)] transition-all duration-300 hover:shadow-lg hover:-translate-y-1">
-						<div class="w-12 h-12 flex items-center justify-center rounded-xl mb-6" style="background-color: {feature.color}0D;">
-							<feature.icon class="w-5 h-5" style="color: {feature.color};" />
-						</div>
-						<h3 class="text-xl font-semibold mb-3 font-fira text-[var(--text)]">{feature.title}</h3>
-						<p class="leading-relaxed text-[var(--text-muted)] text-[0.9375rem]">{feature.description}</p>
-					</div>
-				{/each}
-			</div>
-		</div>
-	</section>
-
-	<!-- ===== TWO MODES SECTION ===== -->
-	<section class="py-20 bg-[var(--bg)]">
-		<div class="max-w-[1200px] mx-auto px-6">
-			<div class="text-center mb-14">
-				<div class="inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm mb-6 bg-blue-50 dark:bg-blue-500/10 border border-blue-200/60 dark:border-blue-500/20">
-					<span class="text-[var(--accent)] font-medium">Two Modes</span>
-				</div>
-				<h2 class="text-3xl md:text-4xl font-bold font-fira mb-4">
-					Choose Your <span class="bg-gradient-to-r from-[var(--accent)] to-purple-500 bg-clip-text text-transparent">Trade-off</span>
-				</h2>
-				<p class="text-lg max-w-3xl mx-auto text-[var(--text-muted)]">
-					Server mode for production reliability, Browser mode for privacy and local testing.
-				</p>
-			</div>
-
-			<div class="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto">
-				<!-- Server Mode -->
-				<div class="relative p-8 rounded-xl border-2 border-blue-200 dark:border-blue-500/30 bg-blue-50/30 dark:bg-blue-500/5 overflow-hidden">
-					<div class="absolute top-4 right-4 text-[10px] px-2 py-1 rounded bg-blue-500/10 text-[var(--accent)] font-medium">DEFAULT</div>
-					<div class="flex items-center gap-3 mb-4">
-						<div class="w-10 h-10 flex items-center justify-center rounded-lg bg-blue-100 dark:bg-blue-500/20">
-							<Server class="w-5 h-5 text-[var(--accent)]" />
-						</div>
-						<h3 class="text-xl font-semibold font-fira text-[var(--text)]">Server Mode</h3>
-					</div>
-					<p class="text-[var(--text-muted)] text-[0.9375rem] mb-5 leading-relaxed">
-						Requests are stored in PostgreSQL. Transforms and forwarding run server-side, always-on even without a browser. Ideal for production webhooks.
-					</p>
-					<div class="flex flex-wrap gap-2">
-						{#each ['Persistent storage', 'Always-on', 'Server-side WASM', 'Retry with backoff'] as tag}
-							<span class="px-2.5 py-1 text-xs font-fira rounded bg-blue-100 dark:bg-blue-500/10 text-[var(--accent)]">{tag}</span>
-						{/each}
-					</div>
-				</div>
-
-				<!-- Browser Mode -->
-				<div class="relative p-8 rounded-xl border-2 border-purple-200 dark:border-purple-500/30 bg-purple-50/30 dark:bg-purple-500/5 overflow-hidden">
-					<div class="absolute top-4 right-4 text-[10px] px-2 py-1 rounded bg-purple-500/10 text-[var(--purple)] font-medium">TUNNEL KILLER</div>
-					<div class="flex items-center gap-3 mb-4">
-						<div class="w-10 h-10 flex items-center justify-center rounded-lg bg-purple-100 dark:bg-purple-500/20">
-							<Monitor class="w-5 h-5 text-[var(--purple)]" />
-						</div>
-						<h3 class="text-xl font-semibold font-fira text-[var(--text)]">Browser Mode</h3>
-					</div>
-					<p class="text-[var(--text-muted)] text-[0.9375rem] mb-5 leading-relaxed">
-						Your tunnel replacement for local webhook testing. Webhooks hit Testhooks, stream to your browser via WebSocket, and <code class="text-[var(--purple)] bg-purple-500/5 px-1 rounded">fetch()</code> delivers them to localhost. No CLI, no daemon, no port forwarding. Zero server storage.
-					</p>
-					<div class="flex flex-wrap gap-2">
-						{#each ['Replaces ngrok', 'Reach localhost', 'Zero storage', 'No CLI needed'] as tag}
-							<span class="px-2.5 py-1 text-xs font-fira rounded bg-purple-100 dark:bg-purple-500/10 text-[var(--purple)]">{tag}</span>
-						{/each}
-					</div>
-				</div>
-			</div>
-		</div>
-	</section>
-
-	<!-- ===== REPLACE YOUR HTTP TUNNEL SECTION ===== -->
-	<section class="py-20 bg-[var(--bg-card)]">
-		<div class="max-w-[1200px] mx-auto px-6">
-			<div class="text-center mb-14">
-				<div class="inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm mb-6 bg-purple-50 dark:bg-purple-500/10 border border-purple-200/60 dark:border-purple-500/20">
-					<Unplug class="w-4 h-4 text-[var(--purple)]" />
-					<span class="text-[var(--purple)] font-medium">No CLI, No Daemon</span>
-				</div>
-				<h2 class="text-3xl md:text-4xl font-bold font-fira mb-4">
-					Replace <span class="bg-gradient-to-r from-purple-500 to-[var(--accent)] bg-clip-text text-transparent">ngrok</span> for Webhook Testing
-				</h2>
-				<p class="text-lg max-w-3xl mx-auto text-[var(--text-muted)]">
-					Browser mode turns Testhooks into a webhook tunnel — without installing anything.
-					External services hit your public Testhooks URL, the payload streams over WebSocket to your browser,
-					and <code class="text-[var(--purple)] bg-purple-500/5 px-1.5 py-0.5 rounded text-base">fetch()</code> delivers it straight to localhost.
-				</p>
-			</div>
-
-			<!-- Flow diagram -->
-			<div class="max-w-5xl mx-auto mb-14">
-				<div class="flex flex-col md:flex-row items-center justify-center gap-3 md:gap-0">
-					<!-- Step 1: External Service -->
-					<div class="flex flex-col items-center text-center md:flex-1">
-						<div class="w-16 h-16 rounded-2xl flex items-center justify-center mb-3 bg-orange-50 dark:bg-orange-500/10 border border-orange-200 dark:border-orange-500/30">
-							<Globe class="w-7 h-7 text-orange-500" />
-						</div>
-						<h4 class="text-sm font-semibold font-fira text-[var(--text)] mb-1">Stripe / GitHub / Slack</h4>
-						<p class="text-[11px] text-[var(--text-muted)] leading-relaxed">Sends webhook to<br />your Testhooks URL</p>
-					</div>
-
-					<!-- Arrow -->
-					<div class="hidden md:flex items-center justify-center md:w-16 shrink-0">
-						<div class="flex items-center gap-1 w-full">
-							<div class="h-0.5 flex-1 bg-gradient-to-r from-orange-300 to-purple-300 dark:from-orange-500/40 dark:to-purple-500/40"></div>
-							<ArrowRight class="w-4 h-4 text-[var(--text-muted)] shrink-0" />
-						</div>
-					</div>
-					<div class="md:hidden flex justify-center">
-						<ArrowRight class="w-4 h-4 text-[var(--text-muted)] rotate-90" />
-					</div>
-
-					<!-- Step 2: Your Browser -->
-					<div class="flex flex-col items-center text-center md:flex-1">
-						<div class="w-16 h-16 rounded-2xl flex items-center justify-center mb-3 bg-purple-50 dark:bg-purple-500/10 border border-purple-200 dark:border-purple-500/30">
-							<Laptop class="w-7 h-7 text-purple-500" />
-						</div>
-						<h4 class="text-sm font-semibold font-fira text-[var(--text)] mb-1">Your Browser</h4>
-						<p class="text-[11px] text-[var(--text-muted)] leading-relaxed">Receives via WebSocket,<br />inspects, transforms, forwards</p>
-					</div>
-
-					<!-- Arrow -->
-					<div class="hidden md:flex items-center justify-center md:w-16 shrink-0">
-						<div class="flex items-center gap-1 w-full">
-							<div class="h-0.5 flex-1 bg-gradient-to-r from-purple-300 to-green-300 dark:from-purple-500/40 dark:to-green-500/40"></div>
-							<ArrowRight class="w-4 h-4 text-[var(--text-muted)] shrink-0" />
-						</div>
-					</div>
-					<div class="md:hidden flex justify-center">
-						<ArrowRight class="w-4 h-4 text-[var(--text-muted)] rotate-90" />
-					</div>
-
-					<!-- Step 3: Localhost -->
-					<div class="flex flex-col items-center text-center md:flex-1">
-						<div class="w-16 h-16 rounded-2xl flex items-center justify-center mb-3 bg-green-50 dark:bg-green-500/10 border border-green-200 dark:border-green-500/30">
-							<Terminal class="w-7 h-7 text-green-500" />
-						</div>
-						<h4 class="text-sm font-semibold font-fira text-[var(--text)] mb-1">localhost:3000</h4>
-						<p class="text-[11px] text-[var(--text-muted)] leading-relaxed">Your app receives<br />the webhook via fetch()</p>
-					</div>
-				</div>
-
-				<!-- Annotation bar -->
-				<div class="hidden md:flex justify-between max-w-3xl mx-auto mt-6 px-8">
-					<span class="text-[10px] font-fira text-orange-500/70 dark:text-orange-400/50">POST /h/abc123</span>
-					<span class="text-[10px] font-fira text-purple-500/70 dark:text-purple-400/50">WebSocket push</span>
-					<span class="text-[10px] font-fira text-green-500/70 dark:text-green-400/50">fetch("http://localhost:3000")</span>
-				</div>
-			</div>
-
-			<!-- Comparison table -->
-			<div class="max-w-4xl mx-auto">
-				<div class="rounded-xl border border-[var(--border)] overflow-hidden">
-					<!-- Header -->
-					<div class="grid grid-cols-3 bg-[var(--bg)] border-b border-[var(--border)]">
-						<div class="px-5 py-3"></div>
-						<div class="px-5 py-3 text-center border-l border-[var(--border)]">
-							<span class="text-xs font-fira font-semibold text-[var(--text-muted)] uppercase tracking-wider">ngrok / localtunnel</span>
-						</div>
-						<div class="px-5 py-3 text-center border-l border-purple-200 dark:border-purple-500/30 bg-purple-50/50 dark:bg-purple-500/5">
-							<span class="text-xs font-fira font-semibold text-[var(--purple)] uppercase tracking-wider">Testhooks Browser Mode</span>
-						</div>
-					</div>
-					<!-- Rows -->
-					{#each [
-						{ label: 'Setup', tunnel: 'Install CLI, authenticate, run daemon', testhooks: 'Open a browser tab' },
-						{ label: 'Inspect payloads', tunnel: 'Separate logging or dashboard', testhooks: 'Built-in live view with syntax highlighting' },
-						{ label: 'Transform before delivery', tunnel: 'Not possible', testhooks: 'JS, Lua, or Jsonnet in sandboxed WASM' },
-						{ label: 'Custom responses', tunnel: 'Whatever your local server returns', testhooks: 'Script-defined — test error handling without changing your app' },
-						{ label: 'Data privacy', tunnel: 'Traffic routes through third-party servers', testhooks: 'Payloads never stored — browser-only, zero disk' }
-					] as row}
-						<div class="grid grid-cols-3 border-b border-[var(--border)] last:border-b-0">
-							<div class="px-5 py-3 flex items-center">
-								<span class="text-xs font-semibold text-[var(--text)]">{row.label}</span>
-							</div>
-							<div class="px-5 py-3 border-l border-[var(--border)] flex items-center">
-								<span class="text-xs text-[var(--text-muted)]">{row.tunnel}</span>
-							</div>
-							<div class="px-5 py-3 border-l border-purple-200 dark:border-purple-500/30 bg-purple-50/30 dark:bg-purple-500/5 flex items-center gap-2">
-								<CircleCheck class="w-3.5 h-3.5 text-[var(--green)] shrink-0" />
-								<span class="text-xs text-[var(--text)]">{row.testhooks}</span>
-							</div>
-						</div>
-					{/each}
-				</div>
-
-				<!-- Provider callout -->
-				<p class="text-center text-sm text-[var(--text-muted)] mt-8">
-					Works with any webhook provider — Stripe, GitHub, Slack, Shopify, Twilio, Linear, and more.
-					<br />
-					<span class="text-xs">Just point their webhook URL at your Testhooks endpoint.</span>
-				</p>
-			</div>
-		</div>
-	</section>
-
 	<!-- ===== CREATE ENDPOINT SECTION ===== -->
-	<section id="create-section" class="py-20 bg-[var(--bg)]">
+	<section id="create-section" class="pt-10 pb-6 bg-[var(--bg)]">
 		<div class="max-w-3xl mx-auto px-6">
-			<div class="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl overflow-hidden shadow-lg shadow-blue-500/5">
+			<div class="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl overflow-hidden">
 				<div class="px-6 pt-6 pb-4">
 					<div class="flex items-center gap-3 mb-1">
 						<Webhook class="w-5 h-5 text-[var(--accent)]" />
@@ -693,14 +187,14 @@
 					</div>
 					<p class="text-xs text-[var(--text-muted)] mb-4 ml-8">Get a unique URL to capture, inspect, and forward webhooks in real time.</p>
 
-					<!-- Row 1: Name + Mode -->
-					<div class="flex gap-3 mb-3">
+					<!-- Row 1: Name + Mode (stacked on phones) -->
+					<div class="flex flex-col sm:flex-row gap-3 mb-3">
 						<input
 							bind:value={newName}
 							placeholder="Endpoint name (optional)"
-							class="flex-1 bg-[var(--bg)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm text-[var(--text)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent)] transition-colors"
+							class="flex-1 min-w-0 bg-[var(--bg)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm text-[var(--text)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent)] transition-colors"
 						/>
-						<div class="flex gap-1 bg-[var(--bg)] border border-[var(--border)] rounded-lg p-1">
+						<div class="flex gap-1 self-start bg-[var(--bg)] border border-[var(--border)] rounded-lg p-1">
 							<button
 								class="px-3 py-1.5 rounded-md text-xs font-medium transition-colors flex items-center gap-1.5 {newMode === 'server' ? 'bg-[var(--accent)] text-white' : 'text-[var(--text-muted)] hover:text-[var(--text)]'}"
 								onclick={() => (newMode = 'server')}
@@ -721,7 +215,7 @@
 					<!-- Mode description -->
 					<div class="text-[11px] text-[var(--text-muted)] mb-4 px-1">
 						{#if newMode === 'server'}
-							Requests are stored in the database. Transforms and forwarding run server-side, always-on even without a browser.
+							Requests are stored on the server. Transforms and forwarding run server-side, always-on even without a browser.
 						{:else}
 							Privacy-first: payloads never touch the server's disk. Transforms and forwarding run in your browser. Ideal for localhost targets.
 						{/if}
@@ -961,7 +455,7 @@
 	</section>
 
 	<!-- ===== ENDPOINTS LIST ===== -->
-	<section class="py-16 bg-[var(--bg-card)]">
+	<section class="pt-4 pb-12 bg-[var(--bg)]">
 		<div class="max-w-3xl mx-auto px-6">
 			{#if deleteError}
 				<div class="mb-3 px-3 py-2 rounded bg-red-500/10 border border-red-500/20 text-sm text-[var(--red)] flex items-center justify-between">
@@ -1072,56 +566,13 @@
 		</div>
 	</section>
 
-	<!-- ===== FOOTER CTA ===== -->
-	<section class="py-20 bg-gradient-to-b from-[var(--bg-card)] to-blue-50/30 dark:to-blue-950/10">
-		<div class="max-w-3xl mx-auto px-6 text-center">
-			<h2 class="text-3xl md:text-4xl font-bold font-fira mb-6">
-				Ready to <span class="bg-gradient-to-r from-[var(--accent)] to-purple-500 bg-clip-text text-transparent">Own Your Webhooks</span>?
-			</h2>
-			<p class="text-lg mb-8 text-[var(--text-muted)]">
-				Open source, self-hostable, no sign-up required. One binary, one database — and browser mode reaches localhost too.
-			</p>
-			<div class="flex flex-col sm:flex-row items-center justify-center gap-4">
-				<button
-					onclick={scrollToCreate}
-					class="inline-flex items-center gap-2 px-7 py-3 text-base font-medium rounded-xl bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)] transition-all shadow-lg shadow-blue-500/20"
-				>
-					Get Started
-					<ArrowRight class="w-4 h-4" />
-				</button>
-				<a
-					href="https://github.com/sarathsp06/testhooks"
-					target="_blank"
-					rel="noopener noreferrer"
-					class="inline-flex items-center gap-2 px-7 py-3 text-base font-medium rounded-xl border border-[var(--border)] text-[var(--text)] hover:bg-[var(--bg-hover)] transition-all"
-				>
-					<svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-						<path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z" />
-					</svg>
-					Star on GitHub
-				</a>
-			</div>
-		</div>
-	</section>
-
-	<!-- ===== FOOTER ===== -->
-	<footer class="py-8 border-t border-[var(--border)]">
-		<div class="max-w-[1200px] mx-auto px-6">
-			<div class="flex flex-col md:flex-row items-center justify-between gap-4">
-				<div class="flex items-center gap-2">
-					<Webhook class="w-4 h-4 text-[var(--text-muted)]" />
-					<span class="font-fira text-sm"><span class="font-normal text-[var(--text-muted)]">TEST</span><span class="font-bold text-[var(--text)]">HOOKS</span></span>
-				</div>
-				<p class="text-xs text-[var(--text-muted)]">Self-hostable webhook inspector. Open source.</p>
-			<a
-				href="https://github.com/sarathsp06/testhooks"
-				target="_blank"
-				rel="noopener noreferrer"
-				class="text-xs text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors"
-			>
-					GitHub
-				</a>
-			</div>
+	<footer class="py-6 border-t border-[var(--border)]">
+		<div class="max-w-3xl mx-auto px-6 flex items-center justify-between gap-4 text-xs text-[var(--text-muted)]">
+			<span>testhooks · self-hosted webhook inspector</span>
+			<span class="flex gap-4">
+				<a href="https://sarathsp06.github.io/testhooks/" target="_blank" rel="noopener noreferrer" class="hover:text-[var(--accent)] transition-colors">Docs</a>
+				<a href="https://github.com/sarathsp06/testhooks" target="_blank" rel="noopener noreferrer" class="hover:text-[var(--accent)] transition-colors">GitHub</a>
+			</span>
 		</div>
 	</footer>
 </div>

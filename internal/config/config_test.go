@@ -14,14 +14,15 @@ func TestLoad_Defaults(t *testing.T) {
 		t.Setenv(e, "")
 		os.Unsetenv(e)
 	}
-	// H-01: Set a non-default DATABASE_URL to avoid log.Fatal on default credentials.
-	t.Setenv("DATABASE_URL", "postgres://user:pass@localhost:5432/testdb?sslmode=disable")
-
 	cfg, err := Load()
 	if err != nil {
 		t.Fatalf("Load() error: %v", err)
 	}
 
+	// With nothing set, testhooks runs in memory: no database needed.
+	if cfg.DatabaseURL != "memory" {
+		t.Errorf("DatabaseURL = %q, want %q", cfg.DatabaseURL, "memory")
+	}
 	if cfg.Listen != ":8080" {
 		t.Errorf("Listen = %q, want %q", cfg.Listen, ":8080")
 	}

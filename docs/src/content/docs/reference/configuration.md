@@ -9,7 +9,7 @@ Testhooks is configured entirely with environment variables. A `.env` file in th
 
 | Variable | Default | Description |
 |---|---|---|
-| `DATABASE_URL` | `postgres://testhooks:testhooks@localhost:5432/testhooks?sslmode=disable` | PostgreSQL connection string, or `memory` to keep data in memory (local testing). See [Run without a database](../../getting-started/installation/#run-without-a-database) |
+| `DATABASE_URL` | `memory` | `memory` keeps data in memory (local testing, no database). Set a PostgreSQL connection string, such as `postgres://user:pass@host:5432/testhooks`, for shared or long-running instances. See [Run without a database](../../getting-started/installation/#run-without-a-database) |
 | `SNAPSHOT_PATH` | | With `DATABASE_URL=memory`: file the data is saved to every 30 seconds and on shutdown, and loaded from on start. Empty keeps data in memory only |
 | `LISTEN` | `:8080` | Address to listen on |
 | `PORT` | | If set, listens on `:<PORT>` instead of `LISTEN` (PaaS convention) |

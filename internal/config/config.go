@@ -18,10 +18,10 @@ type Config struct {
 	// If PORT is set, Listen becomes ":<PORT>".
 	Port int `env:"PORT"`
 
-	// PostgreSQL connection string. Required in production.
-	// WARNING: The default value includes credentials and should NOT be used in production.
-	// Set to "memory" to run without a database (local testing).
-	DatabaseURL string `env:"DATABASE_URL" envDefault:"postgres://testhooks:testhooks@localhost:5432/testhooks?sslmode=disable"`
+	// Storage: "memory" (the default) keeps data in memory, for local testing
+	// with no database. Set a PostgreSQL connection string for anything shared
+	// or long-running, e.g. postgres://user:pass@host:5432/testhooks.
+	DatabaseURL string `env:"DATABASE_URL" envDefault:"memory"`
 
 	// SnapshotPath, with DATABASE_URL=memory, is a file the in-memory store is
 	// saved to every 30s and on shutdown, and loaded from on start. Empty keeps
@@ -144,12 +144,6 @@ func Load() (*Config, error) {
 	}
 	if cfg.Port > 0 {
 		cfg.Listen = fmt.Sprintf(":%d", cfg.Port)
-	}
-
-	// H-01: Fatal if using the default DATABASE_URL with embedded credentials in production.
-	const defaultDBURL = "postgres://testhooks:testhooks@localhost:5432/testhooks?sslmode=disable"
-	if cfg.DatabaseURL == defaultDBURL && !cfg.Dev {
-		log.Fatal().Msg("DATABASE_URL is using default credentials — set DATABASE_URL env var for production")
 	}
 
 	// L-04: Validate configuration bounds.

@@ -7,11 +7,19 @@ Testhooks is a single Go binary with the web UI embedded. It stores data in Post
 
 ## Install the binary
 
-The quickest start: no Docker and, with in-memory storage, no database. Downloads the build for your OS and architecture from GitHub Releases, verifies its SHA-256 checksum, and runs it:
+The quickest start: no Docker and, with in-memory storage, no database. Install once; it downloads the build for your OS and architecture and verifies its SHA-256 checksum:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/sarathsp06/testhooks/main/install.sh | sh && DATABASE_URL=memory testhooks
+curl -fsSL https://raw.githubusercontent.com/sarathsp06/testhooks/main/install.sh | sh
 ```
+
+Then run it, now and every time after:
+
+```bash
+DATABASE_URL=memory testhooks
+```
+
+Installer options:
 
 | Variable | Default | |
 |---|---|---|
@@ -38,13 +46,19 @@ A clean shutdown loses nothing; a crash loses at most the last 30 seconds. If th
 
 In-memory mode is meant for one person testing locally. For a shared or public instance, use PostgreSQL.
 
+:::caution[Needs one long-running process]
+In-memory data lives in a single process. On serverless platforms such as Vercel, Netlify Functions or AWS Lambda, requests are spread across short-lived instances that each have their own memory, so endpoints created on one instance are missing on the next and webhook URLs return 404. A snapshot file doesn't help there either, because each instance has its own temporary disk. Those platforms also don't keep WebSockets open, so the live view and browser mode won't work.
+
+Run Testhooks as one long-running process instead: your machine, a VPS, or a container host (Fly.io, Railway, Render and similar) with a single instance.
+:::
+
 ### With PostgreSQL
 
 For a quick local database:
 
 ```bash
 docker run -d --name testhooks-pg -p 127.0.0.1:5432:5432 -e POSTGRES_USER=testhooks -e POSTGRES_PASSWORD=testhooks -e POSTGRES_DB=testhooks postgres:17-alpine
-testhooks   # connects to postgres://testhooks:testhooks@localhost:5432/testhooks by default
+DATABASE_URL='postgres://testhooks:testhooks@localhost:5432/testhooks?sslmode=disable' testhooks
 ```
 
 Point it at another database with `DATABASE_URL`. See [Configuration](../../reference/configuration/) for every setting.
@@ -109,7 +123,7 @@ The image is built `FROM scratch`: it holds only the binary, CA certificates and
 
 ## From source
 
-Prerequisites: Go 1.26+ and Node 22+. PostgreSQL is optional: `DATABASE_URL=memory ./testhooks` runs without it.
+Prerequisites: Go 1.26+ and Node 22+. PostgreSQL is optional: without `DATABASE_URL`, `./testhooks` stores data in memory.
 
 ```bash
 git clone https://github.com/sarathsp06/testhooks.git

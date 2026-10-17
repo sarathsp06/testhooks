@@ -1,7 +1,7 @@
 # Development: builds testhooks from this checkout and runs it with Postgres.
 #   docker compose up --build
-# For a published image, see deploy/docker-compose.yml. To run without a
-# database, set DATABASE_URL=memory (see README).
+# For a published image, see deploy/docker-compose.yml. testhooks defaults to
+# in-memory storage; this file sets DATABASE_URL to use the Postgres service.
 services:
   postgres:
     image: postgres:17-alpine

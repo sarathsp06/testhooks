@@ -3,23 +3,38 @@ title: Quickstart
 description: Run Testhooks and capture your first webhook in a couple of minutes.
 ---
 
-## 1. Start Testhooks
-
-For local testing, install the binary and run it with no database. Nothing else is needed:
+## 1. Install testhooks
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/sarathsp06/testhooks/main/install.sh | sh && DATABASE_URL=memory testhooks
+curl -fsSL https://raw.githubusercontent.com/sarathsp06/testhooks/main/install.sh | sh
 ```
 
-If the installer put it in `~/.local/bin` and that isn't on your `PATH`, run `~/.local/bin/testhooks` instead.
+This downloads the binary for your OS and architecture, checks its SHA-256 and puts `testhooks` in `/usr/local/bin`, or in `~/.local/bin` if that isn't writable. You only do this once.
 
-Prefer Docker? One container, still no database:
+## 2. Run it
+
+```bash
+DATABASE_URL=memory testhooks
+```
+
+That's how you start it from now on: run `testhooks`. `DATABASE_URL=memory` keeps everything in memory, so you don't need a database. Open [http://localhost:8080](http://localhost:8080).
+
+:::tip[Variations]
+- **Keep data across restarts:** `DATABASE_URL=memory SNAPSHOT_PATH=./testhooks.snapshot testhooks`
+- **Use PostgreSQL:** `DATABASE_URL='postgres://user:pass@host:5432/testhooks' testhooks`
+- **`command not found`?** The installer used `~/.local/bin`, which isn't on your `PATH`. Run `~/.local/bin/testhooks`, or add that folder to your `PATH`.
+- **Check the version:** `testhooks --version`
+:::
+
+### Or run it with Docker
+
+One container, no database:
 
 ```bash
 docker run -d --name testhooks -p 8080:8080 -e DATABASE_URL=memory ghcr.io/sarathsp06/testhooks
 ```
 
-For a shared instance, run it with PostgreSQL instead:
+With PostgreSQL, for a shared instance:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/sarathsp06/testhooks/main/deploy/docker-compose.yml | docker compose -p testhooks -f - up -d
@@ -29,11 +44,9 @@ Check it's up:
 
 ```bash
 curl http://localhost:8080/healthz
-# {"status":"ok"}
 ```
 
-
-## 2. Create an endpoint
+## 3. Create an endpoint
 
 Open `http://localhost:8080` and click **Create New Endpoint**. You get a URL like:
 
@@ -51,7 +64,7 @@ curl -X POST http://localhost:8080/api/endpoints \
 
 The response includes the `slug` used in the webhook URL.
 
-## 3. Send it a webhook
+## 4. Send it a webhook
 
 ```bash
 curl -X POST http://localhost:8080/h/a1b2c3d4 \
@@ -61,7 +74,7 @@ curl -X POST http://localhost:8080/h/a1b2c3d4 \
 
 The request appears in the UI immediately, with its headers, query and body. Anything after the slug is captured too, so `/h/a1b2c3d4/stripe/events` works.
 
-## 4. Point a real provider at it
+## 5. Point a real provider at it
 
 Providers such as Stripe, GitHub or Slack need a public URL. Run Testhooks somewhere public (see [Running in production](../../deployment/production/)) and paste the endpoint URL into the provider's webhook settings.
 

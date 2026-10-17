@@ -155,7 +155,7 @@
 		<div class="mt-2 flex items-start gap-2 text-[10px] text-[var(--text-muted)] bg-[var(--bg)] rounded px-3 py-2 border border-[var(--border)]">
 			<Info class="w-3 h-3 flex-shrink-0 mt-0.5" />
 			{#if isServerMode}
-				<p><strong class="text-[var(--text)]">Server mode</strong> — Requests are stored in the database. Transforms and forwarding run on the server (always-on, headless). The browser is a viewer.</p>
+				<p><strong class="text-[var(--text)]">Server mode</strong> — Requests are stored on the server. Transforms and forwarding run on the server (always-on, headless). The browser is a viewer.</p>
 			{:else}
 				<p><strong class="text-[var(--text)]">Browser mode</strong> — Requests are relayed via WebSocket and never stored on the server. Transforms and forwarding run in your browser. Supports localhost targets. Data is lost if the tab is closed.</p>
 			{/if}

@@ -100,7 +100,7 @@ Stores use `.svelte.ts` files with `$state` and `$derived` runes instead of Svel
 
 - **Go 1.26+** — `go version`
 - **Node 22+** — `node --version`
-- **PostgreSQL 15+** — optional for development; `DATABASE_URL=memory` runs without it
+- **PostgreSQL 15+** — optional; testhooks stores data in memory unless `DATABASE_URL` points at Postgres
 
 ### First time setup
 
@@ -108,12 +108,12 @@ Stores use `.svelte.ts` files with `$state` and `$derived` runes instead of Svel
 # Install frontend dependencies
 cd web && npm ci && cd ..
 
-# Start dev servers (Go + Vite hot reload) with in-memory storage
-DATABASE_URL=memory make dev
+# Start dev servers (Go + Vite hot reload); storage is in memory by default
+make dev
 
 # Or against Postgres (easiest via Docker)
 docker compose up -d postgres
-make dev
+DATABASE_URL=postgres://testhooks:testhooks@localhost:5432/testhooks?sslmode=disable make dev
 ```
 
 The Go server runs on `:8080` and proxies SPA requests to Vite on `:5173` when `DEV=true`.

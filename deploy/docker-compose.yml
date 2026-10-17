@@ -5,7 +5,9 @@
 # Then open http://localhost:8080. Override settings with environment
 # variables, e.g. TESTHOOKS_PORT=9000 AUTH_TOKEN=secret docker compose ... up -d
 #
-# Just testing locally? Skip Postgres entirely with one container:
+# Just testing locally? Skip Postgres entirely with one container (in-memory
+# storage; DATABASE_URL is set here so older images, whose default was
+# Postgres, behave the same):
 #
 #   docker run -d --name testhooks -p 8080:8080 -e DATABASE_URL=memory ghcr.io/sarathsp06/testhooks
 name: testhooks

@@ -68,11 +68,11 @@ Notes:
 
 ### From source
 
-Prerequisites: Go 1.26+ and Node 22+ (PostgreSQL only if you don't use `DATABASE_URL=memory`).
+Prerequisites: Go 1.26+ and Node 22+. PostgreSQL is optional; without `DATABASE_URL` the binary stores data in memory.
 
 ```bash
 git clone https://github.com/sarathsp06/testhooks.git && cd testhooks
-make build && DATABASE_URL=memory ./testhooks   # single binary with the UI embedded
+make build && ./testhooks                       # single binary with the UI embedded; in memory by default
 docker compose up --build                       # or: app + Postgres, built from this checkout
 ```
 
@@ -162,7 +162,7 @@ Everything is configured with environment variables. A `.env` file in the workin
 
 Storage:
 
-- `DATABASE_URL`: PostgreSQL URL, or `memory`. Default `postgres://testhooks:testhooks@localhost:5432/testhooks?sslmode=disable`.
+- `DATABASE_URL`: `memory`, or a PostgreSQL URL such as `postgres://user:pass@host:5432/testhooks`. Default `memory`.
 - `SNAPSHOT_PATH`: with `memory`, file saved every 30 s and on shutdown, loaded on start. Default empty (memory only).
 
 Server and security:
@@ -198,6 +198,7 @@ Development:
 ### Running in production
 
 - Use PostgreSQL; in-memory mode is for local testing.
+- Run it as one long-running server or container (a VPS, Fly.io, Railway, Render), not on serverless functions such as Vercel: WebSockets don't stay open there, and in-memory endpoints vanish between instances.
 - Set `AUTH_TOKEN` and `ALLOWED_ORIGINS`. Without them anyone who can reach the server can read every endpoint.
 - Put it behind a TLS-terminating reverse proxy and list that proxy in `TRUSTED_PROXIES` so rate limiting sees real client IPs.
 - `GET /healthz` returns `200` when the database is reachable and `503` when it isn't. Use it for liveness and readiness checks.

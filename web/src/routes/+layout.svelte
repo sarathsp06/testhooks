@@ -24,7 +24,12 @@
 			<span class="font-semibold text-lg">Testhooks</span>
 		</a>
 		<div class="flex items-center gap-3">
-			<span class="text-xs text-[var(--text-muted)]">webhook inspector</span>
+			<a
+				href="https://sarathsp06.github.io/testhooks/"
+				target="_blank"
+				rel="noopener noreferrer"
+				class="text-xs text-[var(--text-muted)] hover:text-[var(--text)] transition-colors"
+			>Docs</a>
 			{#if auth.signedIn}
 				<button
 					onclick={signOut}

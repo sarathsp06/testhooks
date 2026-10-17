@@ -9,11 +9,22 @@ export default defineConfig({
 	base: process.env.DOCS_BASE ?? '/testhooks',
 	integrations: [
 		starlight({
-			title: 'Testhooks',
+			title: 'testhooks',
 			description:
 				'Self-hostable webhook inspector: capture, inspect, transform, forward and mock webhooks in real time.',
 			logo: { src: './src/assets/logo.svg', alt: 'Testhooks' },
 			favicon: '/favicon.svg',
+			head: [
+				{ tag: 'link', attrs: { rel: 'preconnect', href: 'https://fonts.googleapis.com' } },
+				{ tag: 'link', attrs: { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: '' } },
+				{
+					tag: 'link',
+					attrs: {
+						rel: 'stylesheet',
+						href: 'https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap',
+					},
+				},
+			],
 			customCss: ['./src/styles/custom.css'],
 			social: [{ icon: 'github', label: 'GitHub', href: 'https://github.com/sarathsp06/testhooks' }],
 			editLink: { baseUrl: 'https://github.com/sarathsp06/testhooks/edit/main/docs/' },

@@ -11,7 +11,8 @@ Testhooks has to be reachable from the internet for webhook providers to deliver
 - **Set `ALLOWED_ORIGINS`** to the origin you serve the UI from, such as `https://hooks.example.com`.
 - **Terminate TLS** in a reverse proxy or load balancer in front of Testhooks.
 - **Set `TRUSTED_PROXIES`** to that proxy's CIDR so rate limiting and the captured client IP use the real client address.
-- **Use PostgreSQL**, managed or backed up, if you need to keep server-mode requests. In-memory storage (`DATABASE_URL=memory`) is for local testing: one process, data in RAM, no shared access.
+- **Use PostgreSQL**, managed or backed up, if you need to keep server-mode requests. In-memory storage (the default) is for local testing: one process, data in RAM, no shared access.
+- **Run it as a long-running server, not serverless functions.** Testhooks keeps WebSocket connections open for the live view and browser mode, and in-memory storage only exists inside one process. Serverless platforms such as Vercel or AWS Lambda break both: webhook URLs disappear between instances and live updates never connect. Use a VPS or a container host (Fly.io, Railway, Render and similar).
 
 ## Authentication
 

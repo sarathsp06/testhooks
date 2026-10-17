@@ -1,43 +1,229 @@
-/* Brand colours from the Testhooks logo: Go-cyan accent, orange signal dots. */
+/* Docs theme, matching the landing page (src/pages/index.astro):
+   Geist / Geist Mono, warm off-white and near-black backgrounds, green accent. */
 :root {
-	--sl-color-accent-low: #00313d;
-	--sl-color-accent: #0086a8;
-	--sl-color-accent-high: #a6ecff;
-	--th-orange: #f97316;
+	--sl-font: 'Geist', system-ui, sans-serif;
+	--sl-font-mono: 'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+	/* Dark (Starlight's default block) */
+	--sl-color-white: #e8ede9;
+	--sl-color-gray-1: #dde3df;
+	--sl-color-gray-2: #c2cac5;
+	--sl-color-gray-3: #8e9893;
+	--sl-color-gray-4: #66716b;
+	--sl-color-gray-5: #232b27;
+	--sl-color-gray-6: #121815;
+	--sl-color-black: #0b0f0d;
+	--sl-color-accent-low: #12301f;
+	--sl-color-accent: #1a7f4b;
+	--sl-color-accent-high: #5bd08f;
 }
 
 :root[data-theme='light'] {
-	--sl-color-accent-low: #c9f3ff;
-	--sl-color-accent: #007694;
-	--sl-color-accent-high: #003747;
+	--sl-color-white: #111613;
+	--sl-color-gray-1: #1c2420;
+	--sl-color-gray-2: #3b4540;
+	--sl-color-gray-3: #4a5550;
+	--sl-color-gray-4: #8a948f;
+	--sl-color-gray-5: #d5d8d2;
+	--sl-color-gray-6: #eceee9;
+	--sl-color-gray-7: #f7f7f4;
+	--sl-color-black: #f7f7f4;
+	--sl-color-accent-low: #d9f2e4;
+	--sl-color-accent: #1a7f4b;
+	--sl-color-accent-high: #0d3d24;
+	--sl-color-bg-nav: #f7f7f4;
+	--sl-color-bg-sidebar: #f7f7f4;
 }
 
-:root[data-theme='dark'] {
-	--sl-color-black: #0d1117;
-	--sl-color-gray-6: #161b22;
+/* Headings in the landing page's weight and tracking. */
+.sl-markdown-content :is(h1, h2, h3) {
+	font-weight: 600;
+	letter-spacing: -0.02em;
+}
+h1#_top {
+	font-weight: 600;
+	letter-spacing: -0.03em;
 }
 
-.hero > img {
-	width: min(60%, 14rem);
-	filter: drop-shadow(0 0 2.5rem rgb(0 173 216 / 0.35));
+/* Site title in the header: lowercase brand, like the landing nav. */
+.site-title {
+	font-weight: 600;
+	letter-spacing: -0.01em;
 }
 
-.th-flow {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 0.5rem;
-	align-items: center;
-	justify-content: center;
+/* ---------------------------------------------------------------------------
+   Landing-page look for the docs pages.
+   --------------------------------------------------------------------------- */
+:root {
+	--th-accent: #5bd08f;
+	--th-accent-soft: rgba(91, 208, 143, 0.08);
+	--th-line: #232b27;
+	--th-chip: #1b231f;
+	--th-surface: #121815;
+	--th-code: #0e1210;
+	--sl-color-hairline-light: var(--th-line);
+	--sl-color-hairline: var(--th-line);
+	--sl-color-bg-inline-code: var(--th-chip);
+	--sl-nav-height: 4rem;
+}
+:root[data-theme='light'] {
+	--th-accent: #1a7f4b;
+	--th-accent-soft: rgba(26, 127, 75, 0.06);
+	--th-line: #e2e4df;
+	--th-chip: #eceee9;
+	--th-surface: #ffffff;
+}
+
+body {
+	-webkit-font-smoothing: antialiased;
+}
+
+/* Header: flat, hairline underneath, like the landing nav. */
+header.header {
+	background: var(--sl-color-bg);
+	border-bottom: 1px solid var(--th-line);
+}
+.site-title {
+	color: var(--sl-color-white);
+	font-size: 17px;
+	gap: 10px;
+}
+.site-title img {
+	width: 28px;
+	height: 28px;
+}
+.site-title:hover {
+	color: var(--sl-color-white);
+}
+site-search button[data-open-modal] {
+	border-radius: 8px;
+	border-color: var(--th-line);
+	background: var(--th-surface);
+}
+
+/* Sidebar: mono eyebrow group labels, chip for the current page. */
+.sidebar-pane {
+	background: var(--sl-color-bg);
+	border-inline-end: 1px solid var(--th-line);
+}
+.sidebar-content .group-label .large {
 	font-family: var(--sl-font-mono);
-	font-size: var(--sl-text-sm);
-	padding: 1rem;
-	border: 1px solid var(--sl-color-gray-5);
-	border-radius: 0.5rem;
-	background: var(--sl-color-gray-7, var(--sl-color-gray-6));
+	font-size: 12px;
+	font-weight: 500;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	color: var(--th-accent);
 }
-.th-flow span:nth-child(odd) {
-	color: var(--sl-color-text-accent);
+.sidebar-content a {
+	font-size: 14px;
+	border-radius: 8px;
+	color: var(--sl-color-gray-2);
 }
-.th-flow span:nth-child(even) {
-	color: var(--th-orange);
+.sidebar-content a:hover {
+	color: var(--sl-color-white);
+}
+.sidebar-content a[aria-current='page'],
+.sidebar-content a[aria-current='page']:hover,
+.sidebar-content a[aria-current='page']:focus {
+	background: var(--th-chip);
+	color: var(--sl-color-white);
+	font-weight: 600;
+}
+
+/* Content typography. */
+.content-panel + .content-panel {
+	border-top-color: var(--th-line);
+}
+h1#_top {
+	font-size: clamp(2.25rem, 5vw, 3rem);
+	line-height: 1.08;
+}
+.sl-markdown-content {
+	font-size: 16px;
+	line-height: 1.65;
+}
+.sl-markdown-content h2 {
+	font-size: clamp(1.5rem, 3vw, 1.85rem);
+	line-height: 1.2;
+}
+.sl-markdown-content h3 {
+	font-size: 1.2rem;
+}
+.sl-markdown-content a:not(:where(.not-content *)) {
+	color: var(--th-accent);
+	text-underline-offset: 3px;
+	text-decoration-thickness: 1px;
+}
+.sl-markdown-content :not(pre) > code {
+	background: var(--th-chip);
+	border: 0;
+	border-radius: 6px;
+	padding: 0.15em 0.4em;
+	font-size: 0.875em;
+}
+
+/* Tables: rounded, hairline, chip header row. */
+.sl-markdown-content table {
+	border-collapse: separate;
+	border-spacing: 0;
+	border: 1px solid var(--th-line);
+	border-radius: 12px;
+	overflow-x: auto; /* wide tables scroll inside the rounded border */
+	font-size: 14px;
+}
+.sl-markdown-content td code {
+	overflow-wrap: anywhere; /* long defaults such as the Postgres URL wrap */
+}
+.sl-markdown-content :is(th, td) {
+	border: 0;
+	border-bottom: 1px solid var(--th-line);
+	padding: 10px 14px;
+}
+.sl-markdown-content tr:last-child td {
+	border-bottom: 0;
+}
+.sl-markdown-content th {
+	background: var(--th-chip);
+	color: var(--sl-color-white);
+	font-weight: 600;
+}
+
+/* Asides: soft surfaces with an accent edge instead of Starlight's colours. */
+.starlight-aside {
+	border-radius: 12px;
+	border: 1px solid var(--th-line);
+	border-inline-start-width: 3px;
+	background: var(--th-surface);
+}
+.starlight-aside--tip {
+	--sl-color-asides-text-accent: var(--th-accent);
+	--sl-color-asides-border: var(--th-accent);
+	border-inline-start-color: var(--th-accent);
+	background: var(--th-accent-soft);
+}
+.starlight-aside--note {
+	--sl-color-asides-text-accent: var(--sl-color-white);
+	border-inline-start-color: var(--sl-color-white);
+}
+
+/* Previous / next links as landing-style cards. */
+.pagination-links a {
+	border-radius: 14px;
+	border-color: var(--th-line);
+	background: var(--th-surface);
+	box-shadow: none;
+}
+.pagination-links a:hover {
+	border-color: var(--th-accent);
+}
+
+/* Right-hand table of contents: current item in the accent. */
+starlight-toc a[aria-current='true'] {
+	color: var(--th-accent);
+}
+
+/* Dark mode: give code panels a hairline so they don't melt into the page,
+   as the landing page's command box does. */
+:root:not([data-theme='light']) .expressive-code {
+	--ec-brdCol: #313b36;
 }
