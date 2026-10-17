@@ -5,6 +5,50 @@ description: One-line Docker and binary installs, with PostgreSQL or in-memory s
 
 Testhooks is a single Go binary with the web UI embedded. It stores data in PostgreSQL 15 or newer, or in memory for local testing.
 
+## Install the binary
+
+The quickest start: no Docker and, with in-memory storage, no database. Downloads the build for your OS and architecture from GitHub Releases, verifies its SHA-256 checksum, and runs it:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/sarathsp06/testhooks/main/install.sh | sh && DATABASE_URL=memory testhooks
+```
+
+| Variable | Default | |
+|---|---|---|
+| `TESTHOOKS_VERSION` | `latest` | Release tag to install, for example `v1.1.0` |
+| `TESTHOOKS_INSTALL_DIR` | `/usr/local/bin` if writable, else `~/.local/bin` | Where to put the binary |
+
+If it lands in `~/.local/bin` and that isn't on your `PATH`, run `~/.local/bin/testhooks` (the installer prints a hint). Builds are published for Linux, macOS and Windows on amd64 and arm64. You can also download them directly from the [releases page](https://github.com/sarathsp06/testhooks/releases).
+
+### Run without a database
+
+For local testing, keep everything in memory:
+
+```bash
+DATABASE_URL=memory testhooks
+```
+
+Data is lost when the process stops. To keep it across restarts, add a snapshot file. The store is written to it every 30 seconds when something changed, and on shutdown, then loaded on the next start:
+
+```bash
+DATABASE_URL=memory SNAPSHOT_PATH=./testhooks.snapshot testhooks
+```
+
+A clean shutdown loses nothing; a crash loses at most the last 30 seconds. If the snapshot file is unreadable, Testhooks refuses to start rather than overwrite it.
+
+In-memory mode is meant for one person testing locally. For a shared or public instance, use PostgreSQL.
+
+### With PostgreSQL
+
+For a quick local database:
+
+```bash
+docker run -d --name testhooks-pg -p 127.0.0.1:5432:5432 -e POSTGRES_USER=testhooks -e POSTGRES_PASSWORD=testhooks -e POSTGRES_DB=testhooks postgres:17-alpine
+testhooks   # connects to postgres://testhooks:testhooks@localhost:5432/testhooks by default
+```
+
+Point it at another database with `DATABASE_URL`. See [Configuration](../../reference/configuration/) for every setting.
+
 ## Docker, no database
 
 For local testing. One container, data kept in memory:
@@ -50,54 +94,6 @@ To keep a local copy you can edit, download it first:
 curl -fsSLO https://raw.githubusercontent.com/sarathsp06/testhooks/main/deploy/docker-compose.yml
 docker compose up -d
 ```
-
-## Install the binary
-
-Downloads the build for your OS and architecture from GitHub Releases and verifies its SHA-256 checksum:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/sarathsp06/testhooks/main/install.sh | sh
-```
-
-| Variable | Default | |
-|---|---|---|
-| `TESTHOOKS_VERSION` | `latest` | Release tag to install, for example `v1.1.0` |
-| `TESTHOOKS_INSTALL_DIR` | `/usr/local/bin` if writable, else `~/.local/bin` | Where to put the binary |
-
-Builds are published for Linux, macOS and Windows on amd64 and arm64. You can also download them directly from the [releases page](https://github.com/sarathsp06/testhooks/releases).
-
-### Run without a database
-
-For local testing, keep everything in memory:
-
-```bash
-DATABASE_URL=memory testhooks
-```
-
-Data is lost when the process stops. To keep it across restarts, add a snapshot file. The store is written to it every 30 seconds when something changed, and on shutdown, then loaded on the next start:
-
-```bash
-DATABASE_URL=memory SNAPSHOT_PATH=./testhooks.snapshot testhooks
-```
-
-A clean shutdown loses nothing; a crash loses at most the last 30 seconds. If the snapshot file is unreadable, Testhooks refuses to start rather than overwrite it.
-
-In-memory mode is meant for one person testing locally. For a shared or public instance, use PostgreSQL.
-
-### With PostgreSQL
-
-For a quick local database:
-
-```bash
-docker run -d --name testhooks-pg -p 127.0.0.1:5432:5432 \
-  -e POSTGRES_USER=testhooks -e POSTGRES_PASSWORD=testhooks -e POSTGRES_DB=testhooks \
-  postgres:17-alpine
-
-testhooks             # connects to postgres://testhooks:testhooks@localhost:5432/testhooks by default
-testhooks --version
-```
-
-Point it at another database with `DATABASE_URL`. See [Configuration](../../reference/configuration/) for every setting.
 
 ## Container image
 

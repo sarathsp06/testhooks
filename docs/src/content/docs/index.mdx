@@ -26,7 +26,13 @@ import { Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
 
 ## Run it in one line
 
-Locally, with no database:
+Locally, with no database and nothing else to install:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/sarathsp06/testhooks/main/install.sh | sh && DATABASE_URL=memory testhooks
+```
+
+Or in Docker:
 
 ```bash
 docker run -d --name testhooks -p 8080:8080 -e DATABASE_URL=memory ghcr.io/sarathsp06/testhooks

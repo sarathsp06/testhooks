@@ -5,7 +5,15 @@ description: Run Testhooks and capture your first webhook in a couple of minutes
 
 ## 1. Start Testhooks
 
-You need Docker. For local testing, one container with no database is enough:
+For local testing, install the binary and run it with no database. Nothing else is needed:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/sarathsp06/testhooks/main/install.sh | sh && DATABASE_URL=memory testhooks
+```
+
+If the installer put it in `~/.local/bin` and that isn't on your `PATH`, run `~/.local/bin/testhooks` instead.
+
+Prefer Docker? One container, still no database:
 
 ```bash
 docker run -d --name testhooks -p 8080:8080 -e DATABASE_URL=memory ghcr.io/sarathsp06/testhooks
@@ -24,12 +32,6 @@ curl http://localhost:8080/healthz
 # {"status":"ok"}
 ```
 
-No Docker? Install the binary and run it with no database at all:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/sarathsp06/testhooks/main/install.sh | sh
-DATABASE_URL=memory testhooks
-```
 
 ## 2. Create an endpoint
 
@@ -70,4 +72,4 @@ Providers such as Stripe, GitHub or Slack need a public URL. Run Testhooks somew
 - Reshape payloads or script the response: [Transforms and custom responses](../../guides/scripts/)
 - Check signatures from Sparrow, Svix and others: [Verifying signed webhooks](../../guides/signatures/)
 
-Stop the single container with `docker rm -f testhooks`, or the Compose setup with `docker compose -p testhooks down` (add `-v` to delete the stored data too).
+Stop the binary with Ctrl+C, the single container with `docker rm -f testhooks`, or the Compose setup with `docker compose -p testhooks down` (add `-v` to delete the stored data too).

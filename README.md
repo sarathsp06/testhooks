@@ -27,7 +27,13 @@ Full documentation: **https://sarathsp06.github.io/testhooks/**
 
 Pick one. Each is a single command.
 
-**Docker, no database** (local testing; data is kept in memory):
+**Binary, no database** (quickest: nothing else to install; Linux, macOS, Windows; checks the SHA-256):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/sarathsp06/testhooks/main/install.sh | sh && DATABASE_URL=memory testhooks
+```
+
+**Docker, no database:**
 
 ```bash
 docker run -d --name testhooks -p 8080:8080 -e DATABASE_URL=memory ghcr.io/sarathsp06/testhooks
@@ -45,12 +51,6 @@ docker run -d --name testhooks -p 8080:8080 -v testhooks-data:/data -e DATABASE_
 curl -fsSL https://raw.githubusercontent.com/sarathsp06/testhooks/main/deploy/docker-compose.yml | docker compose -p testhooks -f - up -d
 ```
 
-**Binary** (Linux, macOS, Windows; checks the SHA-256), then run it with no database:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/sarathsp06/testhooks/main/install.sh | sh && DATABASE_URL=memory testhooks
-```
-
 Then open **http://localhost:8080**, create an endpoint, and send it a request:
 
 ```bash
@@ -61,8 +61,9 @@ Notes:
 
 - Compose options go in front of the command, e.g. `TESTHOOKS_PORT=9000 AUTH_TOKEN=change-me curl -fsSL … | docker compose -p testhooks -f - up -d`.
 - Stop Compose with `docker compose -p testhooks down` (add `-v` to delete the data); stop the container with `docker rm -f testhooks`.
-- The installer uses `/usr/local/bin` if writable, else `~/.local/bin`; pin a release with `TESTHOOKS_VERSION=v1.1.0`.
-- In-memory mode is for one person testing locally. With `SNAPSHOT_PATH` it saves every 30 s and on shutdown.
+- The installer uses `/usr/local/bin` if writable, else `~/.local/bin` (run `~/.local/bin/testhooks` if that isn't on your `PATH`).
+- Pin a release with `TESTHOOKS_VERSION=v1.1.0` in front of `sh`.
+- In-memory mode is for one person testing locally. Add `SNAPSHOT_PATH=./testhooks.snapshot` to keep data across restarts (saved every 30 s and on shutdown).
 - With PostgreSQL, migrations run on startup and the server waits up to 60 s for the database.
 
 ### From source
