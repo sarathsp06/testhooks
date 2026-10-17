@@ -46,7 +46,7 @@ const arrow = '<path d="M1 6h37M33 1l5 5-5 5"></path>';
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<title>Testhooks: self-hosted webhook inspector</title>
-		<meta name="description" content="Capture, inspect and forward webhooks on your own machine. A self-hosted webhook.site replacement that also replaces ngrok." />
+		<meta name="description" content="Capture, inspect and forward webhooks on your own server. A self-hosted webhook.site replacement whose browser mode also replaces ngrok." />
 		<link rel="icon" href={`${base}favicon.svg`} type="image/svg+xml" />
 		<link rel="preconnect" href="https://fonts.googleapis.com" />
 		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -72,7 +72,7 @@ const arrow = '<path d="M1 6h37M33 1l5 5-5 5"></path>';
 				</a>
 				<div class="nav-links">
 					<a href="#install" class="nav-link section">Install</a>
-					<a href="#why" class="nav-link section">Why</a>
+					<a href="#overview" class="nav-link section">Overview</a>
 					<a href="#features" class="nav-link section">Features</a>
 					<a href="#standard" class="nav-link section">Signatures</a>
 					<a href="#modes" class="nav-link section">Modes</a>
@@ -95,8 +95,8 @@ const arrow = '<path d="M1 6h37M33 1l5 5-5 5"></path>';
 						Standard Webhooks compatible
 					</a>
 				</div>
-				<h1>Capture, inspect and forward webhooks. On your own machine.</h1>
-				<p class="lede">A self-hosted webhook.site replacement. In browser mode it also replaces ngrok, with nothing to install. Runs on PostgreSQL, or entirely in memory with no database at all.</p>
+				<h1>Capture, inspect and forward webhooks. On your own server.</h1>
+				<p class="lede">A self-hosted webhook.site replacement: deploy it where webhook senders can reach it. Browser mode also replaces ngrok, forwarding each webhook from your tab to code on your machine, with nothing to install locally. Runs on PostgreSQL, or in memory for local testing.</p>
 
 				<div id="install" class="install">
 					<div class="install-head">
@@ -119,30 +119,31 @@ const arrow = '<path d="M1 6h37M33 1l5 5-5 5"></path>';
 				</div>
 			</section>
 
-			<!-- Why use it -->
-			<section id="why" class="wrap why">
+			<!-- Overview -->
+			<section id="overview" class="wrap why">
 				<div class="section-head narrow">
-					<span class="eyebrow mono">Why use it</span>
-					<h2>Webhooks need a public URL. Your code runs on localhost.</h2>
-					<p class="sub">Testhooks gives the sender a URL it can reach, then gets each request to wherever your code actually runs.</p>
+					<span class="eyebrow mono">webhook.site, self-hosted</span>
+					<h2>Everything webhook.site does. Plus browser mode.</h2>
+					<p class="sub">Capture and inspect any request on your own server, like webhook.site. Browser mode adds what it can't do: forward each webhook from your browser tab to code running on your own machine. Either way, deploy Testhooks somewhere the webhook sender can reach it.</p>
 				</div>
 				<div class="cards">
+					<div class="card">
+						<span class="mono tag">server mode · like webhook.site</span>
+						<h3>See exactly what a sender sends</h3>
+						<p>Capture every request with headers and body, verify signatures, mock the response, and forward it on, even with no browser open.</p>
+					</div>
 					<div class="card card-strong">
-						<span class="mono tag accent">browser mode · the main use</span>
-						<h3>Test webhooks against localhost</h3>
-						<p>Your receiver only runs on your laptop. Point the provider at Testhooks, set forward to localhost, and trigger real events, with no tunnel to install.</p>
+						<span class="mono tag accent">browser mode · the difference</span>
+						<h3>Use it instead of ngrok</h3>
+						<p>Point the provider at your deployed Testhooks, open the endpoint in your browser and set forward to localhost. Each webhook shows up in your tab with its full payload, and your tab delivers it to your local app. Nothing to install on your machine.</p>
 					</div>
 					<div class="card">
 						<span class="mono tag">browser mode</span>
 						<h3>Reach what only your machine can see</h3>
-						<p>Forwarding runs in your tab, so it reaches Docker containers and anything else your machine can reach but the internet can't.</p>
-					</div>
-					<div class="card">
-						<span class="mono tag">server mode</span>
-						<h3>See exactly what a sender sends</h3>
-						<p>Capture every request with headers and body, verify signatures, mock the response, and forward it on, even with no browser open.</p>
+						<p>Forwarding runs in your tab, not on the server, so it reaches localhost, Docker containers and anything else your machine can reach but the internet can't.</p>
 					</div>
 				</div>
+				<p class="why-note">The one-liners above run Testhooks on your machine, which is enough to try it with curl. Real providers can only deliver to a URL they can reach, so for those <a href={`${base}deployment/production/`}>deploy it on a server or PaaS with a public URL</a>.</p>
 			</section>
 
 			<!-- Modes -->
@@ -203,8 +204,8 @@ const arrow = '<path d="M1 6h37M33 1l5 5-5 5"></path>';
 						<div class="example">
 							<h4>Example: your receiver only runs on localhost</h4>
 							<ol>
-								<li><span class="num mono">1</span><span>Create an endpoint and paste its <span class="mono sm ink">/h/:slug</span> URL into the provider's webhook settings.</span></li>
-								<li><span class="num mono">2</span><span>Switch the endpoint to browser mode and set forward to <span class="mono sm ink">http://localhost:[port]/[path]</span>.</span></li>
+								<li><span class="num mono">1</span><span>Deploy Testhooks where the provider can reach it, create an endpoint, and paste its <span class="mono sm ink">/h/:slug</span> URL into the provider's webhook settings.</span></li>
+								<li><span class="num mono">2</span><span>Open the endpoint in your browser, switch it to browser mode and set forward to <span class="mono sm ink">http://localhost:[port]/[path]</span>.</span></li>
 								<li><span class="num mono">3</span><span>Trigger the event. Your tab receives it and delivers it to your local server, and you see both sides.</span></li>
 							</ol>
 						</div>
@@ -464,11 +465,12 @@ const arrow = '<path d="M1 6h37M33 1l5 5-5 5"></path>';
 			.narrow { max-width: 720px; }
 			.eyebrow { font-size: 12px; font-weight: 500; letter-spacing: 0.04em; text-transform: uppercase; color: var(--accent); }
 
-			/* Why */
+			/* Overview */
 			.why { padding-top: 48px; padding-bottom: 24px; }
 			.cards { margin-top: 36px; display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
 			.card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 28px; display: flex; flex-direction: column; gap: 10px; }
 			.card-strong { border-color: var(--ink); }
+			.why-note { margin-top: 20px; font-size: 15px; line-height: 1.55; color: var(--text); max-width: 760px; }
 			.card h3 { font-size: 18px; font-weight: 600; }
 			.card p { font-size: 15px; line-height: 1.55; color: var(--text); }
 			.tag { font-size: 12px; color: var(--faint); }
