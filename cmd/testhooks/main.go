@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/fs"
 	"net/http"
@@ -282,6 +283,9 @@ func connectWithRetry(ctx context.Context, databaseURL string, maxWait time.Dura
 		cancel()
 		if err == nil {
 			return pool, nil
+		}
+		if errors.Is(err, db.ErrInvalidURL) {
+			return nil, err // a malformed URL won't fix itself
 		}
 		if ctx.Err() != nil || time.Now().Add(delay).After(deadline) {
 			return nil, err

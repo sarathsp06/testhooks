@@ -178,3 +178,23 @@ func TestParseEndpointConfig_InvalidJSON(t *testing.T) {
 		t.Errorf("expected zero-value config for invalid JSON")
 	}
 }
+
+func TestLoad_TrimsDatabaseURL(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://u:p@db:5432/x?sslmode=require\n")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.DatabaseURL != "postgres://u:p@db:5432/x?sslmode=require" {
+		t.Errorf("DatabaseURL = %q, want trailing newline trimmed", cfg.DatabaseURL)
+	}
+
+	t.Setenv("DATABASE_URL", "  \n")
+	cfg, err = Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.DatabaseURL != "memory" {
+		t.Errorf("blank DATABASE_URL = %q, want memory", cfg.DatabaseURL)
+	}
+}

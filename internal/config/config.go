@@ -146,6 +146,14 @@ func Load() (*Config, error) {
 		cfg.Listen = fmt.Sprintf(":%d", cfg.Port)
 	}
 
+	// Secrets pasted into hosting dashboards often carry a trailing newline,
+	// which makes the URL unparseable. Trim it; empty falls back to memory.
+	cfg.DatabaseURL = strings.TrimSpace(cfg.DatabaseURL)
+	if cfg.DatabaseURL == "" {
+		cfg.DatabaseURL = "memory"
+	}
+	cfg.SnapshotPath = strings.TrimSpace(cfg.SnapshotPath)
+
 	// L-04: Validate configuration bounds.
 	if cfg.MaxBodySize < 1024 || cfg.MaxBodySize > 10*1024*1024 {
 		return nil, fmt.Errorf("MAX_BODY_SIZE must be between 1KB and 10MB, got %d", cfg.MaxBodySize)

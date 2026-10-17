@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"embed"
+	"errors"
 	"fmt"
 	"time"
 
@@ -21,11 +22,14 @@ type Pool struct {
 	*pgxpool.Pool
 }
 
+// ErrInvalidURL marks a DATABASE_URL that can't be parsed. Retrying won't help.
+var ErrInvalidURL = errors.New("invalid DATABASE_URL")
+
 // Connect creates a new connection pool and runs migrations.
 func Connect(ctx context.Context, databaseURL string) (*Pool, error) {
 	cfg, err := pgxpool.ParseConfig(databaseURL)
 	if err != nil {
-		return nil, fmt.Errorf("parse db config: %w", err)
+		return nil, fmt.Errorf("%w: %w", ErrInvalidURL, err)
 	}
 	cfg.MaxConns = 20
 	cfg.MinConns = 2
