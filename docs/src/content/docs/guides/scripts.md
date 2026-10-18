@@ -14,6 +14,16 @@ Scripts are JavaScript. They run sandboxed in WebAssembly (QuickJS), on the serv
 - A script has 5 seconds to finish.
 - On the server, memory is capped at 64 MB and the result at 1 MB.
 
+## Trying a script before you save it
+
+The top of the Transform tab is the **test input**: the request your scripts run against when you test them.
+
+- **Captured request** uses the request selected in the list, or the latest one.
+- **Sample payload** lets you write or paste a request: method, path, headers (one `Name: value` per line) and body. Start from a preset such as a JSON event, a ping or a form post, or click **Edit a copy** on a captured request to change it. The sample is remembered per endpoint in your browser.
+- **What your script gets as req** shows the exact `req` the input produces, including `req.json`.
+
+**Dry run** runs your unsaved transform and reply on the test input, in the server's order. It shows what would be forwarded, with a line diff of the body and a list of header, method and path changes, and the reply the sender would get. Nothing is sent: the forward target isn't called, and with sync forwarding `req.forward_response` is a stand-in `200 {"ok":true}`.
+
 ## What a script gets
 
 Both kinds of script receive the same `req`:
@@ -52,7 +62,7 @@ function transform(req) {
 
 ### Skipping a request
 
-Return `null` to capture a request without forwarding it:
+Return `null` to capture a request without forwarding it. The sender gets the default reply; the custom reply doesn't run for a skipped request.
 
 ```js
 function transform(req) {

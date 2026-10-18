@@ -16,6 +16,8 @@
 	import RequestDetail from '$lib/components/RequestDetail.svelte';
 	import ForwardConfig from '$lib/components/ForwardConfig.svelte';
 	import TransformConfig from '$lib/components/TransformConfig.svelte';
+	import TestInput from '$lib/components/TestInput.svelte';
+	import DryRun from '$lib/components/DryRun.svelte';
 	import type { CapturedRequest, CapturedResponse, Endpoint, ResponseNeededData, ResponseInfoData, ForwardResponse, ForwardResultData } from '$lib/types';
 	import { Copy, Wifi, WifiOff, Trash2, Server, Monitor, Settings, Code2, Download, Inbox, Check, XCircle, AlertTriangle, MessageSquare, BookOpen, AlertCircle, Loader2, Play } from 'lucide-svelte';
 	import Tooltip from '$lib/components/Tooltip.svelte';
@@ -42,6 +44,8 @@
 	// Set when the saved script is Lua or Jsonnet, which no longer run.
 	let transformLegacy = $state<string | null>(null);
 	let scriptSaved = $state(false);
+	// The request both scripts are tested against: a captured one or a sample.
+	let testInput = $state<CapturedRequest | null>(null);
 
 	// Custom response state (synced with endpoint config)
 	let customResponseEnabled = $state(false);
@@ -245,15 +249,24 @@
 								});
 							}
 
-							// Step 3: Run handler with (optionally) forward response
-							const result = await runResponseHandler(cr.script, handlerReq, 'javascript', fwdResponse);
-							const responseData = {
-								request_id: data.request_id,
-								status: result.response?.status || 200,
-								headers: result.response?.headers || {},
-								body: result.response?.body || '',
-								content_type: result.response?.content_type || ''
-							};
+							// Step 3: Run handler with (optionally) forward response. Like the
+							// server, a skipped request gets the default reply, not the handler's.
+							const result = dropped ? null : await runResponseHandler(cr.script, handlerReq, 'javascript', fwdResponse);
+							const responseData = result
+								? {
+										request_id: data.request_id,
+										status: result.response?.status || 200,
+										headers: result.response?.headers || {},
+										body: result.response?.body || '',
+										content_type: result.response?.content_type || ''
+									}
+								: {
+										request_id: data.request_id,
+										status: 202,
+										headers: {},
+										body: JSON.stringify({ status: 'ok', id: data.request_id }),
+										content_type: 'application/json'
+									};
 							wsClient.send({
 								type: 'response_result',
 								data: responseData
@@ -265,7 +278,7 @@
 								headers: responseData.headers,
 								body: responseData.body,
 								content_type: responseData.content_type,
-								source: 'handler'
+								source: result ? 'handler' : 'default'
 							});
 						} catch (err) {
 							console.warn('Custom response handler failed:', err);
@@ -375,7 +388,7 @@
 	}
 
 	async function handleResponseTest() {
-		const req = requestsStore.selected;
+		const req = testInput;
 		if (!req) return;
 		if (!isWasmReady()) {
 			await initWasm();
@@ -701,6 +714,13 @@
 						{/if}
 					{:else if rightTab === 'transform'}
 						<div class="p-4 max-w-2xl">
+							<div class="mb-6">
+								<TestInput
+									slug={ep.slug}
+									captured={requestsStore.selected ?? requestsStore.items[0] ?? null}
+									bind:request={testInput}
+								/>
+							</div>
 							<div class="mb-4 flex items-start justify-between">
 								<div>
 									<h3 class="text-sm font-semibold mb-1 flex items-center">
@@ -748,7 +768,7 @@
 								<TransformConfig
 									script={transformScript}
 									onScriptChange={handleTransformScriptChange}
-									testRequest={requestsStore.selected}
+									testRequest={testInput}
 								/>
 							{:else}
 								<div class="text-xs text-[var(--text-muted)] italic bg-[var(--bg)] border border-[var(--border)] rounded-lg px-3 py-4 text-center">
@@ -830,9 +850,9 @@
 										</button>
 										<button
 											onclick={handleResponseTest}
-											disabled={responseTesting || !requestsStore.selected || !customResponseScript}
+											disabled={responseTesting || !testInput || !customResponseScript}
 											class="text-[11px] px-2.5 py-1 rounded border border-[var(--border)] hover:bg-[var(--bg-hover)] text-[var(--text-muted)] hover:text-[var(--text)] transition-colors flex items-center gap-1 disabled:opacity-50"
-											title={!requestsStore.selected ? 'Select a request to test against' : 'Run handler on selected request'}
+											title={!testInput ? 'Choose a test input above' : 'Run the handler on the test input'}
 										>
 											{#if responseTesting}
 												<Loader2 class="w-3 h-3 animate-spin" />
@@ -851,18 +871,13 @@
 										<div class="bg-[var(--bg)] border border-[var(--border)] rounded">
 											<div class="px-3 py-2 text-xs font-medium text-[var(--text-muted)] border-b border-[var(--border)] flex items-center gap-1.5">
 												<BookOpen class="w-3 h-3" />
-												{#if requestsStore.selected}
-													<span>Request Object — <span class="text-[var(--accent)]">{requestsStore.selected.method} {requestsStore.selected.path}</span></span>
+												{#if testInput}
+													<span>Request Object — <span class="text-[var(--accent)]">{testInput.method} {testInput.path}</span></span>
 												{:else}
 													<span>What your script gets</span>
 												{/if}
 											</div>
-											<pre class="px-3 py-2 text-[11px] font-mono text-[var(--text-muted)] overflow-x-auto max-h-48 leading-relaxed whitespace-pre">{formatRequestReference(requestsStore.selected)}</pre>
-											{#if !requestsStore.selected}
-												<div class="px-3 py-1.5 text-[10px] text-[var(--text-muted)] italic border-t border-[var(--border)]">
-													Select a request to see its actual data here.
-												</div>
-											{/if}
+											<pre class="px-3 py-2 text-[11px] font-mono text-[var(--text-muted)] overflow-x-auto max-h-48 leading-relaxed whitespace-pre">{formatRequestReference(testInput)}</pre>
 										</div>
 									{/if}
 
@@ -904,15 +919,20 @@
 								</div>
 							{/if}
 
-							<!-- Footer: Clear + Save (both Transform and Custom Response) -->
-							<div class="mt-4 flex items-center justify-between">
-								<div class="flex items-center gap-2">
-									{#if !transformEnabled && !customResponseEnabled && !requestsStore.selected}
-										<span class="text-xs text-[var(--text-muted)]"></span>
-									{:else if (transformEnabled || customResponseEnabled) && !requestsStore.selected}
-										<span class="text-xs text-[var(--text-muted)]">Select a request from the left panel to test your scripts.</span>
-									{/if}
+							{#if transformEnabled || customResponseEnabled}
+								<div class="mt-6">
+									<DryRun
+										request={testInput}
+										transformScript={transformEnabled && !transformLegacy ? transformScript || DEFAULT_SCRIPTS.javascript : ''}
+										handlerScript={customResponseEnabled && !customResponseLegacy ? customResponseScript || DEFAULT_RESPONSE_SCRIPTS.javascript : ''}
+										forwardUrl={ep.config?.forward_url}
+										forwardMode={ep.config?.forward_mode}
+									/>
 								</div>
+							{/if}
+
+							<!-- Footer: Clear + Save (both Transform and Custom Response) -->
+							<div class="mt-4 flex items-center justify-end">
 								<div class="flex items-center gap-2">
 									{#if (transformEnabled && transformScript) || (customResponseEnabled && customResponseScript)}
 										<button
