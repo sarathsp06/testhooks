@@ -26,3 +26,4 @@ Thumbs.db
 .env
 .env.local
 .serena/
+/.vercel/
