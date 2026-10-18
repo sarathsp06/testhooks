@@ -24,6 +24,8 @@ COPY . .
 COPY --from=web /app/web/dist ./web/dist
 RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH \
     go build -trimpath -ldflags="-s -w -X main.version=$VERSION" -o /testhooks ./cmd/testhooks
+# scratch has no /tmp; the script runner makes its empty sandbox directory there.
+RUN mkdir -p /rootfs/tmp && chmod 1777 /rootfs/tmp
 
 # ---- Stage 3: Runtime (scratch — no OS, just the binary) ----
 FROM scratch
@@ -36,5 +38,6 @@ LABEL org.opencontainers.image.title="testhooks" \
 COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=build /usr/share/zoneinfo /usr/share/zoneinfo
 COPY --from=build /testhooks /testhooks
+COPY --from=build /rootfs/ /
 EXPOSE 8080
 ENTRYPOINT ["/testhooks"]

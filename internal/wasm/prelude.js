@@ -18,6 +18,19 @@
 // A transform returns the request to forward (changes to req.json are written
 // back to the body), or null to skip forwarding it.
 
+// Scripts get plain JavaScript only. qjs adds host modules (std, os) to the
+// global scope; remove them before any user code runs. The runner also gives
+// the runtime an empty, read-only filesystem, so this isn't the only barrier.
+(function () {
+  var names = ['std', 'os', 'bjson', 'scriptArgs', 'print'];
+  for (var i = 0; i < names.length; i++) {
+    try { delete globalThis[names[i]]; } catch (e) {}
+    if (typeof globalThis[names[i]] !== 'undefined') {
+      try { Object.defineProperty(globalThis, names[i], { value: undefined, writable: false, configurable: false }); } catch (e) {}
+    }
+  }
+})();
+
 function __th_headerKeys(headers, name) {
   var want = String(name).toLowerCase();
   var keys = [];

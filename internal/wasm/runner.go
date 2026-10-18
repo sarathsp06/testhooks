@@ -11,6 +11,8 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
+	"io"
+	"os"
 	"sync/atomic"
 	"time"
 
@@ -75,6 +77,8 @@ type Runner struct {
 	// slots bounds concurrent runtimes so a burst of requests can't allocate
 	// PoolSize×MemoryLimit without limit and OOM the process.
 	slots chan struct{}
+	// sandboxDir is the empty directory scripts see as their filesystem.
+	sandboxDir string
 }
 
 // Config for the WASM runner.
@@ -104,10 +108,31 @@ func DefaultConfig() Config {
 func New(_ context.Context, cfg Config, log zerolog.Logger) (*Runner, error) {
 	l := log.With().Str("component", "wasm").Logger()
 
+	// qjs mounts Option.CWD into the sandbox read-write, and defaults it to the
+	// process's working directory, so scripts could read and write the server's
+	// files (.env, snapshots) through qjs's std and os modules. Give it an
+	// empty, read-only directory instead. The prelude also removes std and os.
+	sandboxDir, err := os.MkdirTemp("", "testhooks-js-")
+	if err != nil {
+		return nil, fmt.Errorf("create script sandbox dir: %w", err)
+	}
+	if err := os.Chmod(sandboxDir, 0o555); err != nil {
+		return nil, fmt.Errorf("lock script sandbox dir: %w", err)
+	}
+
+	wasmBytes, err := cappedQJSWasm(cfg.MemoryLimit)
+	if err != nil {
+		return nil, fmt.Errorf("cap script memory: %w", err)
+	}
+
 	option := qjs.Option{
+		CWD:              sandboxDir,
+		QuickJSWasmBytes: wasmBytes,
 		MemoryLimit:      cfg.MemoryLimit,
 		MaxStackSize:     cfg.MaxStackSize,
 		MaxExecutionTime: int(cfg.Timeout.Milliseconds()),
+		Stdout:           io.Discard,
+		Stderr:           io.Discard,
 	}
 
 	poolSize := cfg.PoolSize
@@ -121,6 +146,7 @@ func New(_ context.Context, cfg Config, log zerolog.Logger) (*Runner, error) {
 		log:           l,
 		timeout:       cfg.Timeout,
 		maxOutputSize: 1024 * 1024, // M-07: 1MB default
+		sandboxDir:    sandboxDir,
 	}
 	r.ready.Store(true)
 
@@ -136,7 +162,10 @@ func New(_ context.Context, cfg Config, log zerolog.Logger) (*Runner, error) {
 // Close shuts down the runner. No pool to drain since runtimes are created
 // fresh per execution.
 func (r *Runner) Close(_ context.Context) error {
-	r.ready.Store(false)
+	if r.ready.Swap(false) && r.sandboxDir != "" {
+		_ = os.Chmod(r.sandboxDir, 0o700)
+		_ = os.RemoveAll(r.sandboxDir)
+	}
 	return nil
 }
 
