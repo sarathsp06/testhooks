@@ -12,6 +12,7 @@
 	import { forwardRequest, forwardRequestSync, forwardRequestWithResponse } from '$lib/forward';
 	import { saveRequest as saveToIDB } from '$lib/idb';
 	import RequestList from '$lib/components/RequestList.svelte';
+	import EndpointWaiting from '$lib/components/EndpointWaiting.svelte';
 	import RequestDetail from '$lib/components/RequestDetail.svelte';
 	import ForwardConfig from '$lib/components/ForwardConfig.svelte';
 	import TransformConfig from '$lib/components/TransformConfig.svelte';
@@ -512,7 +513,7 @@
 	{@const ep = endpointStore.current}
 	<div class="flex flex-col h-[calc(100vh-57px)]">
 		<!-- Top bar -->
-		<div class="border-b border-[var(--border)] px-4 py-2.5 flex items-center gap-3 flex-shrink-0">
+		<div class="border-b border-[var(--border)] px-4 py-2.5 flex flex-wrap items-center gap-3 flex-shrink-0">
 			<!-- Left: endpoint info -->
 			<div class="flex items-center gap-2 min-w-0">
 				<a href="/" class="text-xs text-[var(--text-muted)] hover:text-[var(--text)] transition-colors">&larr;</a>
@@ -611,6 +612,9 @@
 		{/if}
 
 		<!-- Main content area -->
+		{#if requestsStore.items.length === 0 && rightTab === 'requests'}
+			<div class="flex-1 overflow-y-auto"><EndpointWaiting endpoint={ep} onOpenTab={(tab) => (rightTab = tab)} /></div>
+		{:else}
 		<div class="flex flex-1 overflow-hidden">
 			<!-- Left sidebar: request list -->
 			<div class="w-80 border-r border-[var(--border)] overflow-y-auto flex-shrink-0 flex flex-col">
@@ -943,5 +947,6 @@
 				</div>
 			</div>
 		</div>
+		{/if}
 	</div>
 {/if}

@@ -1,43 +1,106 @@
 @import 'tailwindcss';
 
+/* mode-watcher toggles a .dark class on <html>. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/*
+ * Design tokens. The palette matches the docs site (Geist, warm off-white,
+ * green accent). The older names (--bg, --text, --accent, ...) are kept and
+ * mapped onto the same palette so screens that use them stay coherent.
+ */
 :root {
-	--bg: #ffffff;
-	--bg-card: #f9fafb;
-	--bg-hover: #f3f4f6;
-	--border: #e5e7eb;
-	--text: #111827;
-	--text-muted: #6b7280;
-	--accent: #3b82f6;
-	--accent-hover: #2563eb;
-	--green: #16a34a;
-	--red: #dc2626;
-	--yellow: #ca8a04;
-	--orange: #ea580c;
-	--purple: #9333ea;
+	--page: #f7f7f4;
+	--surface: #ffffff;
+	--ink: #111613;
+	--body: #4a5550;
+	--soft: #3b4540;
+	--faint: #55605a;
+	--line: #e2e4df;
+	--line-strong: #d5d8d2;
+	--line-dashed: #c9cdc6;
+	--chip: #eceee9;
+	--code: #0e1210;
+	--code-ink: #e8ede9;
+	--code-green: #5bd08f;
+	--code-line: #222a26;
+	--code-button: #161c19;
+	--danger: #b42318;
+	/* Text on an --ink background (primary buttons, step numbers). */
+	--on-ink: #ffffff;
+
+	--bg: var(--page);
+	--bg-card: var(--surface);
+	--bg-hover: var(--chip);
+	--border: var(--line);
+	--text: var(--ink);
+	--text-muted: var(--faint);
+	--accent: #1a7f4b;
+	--accent-hover: #146b3e;
+	--green: #1a7f4b;
+	--red: var(--danger);
+	--yellow: #a15c07;
+	--orange: #c4510f;
+	--purple: #7a3fc4;
 }
 
 .dark {
-	--bg: #0a0a0a;
-	--bg-card: #141414;
-	--bg-hover: #1a1a1a;
-	--border: #262626;
-	--text: #e5e5e5;
-	--text-muted: #737373;
-	--accent: #3b82f6;
-	--accent-hover: #2563eb;
-	--green: #22c55e;
-	--red: #ef4444;
+	--page: #0b0f0d;
+	--surface: #121815;
+	--ink: #e8ede9;
+	--body: #a7b1ab;
+	--soft: #b9c2bd;
+	--faint: #8a958f;
+	--line: #232b27;
+	--line-strong: #2f3833;
+	--line-dashed: #36403a;
+	--chip: #1b231f;
+	--code: #070a09;
+	--code-ink: #e8ede9;
+	--code-green: #5bd08f;
+	--code-line: #232b27;
+	--code-button: #121815;
+	--danger: #f97066;
+	--on-ink: #0b0f0d;
+
+	--accent: #5bd08f;
+	--accent-hover: #7adca4;
+	--green: #5bd08f;
 	--yellow: #eab308;
 	--orange: #f97316;
 	--purple: #a855f7;
 }
 
+@theme inline {
+	--font-sans: 'Geist', ui-sans-serif, system-ui, sans-serif;
+	--font-mono: 'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+	--color-page: var(--page);
+	--color-surface: var(--surface);
+	--color-ink: var(--ink);
+	--color-body: var(--body);
+	--color-soft: var(--soft);
+	--color-faint: var(--faint);
+	--color-line: var(--line);
+	--color-line-strong: var(--line-strong);
+	--color-line-dashed: var(--line-dashed);
+	--color-chip: var(--chip);
+	--color-code: var(--code);
+	--color-code-ink: var(--code-ink);
+	--color-code-green: var(--code-green);
+	--color-code-line: var(--code-line);
+	--color-code-button: var(--code-button);
+	--color-danger: var(--danger);
+	--color-on-ink: var(--on-ink);
+	--color-accent: var(--accent);
+}
+
 body {
 	background-color: var(--bg);
 	color: var(--text);
-	font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
+	font-family: var(--font-sans);
+	-webkit-font-smoothing: antialiased;
 }
 
 .font-fira {
-	font-family: 'Fira Code', ui-monospace, monospace;
+	font-family: var(--font-mono);
 }
