@@ -146,17 +146,15 @@ func TestTransform_ReturnsNull(t *testing.T) {
 
 	input := TransformInput{Method: "GET", Path: "/", Headers: map[string][]string{}}
 
-	// transform returns null → JSON.stringify(null) = "null" string →
-	// unmarshals into zero-value TransformOutput (no error).
+	// Returning null means "don't forward this request".
 	script := `function transform(req) { return null; }`
 
 	out, err := r.Transform(context.Background(), script, input)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	// All fields should be zero/empty since "null" unmarshals to empty struct.
-	if out.Body != "" || out.Method != "" || out.Drop {
-		t.Errorf("expected zero-value output, got %+v", out)
+	if !out.Drop {
+		t.Errorf("expected Drop, got %+v", out)
 	}
 }
 

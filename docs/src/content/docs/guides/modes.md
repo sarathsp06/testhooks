@@ -8,7 +8,7 @@ Every endpoint runs in one of two modes. You can switch at any time from the end
 | | Server mode | Browser mode |
 |---|---|---|
 | Requests stored | In the database (PostgreSQL or memory) | Not stored (optional *Persist requests*) |
-| Transforms run | On the server (JavaScript) | In your browser (JavaScript, Lua, Jsonnet) |
+| Transforms run | On the server (JavaScript) | In your browser (JavaScript) |
 | Forwarding runs | On the server, public URLs only | In your browser, any URL including `localhost` |
 | Custom responses | Scripted on the server | Scripted in your browser while a tab is open |
 | Works with no tab open | Yes | Captures are relayed only to open tabs |

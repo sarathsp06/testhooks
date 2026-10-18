@@ -113,10 +113,10 @@ Returns `{"requests": [...], "total": 123, "limit": 50, "offset": 0}`, newest fi
 | `forward_url` | string | [Forward](../../guides/forwarding/) target |
 | `forward_mode` | `async` \| `sync` | Defaults to `async` |
 | `wasm_script` | string | Server-side JavaScript [transform](../../guides/scripts/) |
-| `transform_language` | `javascript` \| `lua` \| `jsonnet` | Language of the transform (Lua and Jsonnet run in browser mode only) |
+| `transform_language` | `javascript` | Language of the transform. Older `lua` and `jsonnet` scripts are kept but not run |
 | `custom_response.enabled` | bool | Turn the response handler on |
 | `custom_response.script` | string | Response handler script |
-| `custom_response.language` | `javascript` \| `lua` \| `jsonnet` | Language of the handler |
+| `custom_response.language` | `javascript` | Language of the handler. Older `lua` and `jsonnet` scripts are kept but not run |
 | `persist_requests` | bool | Store browser-mode requests in the database too |
 | `signature.secret` | string | HMAC secret for [signature verification](../../guides/signatures/) |
 | `signature.public_key` | string | Hex Ed25519 public key |

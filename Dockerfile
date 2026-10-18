@@ -4,6 +4,8 @@ WORKDIR /app/web
 COPY web/package.json web/package-lock.json* ./
 RUN npm ci
 COPY web/ ./
+# The script prelude is shared with the Go server; wasm.ts imports it.
+COPY internal/wasm/prelude.js /app/internal/wasm/prelude.js
 RUN npm run build
 
 # ---- Stage 2: Build Go binary (cross-compiled for the target platform) ----

@@ -7,7 +7,7 @@
 	import { getEndpointStore } from '$lib/stores/endpoint.svelte';
 	import { getRequestsStore } from '$lib/stores/requests.svelte';
 	import { getWebhookURL, copyToClipboard } from '$lib/utils';
-	import { initWasm, isWasmReady, runTransform, runResponseHandler, validateResponseHandler, SUPPORTED_LANGUAGES, DEFAULT_RESPONSE_SCRIPTS, RESPONSE_HANDLER_EXAMPLES, formatRequestReference, type TransformLanguage } from '$lib/wasm';
+	import { initWasm, isWasmReady, runTransform, runResponseHandler, validateResponseHandler, isLegacyLanguage, DEFAULT_SCRIPTS, DEFAULT_RESPONSE_SCRIPTS, RESPONSE_HANDLER_EXAMPLES, formatRequestReference } from '$lib/wasm';
 	import CodeEditor from '$lib/components/CodeEditor.svelte';
 	import { forwardRequest, forwardRequestSync, forwardRequestWithResponse } from '$lib/forward';
 	import { saveRequest as saveToIDB } from '$lib/idb';
@@ -38,13 +38,14 @@
 	// Transform script state (synced with endpoint config)
 	let transformEnabled = $state(false);
 	let transformScript = $state('');
-	let transformLanguage = $state<TransformLanguage>('javascript');
+	// Set when the saved script is Lua or Jsonnet, which no longer run.
+	let transformLegacy = $state<string | null>(null);
 	let scriptSaved = $state(false);
 
 	// Custom response state (synced with endpoint config)
 	let customResponseEnabled = $state(false);
 	let customResponseScript = $state('');
-	let customResponseLanguage = $state<TransformLanguage>('javascript');
+	let customResponseLegacy = $state<string | null>(null);
 	let showResponseExample = $state(false);
 	let showResponseReqRef = $state(false);
 	let responseValidating = $state(false);
@@ -65,29 +66,22 @@
 			endpointStore.set(ep);
 			endpoint = ep;
 		transformScript = ep.config?.wasm_script ?? '';
-		transformLanguage = (ep.config?.transform_language as TransformLanguage) || 'javascript';
+		transformLegacy = isLegacyLanguage(ep.config?.transform_language) ? (ep.config?.transform_language as string) : null;
 		transformEnabled = !!ep.config?.wasm_script;
 
 			// Init custom response state from endpoint config
 			const cr = ep.config?.custom_response as Record<string, unknown> | undefined;
 			customResponseEnabled = !!cr?.enabled;
 			customResponseScript = (cr?.script as string) ?? '';
-			customResponseLanguage = ((cr?.language as string) || 'javascript') as TransformLanguage;
+			customResponseLegacy = isLegacyLanguage(cr?.language as string) ? (cr?.language as string) : null;
 
 			if (ep.mode === 'server' || ep.config?.persist_requests) {
 				await requestsStore.load(ep.id);
 			}
 
-			if (ep.config?.wasm_script || ep.mode === 'browser') {
-				initWasm(transformLanguage).catch((err) => {
-					console.warn('WASM init failed for transform language:', err);
-				});
-			}
-
-			// Pre-init WASM for custom response handler language if configured.
-			if (cr?.enabled && cr?.script && cr?.language) {
-				initWasm(cr.language as TransformLanguage).catch((err) => {
-					console.warn('WASM init failed for response handler:', err);
+			if (ep.config?.wasm_script || ep.mode === 'browser' || (cr?.enabled && cr?.script)) {
+				initWasm().catch((err) => {
+					console.warn('Script engine failed to load:', err);
 				});
 			}
 
@@ -101,12 +95,18 @@
 
 					// Browser-mode pipeline: Transform → Forward → Store
 					if (ep.mode === 'browser') {
-						// Step 1: Transform
-						if (transformEnabled && transformScript) {
+						// Step 1: Transform (returning null skips forwarding)
+						let dropped = false;
+						if (transformEnabled && transformScript && !transformLegacy) {
 							try {
-								const result = await runTransform(transformScript, req, transformLanguage);
-								if (result.ok && result.data) {
+								await initWasm();
+								const result = await runTransform(transformScript, req);
+								if (result.ok && result.dropped) {
+									dropped = true;
+								} else if (result.ok && result.data) {
 									req = { ...req, ...result.data } as CapturedRequest;
+								} else if (!result.ok) {
+									console.warn('Live transform error:', result.error);
 								}
 							} catch (err) {
 								console.warn('Live transform error:', err);
@@ -114,7 +114,7 @@
 						}
 
 						// Step 2: Forward (if configured)
-						const fwdUrl = ep.config?.forward_url;
+						const fwdUrl = dropped ? undefined : ep.config?.forward_url;
 						if (fwdUrl) {
 							const fwdMode = ep.config?.forward_mode || 'async';
 							if (fwdMode === 'async') {
@@ -187,19 +187,21 @@
 					// Pipeline: Transform → Forward (sync) → Handler → respond
 					const data = msg.data as ResponseNeededData;
 					const cr = ep.config?.custom_response;
-					if (cr?.enabled && cr?.script && wsClient) {
-						const crLang = (cr.language as TransformLanguage) || 'javascript';
+					if (cr?.enabled && cr?.script && !customResponseLegacy && wsClient) {
 						try {
-							await initWasm(crLang);
+							await initWasm();
 
 							let handlerReq = data.request;
 							let fwdResponse: ForwardResponse | null = null;
 
-							// Step 1: Transform (if configured)
-							if (transformEnabled && transformScript) {
+							// Step 1: Transform (if configured; null skips the forward)
+							let dropped = false;
+							if (transformEnabled && transformScript && !transformLegacy) {
 								try {
-									const txResult = await runTransform(transformScript, handlerReq, transformLanguage);
-									if (txResult.ok && txResult.data) {
+									const txResult = await runTransform(transformScript, handlerReq);
+									if (txResult.ok && txResult.dropped) {
+										dropped = true;
+									} else if (txResult.ok && txResult.data) {
 										handlerReq = { ...handlerReq, ...txResult.data } as CapturedRequest;
 									}
 								} catch (err) {
@@ -208,7 +210,7 @@
 							}
 
 							// Step 2: Sync forward (if configured)
-							const fwdUrl = ep.config?.forward_url;
+							const fwdUrl = dropped ? undefined : ep.config?.forward_url;
 							const fwdMode = ep.config?.forward_mode || 'async';
 							if (fwdUrl && fwdMode === 'sync') {
 								try {
@@ -243,7 +245,7 @@
 							}
 
 							// Step 3: Run handler with (optionally) forward response
-							const result = await runResponseHandler(cr.script, handlerReq, crLang, fwdResponse);
+							const result = await runResponseHandler(cr.script, handlerReq, 'javascript', fwdResponse);
 							const responseData = {
 								request_id: data.request_id,
 								status: result.response?.status || 200,
@@ -329,9 +331,19 @@
 		scriptSaved = false;
 	}
 
-	function handleTransformLanguageChange(lang: TransformLanguage) {
-		transformLanguage = lang;
+	// Replace a Lua/Jsonnet script with a JavaScript starting point.
+	function rewriteTransformInJS() {
+		transformLegacy = null;
+		transformScript = DEFAULT_SCRIPTS.javascript;
 		scriptSaved = false;
+	}
+
+	function rewriteResponseInJS() {
+		customResponseLegacy = null;
+		customResponseScript = DEFAULT_RESPONSE_SCRIPTS.javascript;
+		scriptSaved = false;
+		responseValidationResult = null;
+		responseTestResult = null;
 	}
 
 	function toggleCustomResponse() {
@@ -344,25 +356,17 @@
 		scriptSaved = false;
 	}
 
-	function handleResponseLanguageChange(lang: TransformLanguage) {
-		customResponseLanguage = lang;
-		customResponseScript = '';
-		scriptSaved = false;
-		responseValidationResult = null;
-		responseTestResult = null;
-	}
 
 	async function handleResponseValidate() {
-		if (!isWasmReady(customResponseLanguage)) {
-			await initWasm(customResponseLanguage);
+		if (!isWasmReady()) {
+			await initWasm();
 		}
-		if (!isWasmReady(customResponseLanguage)) return;
+		if (!isWasmReady()) return;
 		responseValidating = true;
 		responseValidationResult = null;
 		try {
 			responseValidationResult = await validateResponseHandler(
-				customResponseScript || DEFAULT_RESPONSE_SCRIPTS[customResponseLanguage],
-				customResponseLanguage
+				customResponseScript || DEFAULT_RESPONSE_SCRIPTS.javascript
 			);
 		} finally {
 			responseValidating = false;
@@ -372,17 +376,16 @@
 	async function handleResponseTest() {
 		const req = requestsStore.selected;
 		if (!req) return;
-		if (!isWasmReady(customResponseLanguage)) {
-			await initWasm(customResponseLanguage);
+		if (!isWasmReady()) {
+			await initWasm();
 		}
-		if (!isWasmReady(customResponseLanguage)) return;
+		if (!isWasmReady()) return;
 		responseTesting = true;
 		responseTestResult = null;
 		try {
 			responseTestResult = await runResponseHandler(
-				customResponseScript || DEFAULT_RESPONSE_SCRIPTS[customResponseLanguage],
-				req,
-				customResponseLanguage
+				customResponseScript || DEFAULT_RESPONSE_SCRIPTS.javascript,
+				req
 			);
 		} finally {
 			responseTesting = false;
@@ -396,13 +399,15 @@
 		const ep = endpointStore.current;
 		if (!ep) return;
 		const scriptToSave = transformEnabled ? transformScript : '';
-		const langToSave = transformEnabled ? transformLanguage : undefined;
+		// A legacy script keeps its language so it stays skipped (and shown as legacy).
+		const langToSave = transformEnabled ? (transformLegacy ?? 'javascript') : undefined;
+		const responseLang = customResponseLegacy ?? 'javascript';
 
 		// Build custom response config
 		const customResponseConfig = customResponseEnabled
-			? { enabled: true, script: customResponseScript, language: customResponseLanguage }
+			? { enabled: true, script: customResponseScript, language: responseLang }
 			: customResponseScript
-				? { enabled: false, script: customResponseScript, language: customResponseLanguage }
+				? { enabled: false, script: customResponseScript, language: responseLang }
 				: undefined;
 
 		endpointStore.update({
@@ -420,7 +425,9 @@
 	function clearTransformScript() {
 		transformScript = '';
 		transformEnabled = false;
+		transformLegacy = null;
 		customResponseScript = '';
+		customResponseLegacy = null;
 		customResponseEnabled = false;
 		scriptSaved = false;
 	}
@@ -716,12 +723,27 @@
 								</label>
 							</div>
 
-							{#if transformEnabled}
+							{#snippet legacyNotice(lang: string, script: string, what: string, onRewrite: () => void)}
+								<div class="flex flex-col gap-2">
+									<div class="flex items-start gap-2 text-xs text-[var(--yellow)] bg-yellow-500/5 border border-yellow-500/20 rounded px-3 py-2">
+										<AlertCircle class="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+										<div class="flex-1">
+											<p>This {what} is written in {lang === 'lua' ? 'Lua' : lang === 'jsonnet' ? 'Jsonnet' : lang}. testhooks now runs JavaScript only, so it's skipped until you rewrite it.</p>
+											<button onclick={onRewrite} class="mt-2 text-[11px] px-2.5 py-1 rounded border border-[var(--border)] bg-[var(--bg-card)] text-[var(--text)] hover:bg-[var(--bg-hover)] transition-colors">
+												Start a JavaScript version
+											</button>
+										</div>
+									</div>
+									<pre class="text-[11px] font-mono text-[var(--text-muted)] bg-[var(--bg)] border border-[var(--border)] rounded px-3 py-2 overflow-x-auto max-h-64 whitespace-pre" aria-label="Old {what} (read-only)">{script}</pre>
+								</div>
+							{/snippet}
+
+							{#if transformEnabled && transformLegacy}
+								{@render legacyNotice(transformLegacy, transformScript, 'transform', rewriteTransformInJS)}
+							{:else if transformEnabled}
 								<TransformConfig
 									script={transformScript}
-									language={transformLanguage}
 									onScriptChange={handleTransformScriptChange}
-									onLanguageChange={handleTransformLanguageChange}
 									testRequest={requestsStore.selected}
 								/>
 							{:else}
@@ -744,7 +766,7 @@
 									<p class="text-xs text-[var(--text-muted)]">
 										Write a script that receives the request and returns a custom response ({@html '<code class="text-[10px]">{ status, headers, body }</code>'}).
 										{#if ep.mode === 'server'}
-											Runs server-side on every inbound request via Wazero (JavaScript only).
+											Runs server-side on every inbound request.
 										{:else}
 											Runs in-browser via WASM when this tab is open.
 										{/if}
@@ -762,26 +784,15 @@
 								</label>
 							</div>
 
-							{#if customResponseEnabled}
+							{#if customResponseEnabled && customResponseLegacy}
+								{@render legacyNotice(customResponseLegacy, customResponseScript, 'response handler', rewriteResponseInJS)}
+							{:else if customResponseEnabled}
 								<div class="flex flex-col gap-2">
-									<!-- Language picker -->
 									<div class="flex items-center gap-2 flex-wrap">
-										<span class="text-[11px] text-[var(--text-muted)]">Language:</span>
-										<div class="flex items-center border border-[var(--border)] rounded overflow-hidden">
-											{#each SUPPORTED_LANGUAGES as lang}
-												<button
-													onclick={() => handleResponseLanguageChange(lang.id)}
-													class="text-[11px] px-2.5 py-1 transition-colors {customResponseLanguage === lang.id
-														? 'bg-[var(--accent)] text-white'
-														: 'text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)]'}"
-												>
-													{lang.label}
-												</button>
-											{/each}
-										</div>
+										<span class="text-[11px] text-[var(--text-muted)]">JavaScript</span>
 										{#if !customResponseScript}
 											<button
-												onclick={() => { customResponseScript = DEFAULT_RESPONSE_SCRIPTS[customResponseLanguage]; scriptSaved = false; }}
+												onclick={() => { customResponseScript = DEFAULT_RESPONSE_SCRIPTS.javascript; scriptSaved = false; }}
 												class="text-[11px] px-2 py-1 rounded border border-[var(--border)] hover:bg-[var(--bg-hover)] text-[var(--text-muted)] hover:text-[var(--text)] transition-colors"
 											>
 												Insert template
@@ -829,7 +840,7 @@
 									</div>
 
 									{#if showResponseExample}
-										<pre class="text-[10px] text-[var(--text-muted)] bg-[var(--bg)] border border-[var(--border)] rounded p-2 overflow-x-auto whitespace-pre">{RESPONSE_HANDLER_EXAMPLES[customResponseLanguage]}</pre>
+										<pre class="text-[10px] text-[var(--text-muted)] bg-[var(--bg)] border border-[var(--border)] rounded p-2 overflow-x-auto whitespace-pre">{RESPONSE_HANDLER_EXAMPLES.javascript}</pre>
 									{/if}
 
 									{#if showResponseReqRef}
@@ -839,10 +850,10 @@
 												{#if requestsStore.selected}
 													<span>Request Object — <span class="text-[var(--accent)]">{requestsStore.selected.method} {requestsStore.selected.path}</span></span>
 												{:else}
-													<span>Request Object Shape ({SUPPORTED_LANGUAGES.find(l => l.id === customResponseLanguage)?.label})</span>
+													<span>What your script gets</span>
 												{/if}
 											</div>
-											<pre class="px-3 py-2 text-[11px] font-mono text-[var(--text-muted)] overflow-x-auto max-h-48 leading-relaxed whitespace-pre">{formatRequestReference(requestsStore.selected, customResponseLanguage)}</pre>
+											<pre class="px-3 py-2 text-[11px] font-mono text-[var(--text-muted)] overflow-x-auto max-h-48 leading-relaxed whitespace-pre">{formatRequestReference(requestsStore.selected)}</pre>
 											{#if !requestsStore.selected}
 												<div class="px-3 py-1.5 text-[10px] text-[var(--text-muted)] italic border-t border-[var(--border)]">
 													Select a request to see its actual data here.
@@ -851,19 +862,12 @@
 										</div>
 									{/if}
 
-									{#if ep.mode === 'server' && customResponseLanguage !== 'javascript'}
-										<div class="flex items-start gap-2 text-[10px] text-[var(--yellow)] bg-yellow-500/5 border border-yellow-500/20 rounded px-3 py-2">
-											<AlertCircle class="w-3 h-3 flex-shrink-0 mt-0.5" />
-											<p>Server mode only supports JavaScript. {customResponseLanguage === 'lua' ? 'Lua' : 'Jsonnet'} will only run when the browser tab is open.</p>
-										</div>
-									{/if}
-
 									<CodeEditor
 										value={customResponseScript}
 										onchange={handleResponseScriptChange}
-										placeholder={DEFAULT_RESPONSE_SCRIPTS[customResponseLanguage].split('\n')[0]}
+										placeholder={DEFAULT_RESPONSE_SCRIPTS.javascript.split('\n')[0]}
 										minHeight="140px"
-										language={customResponseLanguage}
+										language="javascript"
 									/>
 
 									{#if responseValidationResult}

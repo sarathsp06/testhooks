@@ -20,8 +20,9 @@ type EndpointConfig struct {
 	// and executed via Wazero/QuickJS on every captured request (server mode only).
 	WASMScript string `json:"wasm_script,omitempty"`
 
-	// TransformLanguage specifies the language of the transform script.
-	// Supported: "javascript" (default), "lua", "jsonnet".
+	// TransformLanguage specifies the language of the transform script. Only
+	// JavaScript runs; "lua" and "jsonnet" are kept from older versions so the
+	// UI can show the script and ask for a rewrite.
 	TransformLanguage string `json:"transform_language,omitempty"`
 
 	// CustomResponse configures a programmable response handler that determines
@@ -54,11 +55,17 @@ type SignatureConfig struct {
 
 // CustomResponseConfig allows users to define a programmable response handler.
 // The script receives the request object and must return {status, headers, body}.
-// Supported languages: "javascript" (default), "lua", "jsonnet".
+// Only JavaScript runs (see IsJavaScript).
 type CustomResponseConfig struct {
 	Enabled  bool   `json:"enabled,omitempty"`  // must be true to apply custom response
 	Script   string `json:"script,omitempty"`   // user-provided response handler script
-	Language string `json:"language,omitempty"` // "javascript", "lua", "jsonnet"
+	Language string `json:"language,omitempty"` // "javascript"; legacy "lua", "jsonnet" don't run
+}
+
+// IsJavaScript reports whether a stored script language can run. Scripts
+// saved before Lua and Jsonnet were removed keep their language and are skipped.
+func IsJavaScript(lang string) bool {
+	return lang == "" || lang == "javascript"
 }
 
 // ParseEndpointConfig unmarshals the raw JSONB config into a typed struct.

@@ -4,8 +4,6 @@
 	import { EditorState, Compartment } from '@codemirror/state';
 	import { javascript } from '@codemirror/lang-javascript';
 	import { json } from '@codemirror/lang-json';
-	import { StreamLanguage } from '@codemirror/language';
-	import { lua } from '@codemirror/legacy-modes/mode/lua';
 	import { oneDark } from '@codemirror/theme-one-dark';
 	import { basicSetup } from 'codemirror';
 
@@ -22,7 +20,7 @@
 		placeholder?: string;
 		readonly?: boolean;
 		minHeight?: string;
-		language?: 'javascript' | 'lua' | 'jsonnet' | 'json';
+		language?: 'javascript' | 'json';
 	} = $props();
 
 	let container: HTMLDivElement;
@@ -32,11 +30,7 @@
 
 	function getLanguageExtension(lang: string) {
 		switch (lang) {
-			case 'lua':
-				return StreamLanguage.define(lua);
-			case 'jsonnet':
 			case 'json':
-				// Jsonnet is a superset of JSON — JSON mode gives reasonable highlighting
 				return json();
 			case 'javascript':
 			default:

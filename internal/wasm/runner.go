@@ -8,6 +8,7 @@ package wasm
 
 import (
 	"context"
+	_ "embed"
 	"encoding/json"
 	"fmt"
 	"sync/atomic"
@@ -16,6 +17,12 @@ import (
 	"github.com/fastschema/qjs"
 	"github.com/rs/zerolog"
 )
+
+// prelude is loaded ahead of every user script. The browser loads the same
+// file (web/src/lib/wasm.ts), so scripts behave identically in both places.
+//
+//go:embed prelude.js
+var prelude string
 
 // TransformInput is the JSON payload passed to the user's transform function.
 type TransformInput struct {
@@ -165,28 +172,13 @@ func (r *Runner) Transform(ctx context.Context, script string, input TransformIn
 	}
 	defer rt.Close()
 
-	// Build the JS program:
-	// 1. Define the user's transform function(s)
-	// 2. Parse the input JSON
-	// 3. Call transform() if it exists, otherwise pass through
-	// 4. Return the JSON-stringified result (last expression value)
-	program := fmt.Sprintf(`
-%s;
-
-var __input = JSON.parse(%s);
-var __result = typeof transform === 'function' ? transform(__input) : __input;
-JSON.stringify(__result);
-`, script, quote(string(inputJSON)))
+	program := buildProgram(script, "__th_runTransform", inputJSON)
 
 	val, err := rt.Eval("transform.js", qjs.Code(program))
 	if err != nil {
 		return nil, fmt.Errorf("exec transform: %w", err)
 	}
 	defer val.Free()
-
-	if val.IsUndefined() || val.IsNull() {
-		return nil, fmt.Errorf("transform returned null/undefined")
-	}
 
 	resultJSON := val.String()
 
@@ -258,18 +250,7 @@ func (r *Runner) RunResponseHandler(ctx context.Context, script string, input Tr
 	}
 	defer rt.Close()
 
-	// Build the JS program:
-	// 1. Define the user's handler function(s)
-	// 2. Parse the input JSON (includes forward_response if present)
-	// 3. Call handler() if it exists, otherwise return null (no custom response)
-	// 4. Return the JSON-stringified result
-	program := fmt.Sprintf(`
-%s;
-
-var __input = JSON.parse(%s);
-var __result = typeof handler === 'function' ? handler(__input) : null;
-JSON.stringify(__result);
-`, script, quote(string(inputJSON)))
+	program := buildProgram(script, "__th_runHandler", inputJSON)
 
 	val, err := rt.Eval("handler.js", qjs.Code(program))
 	if err != nil {
@@ -309,6 +290,12 @@ func (r *Runner) acquire(ctx context.Context) (func(), error) {
 	case <-ctx.Done():
 		return nil, fmt.Errorf("waiting for wasm runtime: %w", ctx.Err())
 	}
+}
+
+// buildProgram wraps a user script with the shared prelude and calls the given
+// prelude entry point on the input; the program's value is the JSON result.
+func buildProgram(script, entry string, inputJSON []byte) string {
+	return prelude + "\n" + script + "\n;\n" + entry + "(JSON.parse(" + quote(string(inputJSON)) + "));\n"
 }
 
 // quote returns a JS string literal wrapping s, safe for embedding in JS source.

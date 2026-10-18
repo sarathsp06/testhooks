@@ -5,82 +5,69 @@ description: Reshape requests before forwarding, and script the response returne
 
 Two kinds of script can run on each request, both edited in the endpoint's **Transform** tab:
 
-- A **transform** reshapes the request before it is forwarded.
+- A **transform** changes the request before it's forwarded, or skips it.
 - A **response handler** decides the status, headers and body returned to the webhook sender.
 
-Scripts run sandboxed in WebAssembly. Each execution gets a fresh runtime, so no state carries over between requests.
+Scripts are JavaScript. They run sandboxed in WebAssembly (QuickJS), on the server in server mode and in your browser tab in browser mode. Both load the same helpers, so a script behaves the same in either mode and in the editor's **Test** button.
 
-| | Server mode | Browser mode |
-|---|---|---|
-| Languages | JavaScript (QuickJS) | JavaScript, Lua, Jsonnet |
-| Time limit | 5 seconds | 5 seconds |
-| Memory limit | 64 MB | Browser's limit |
-| Max output | 1 MB | |
+- Each run gets a fresh runtime, so nothing carries over between requests.
+- A script has 5 seconds to finish.
+- On the server, memory is capped at 64 MB and the result at 1 MB.
 
-## The request object
+## What a script gets
 
-Both kinds of script receive the same `req` object:
+Both kinds of script receive the same `req`:
 
 ```js
-{
-  method: "POST",
-  path: "/stripe/events",            // the part after /h/<slug>
-  headers: { "Content-Type": ["application/json"] },   // values are arrays
-  query: { "debug": ["1"] },
-  body: "{\"event\":\"order.created\"}", // always a string; parse it yourself
-  content_type: "application/json"
-}
+req.method          // "POST"
+req.path            // "/stripe/events", the part after /h/<slug>
+req.query           // { debug: ["1"] }, values are arrays
+req.headers         // { "Content-Type": ["application/json"] }, values are arrays
+req.body            // the raw body, always a string
+req.json            // the body parsed as JSON, or null when it isn't JSON
+req.content_type    // "application/json"
+
+req.header("x-event")             // first value of a header, any case; undefined if absent
+req.setHeader("x-source", "test") // replace a header
+req.removeHeader("x-signature")   // delete a header
 ```
 
 ## Transforms
 
-### JavaScript
-
-Define `transform(req)` and return the request to forward. Any field you leave out keeps its original value.
+Define `transform(req)` and return the request to forward:
 
 ```js
 function transform(req) {
-  const body = JSON.parse(req.body || '{}');
-  body.received_at = new Date().toISOString();
-  return { ...req, body: JSON.stringify(body) };
-}
-```
-
-On the server, return `{ drop: true }` to capture a request without forwarding it:
-
-```js
-function transform(req) {
-  const body = JSON.parse(req.body || '{}');
-  if (body.type === 'ping') return { drop: true };
+  if (req.json) {
+    req.json.received_at = new Date().toISOString();
+    delete req.json.internal_id;
+  }
   return req;
 }
 ```
 
-### Lua (browser mode)
+- Changes to `req.json` are written back to the body. If you don't touch `req.json`, the body is forwarded byte for byte.
+- You can also set `req.body` yourself, or return a new object. Fields you leave out keep their original values.
+- Setting `req.json` on a request that wasn't JSON sets the content type to `application/json`, unless you set one.
 
-```lua
-function transform(req)
-  local body = json.decode(req.body or "{}")
-  body.source = "testhooks"
-  req.body = json.encode(body)
-  return req
-end
+### Skipping a request
+
+Return `null` to capture a request without forwarding it:
+
+```js
+function transform(req) {
+  if (req.json?.type === 'ping') return null;
+  return req;
+}
 ```
 
-`json.decode` and `json.encode` are available.
+### When something goes wrong
 
-### Jsonnet (browser mode)
+If a transform throws, times out or returns nothing, the original request is forwarded unchanged and the error is logged. Forgetting `return req` is the most common mistake; the **Test** button shows it as an error.
 
-The request arrives as an external variable and the script evaluates to the new request:
+### Scripts from older versions
 
-```jsonnet
-local req = std.parseJson(std.extVar("req"));
-local body = std.parseJson(req.body);
-
-req { body: std.manifestJsonEx(body { source: "testhooks" }, "  ") }
-```
-
-If a transform throws or times out, the original request is forwarded unchanged and the error is logged.
+Earlier versions also ran Lua and Jsonnet in browser mode. Those scripts are kept with the endpoint but no longer run. The Transform tab shows them read-only with a button to start a JavaScript version.
 
 ## Custom responses
 
@@ -96,12 +83,10 @@ function handler(req) {
 }
 ```
 
-| Field | Default |
-|---|---|
-| `status` | `200` |
-| `headers` | none |
-| `body` | empty |
-| `content_type` | `text/plain` |
+- `status` defaults to `200`.
+- `headers` is a flat object of strings.
+- `body` is a string, empty by default.
+- `content_type` defaults to `text/plain`.
 
 Return `null` to fall back to the default response. If the handler fails, the default response is used.
 

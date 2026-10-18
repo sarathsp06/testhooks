@@ -5,25 +5,20 @@
 		isWasmReady,
 		runTransform,
 		validateScript,
-		SUPPORTED_LANGUAGES,
 		DEFAULT_SCRIPTS,
 		formatRequestReference,
-		type TransformLanguage
+		type TransformResult
 	} from '$lib/wasm';
-	import type { CapturedRequest, TransformResult } from '$lib/types';
+	import type { CapturedRequest } from '$lib/types';
 	import { Play, Check, AlertTriangle, Loader2, BookOpen, ChevronDown, ChevronRight, FileCode } from 'lucide-svelte';
 
 	let {
 		script = '',
-		language = 'javascript' as TransformLanguage,
 		onScriptChange,
-		onLanguageChange,
 		testRequest
 	}: {
 		script?: string;
-		language?: TransformLanguage;
 		onScriptChange: (script: string) => void;
-		onLanguageChange: (language: TransformLanguage) => void;
 		testRequest?: CapturedRequest | null;
 	} = $props();
 
@@ -40,8 +35,8 @@
 		wasmLoading = true;
 		wasmError = null;
 		try {
-			await initWasm(language);
-			wasmReady = isWasmReady(language);
+			await initWasm();
+			wasmReady = isWasmReady();
 		} catch (err) {
 			wasmReady = false;
 			wasmError = err instanceof Error ? err.message : 'Failed to load WASM engine';
@@ -51,12 +46,12 @@
 	}
 
 	async function handleValidate() {
-		if (!isWasmReady(language)) await loadWasm();
-		if (!isWasmReady(language)) return;
+		if (!isWasmReady()) await loadWasm();
+		if (!isWasmReady()) return;
 		validating = true;
 		validationResult = null;
 		try {
-			validationResult = await validateScript(script || DEFAULT_SCRIPTS[language], language);
+			validationResult = await validateScript(script || DEFAULT_SCRIPTS.javascript);
 		} finally {
 			validating = false;
 		}
@@ -64,49 +59,26 @@
 
 	async function handleTest() {
 		if (!testRequest) return;
-		if (!isWasmReady(language)) await loadWasm();
-		if (!isWasmReady(language)) return;
+		if (!isWasmReady()) await loadWasm();
+		if (!isWasmReady()) return;
 		testing = true;
 		testResult = null;
 		try {
-			testResult = await runTransform(script || DEFAULT_SCRIPTS[language], testRequest, language);
+			testResult = await runTransform(script || DEFAULT_SCRIPTS.javascript, testRequest);
 		} finally {
 			testing = false;
 		}
 	}
 
 	function handleInsertDefault() {
-		onScriptChange(DEFAULT_SCRIPTS[language]);
-	}
-
-	function handleLanguageSwitch(lang: TransformLanguage) {
-		if (lang === language) return;
-		validationResult = null;
-		testResult = null;
-		wasmError = null;
-		onLanguageChange(lang);
-		initWasm(lang).catch(() => {});
+		onScriptChange(DEFAULT_SCRIPTS.javascript);
 	}
 </script>
 
 <div class="flex flex-col gap-3">
-	<!-- Top row: language picker + actions -->
+	<!-- Top row: actions -->
 	<div class="flex items-center justify-between gap-2 flex-wrap">
-		<div class="flex items-center gap-2">
-			<span class="text-xs text-[var(--text-muted)] font-medium">Language</span>
-			<div class="flex items-center border border-[var(--border)] rounded overflow-hidden">
-				{#each SUPPORTED_LANGUAGES as lang}
-					<button
-						onclick={() => handleLanguageSwitch(lang.id)}
-						class="text-[11px] px-2.5 py-1 transition-colors {language === lang.id
-							? 'bg-[var(--accent)] text-white'
-							: 'text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)]'}"
-					>
-						{lang.label}
-					</button>
-				{/each}
-			</div>
-		</div>
+		<span class="text-xs text-[var(--text-muted)] font-medium">JavaScript</span>
 		<div class="flex items-center gap-1.5">
 			{#if !script}
 				<button
@@ -161,10 +133,10 @@
 				{#if testRequest}
 					<span>Request Object — <span class="text-[var(--accent)]">{testRequest.method} {testRequest.path}</span></span>
 				{:else}
-					<span>Request Object Shape ({SUPPORTED_LANGUAGES.find(l => l.id === language)?.label})</span>
+					<span>What your script gets</span>
 				{/if}
 			</div>
-			<pre class="px-3 py-2 text-[11px] font-mono text-[var(--text-muted)] overflow-x-auto max-h-48 leading-relaxed whitespace-pre">{formatRequestReference(testRequest, language)}</pre>
+			<pre class="px-3 py-2 text-[11px] font-mono text-[var(--text-muted)] overflow-x-auto max-h-48 leading-relaxed whitespace-pre">{formatRequestReference(testRequest)}</pre>
 			{#if !testRequest}
 				<div class="px-3 py-1.5 text-[10px] text-[var(--text-muted)] italic border-t border-[var(--border)]">
 					Select a request to see its actual data here.
@@ -177,16 +149,16 @@
 	<CodeEditor
 		value={script}
 		onchange={onScriptChange}
-		placeholder={DEFAULT_SCRIPTS[language].split('\n')[0]}
+		placeholder={DEFAULT_SCRIPTS.javascript.split('\n')[0]}
 		minHeight="180px"
-		{language}
+		language="javascript"
 	/>
 
 	<!-- WASM status -->
 	{#if wasmLoading}
 		<div class="flex items-center gap-1.5 text-xs text-[var(--text-muted)]">
 			<Loader2 class="w-3 h-3 animate-spin" />
-			Loading {SUPPORTED_LANGUAGES.find(l => l.id === language)?.label ?? language} WASM engine...
+			Loading the JavaScript engine...
 		</div>
 	{:else if wasmError}
 		<div class="flex items-center gap-2 text-xs px-3 py-2 rounded border border-red-500/30 bg-red-500/5 text-[var(--red)]">
@@ -219,7 +191,9 @@
 				<span>Transform Result</span>
 				<span class="{testResult.ok ? 'text-[var(--green)]' : 'text-[var(--red)]'}">{testResult.duration}ms</span>
 			</div>
-			{#if testResult.ok}
+			{#if testResult.ok && testResult.dropped}
+				<div class="px-3 py-2 text-xs text-[var(--text-muted)]">Returned null: this request is captured but not forwarded.</div>
+			{:else if testResult.ok}
 				<pre class="px-3 py-2 text-xs font-mono text-[var(--text)] overflow-x-auto max-h-48 whitespace-pre-wrap break-all">{JSON.stringify(testResult.data, null, 2)}</pre>
 			{:else}
 				<div class="px-3 py-2 text-xs text-[var(--red)]">{testResult.error}</div>

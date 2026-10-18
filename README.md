@@ -97,7 +97,7 @@ docker compose up --build                       # or: app + Postgres, built from
 - **Real-time streaming:** requests are pushed to the browser instantly over WebSocket.
 - **Two endpoint modes:** server mode (stored, always on) or browser mode (relayed, not stored).
 - **Forwarding:** from the server to public URLs (async or sync, with retries), or from the browser to anything, `localhost` included.
-- **Transforms:** reshape requests with JavaScript on the server, or JavaScript, Lua and Jsonnet in the browser.
+- **Transforms:** reshape requests with a few lines of JavaScript before they're forwarded, or skip them.
 - **Custom responses:** a script sets the status, headers and body the sender gets back.
 - **Signature verification:** [Standard Webhooks](https://www.standardwebhooks.com) (Sparrow, Svix and others), HMAC and Ed25519.
 - **Export and replay:** download requests as JSON or CSV, or copy any request as cURL.

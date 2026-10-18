@@ -266,7 +266,7 @@ func (c *Capture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Run WASM transform if configured (both modes — server runs it here,
 	// browser mode runs it server-side too so the pipeline is consistent).
 	transformApplied := false
-	if epConfig.WASMScript != "" && c.wasmRunner != nil && c.wasmRunner.Ready() && !isBrowserMode {
+	if epConfig.WASMScript != "" && config.IsJavaScript(epConfig.TransformLanguage) && c.wasmRunner != nil && c.wasmRunner.Ready() && !isBrowserMode {
 		transformInput := wasm.TransformInput{
 			Method:      r.Method,
 			Path:        fullPath,
@@ -343,7 +343,8 @@ func (c *Capture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// The browser handles its own transform/forward/handler chain.
 	if isBrowserMode {
 		// Custom response + browser connected: hold request open for browser-side handler.
-		if epConfig.CustomResponse != nil && epConfig.CustomResponse.Enabled && epConfig.CustomResponse.Script != "" {
+		if epConfig.CustomResponse != nil && epConfig.CustomResponse.Enabled && epConfig.CustomResponse.Script != "" &&
+			config.IsJavaScript(epConfig.CustomResponse.Language) {
 			if c.hub.HasSubscribers(slug) {
 				c.handleBrowserResponse(w, r, slug, req, epConfig, body)
 				return
@@ -413,7 +414,7 @@ func (c *Capture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// ── STEP 4: Custom Response Handler ──
-	if cr := epConfig.CustomResponse; cr != nil && cr.Enabled && cr.Script != "" {
+	if cr := epConfig.CustomResponse; cr != nil && cr.Enabled && cr.Script != "" && config.IsJavaScript(cr.Language) {
 		if c.wasmRunner != nil && c.wasmRunner.Ready() {
 			handlerStart := time.Now()
 			output, err := c.wasmRunner.RunResponseHandler(r.Context(), cr.Script, handlerInput, fwdResponse)

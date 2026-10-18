@@ -14,6 +14,7 @@ export interface EndpointConfig {
 	forward_url?: string;
 	forward_mode?: 'sync' | 'async';
 	wasm_script?: string;
+	// Only JavaScript runs; 'lua' and 'jsonnet' may still be stored by older versions.
 	transform_language?: 'javascript' | 'lua' | 'jsonnet';
 	custom_response?: CustomResponse;
 	persist_requests?: boolean;

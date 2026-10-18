@@ -39,7 +39,7 @@ If forwarding fails with a network error in the browser console, CORS is the usu
 |---|---|---|
 | Setup | Install a CLI, authenticate, run a daemon | Open a browser tab |
 | Inspecting payloads | Separate dashboard | Built-in live view |
-| Transform before delivery | Not possible | JavaScript, Lua or Jsonnet |
+| Transform before delivery | Not possible | JavaScript |
 | Custom responses | Whatever your local app returns | Scripted, to test error handling without changing your app |
 | Data | Routed through a third-party service | Relayed by your own server, never stored |
 
