@@ -3,14 +3,12 @@
 	import {
 		initWasm,
 		isWasmReady,
-		runTransform,
 		validateScript,
 		DEFAULT_SCRIPTS,
-		formatRequestReference,
-		type TransformResult
+		formatRequestReference
 	} from '$lib/wasm';
 	import type { CapturedRequest } from '$lib/types';
-	import { Play, Check, AlertTriangle, Loader2, BookOpen, ChevronDown, ChevronRight, FileCode } from 'lucide-svelte';
+	import { Check, AlertTriangle, Loader2, BookOpen, ChevronDown, ChevronRight, FileCode } from 'lucide-svelte';
 
 	let {
 		script = '',
@@ -27,8 +25,6 @@
 	let wasmError = $state<string | null>(null);
 	let validating = $state(false);
 	let validationResult = $state<{ valid: boolean; error?: string } | null>(null);
-	let testResult = $state<TransformResult | null>(null);
-	let testing = $state(false);
 	let showReference = $state(false);
 
 	async function loadWasm() {
@@ -57,18 +53,6 @@
 		}
 	}
 
-	async function handleTest() {
-		if (!testRequest) return;
-		if (!isWasmReady()) await loadWasm();
-		if (!isWasmReady()) return;
-		testing = true;
-		testResult = null;
-		try {
-			testResult = await runTransform(script || DEFAULT_SCRIPTS.javascript, testRequest);
-		} finally {
-			testing = false;
-		}
-	}
 
 	function handleInsertDefault() {
 		onScriptChange(DEFAULT_SCRIPTS.javascript);
@@ -108,19 +92,6 @@
 					<Check class="w-3 h-3" />
 				{/if}
 				Validate
-			</button>
-			<button
-				onclick={handleTest}
-				disabled={testing || !testRequest || !script}
-				class="text-[11px] px-2.5 py-1 rounded border border-[var(--border)] hover:bg-[var(--bg-hover)] text-[var(--text-muted)] hover:text-[var(--text)] transition-colors flex items-center gap-1 disabled:opacity-50"
-				title={!testRequest ? 'Select a request to test against' : 'Run transform on selected request'}
-			>
-				{#if testing}
-					<Loader2 class="w-3 h-3 animate-spin" />
-				{:else}
-					<Play class="w-3 h-3" />
-				{/if}
-				Test
 			</button>
 		</div>
 	</div>
@@ -180,23 +151,6 @@
 				<span class="flex items-center gap-1"><Check class="w-3 h-3" /> Script is valid</span>
 			{:else}
 				<span class="flex items-center gap-1"><AlertTriangle class="w-3 h-3" /> {validationResult.error}</span>
-			{/if}
-		</div>
-	{/if}
-
-	<!-- Test result -->
-	{#if testResult}
-		<div class="bg-[var(--bg-card)] border border-[var(--border)] rounded">
-			<div class="px-3 py-2 text-xs font-medium text-[var(--text-muted)] border-b border-[var(--border)] flex items-center justify-between">
-				<span>Transform Result</span>
-				<span class="{testResult.ok ? 'text-[var(--green)]' : 'text-[var(--red)]'}">{testResult.duration}ms</span>
-			</div>
-			{#if testResult.ok && testResult.dropped}
-				<div class="px-3 py-2 text-xs text-[var(--text-muted)]">Returned null: this request is captured but not forwarded.</div>
-			{:else if testResult.ok}
-				<pre class="px-3 py-2 text-xs font-mono text-[var(--text)] overflow-x-auto max-h-48 whitespace-pre-wrap break-all">{JSON.stringify(testResult.data, null, 2)}</pre>
-			{:else}
-				<div class="px-3 py-2 text-xs text-[var(--red)]">{testResult.error}</div>
 			{/if}
 		</div>
 	{/if}

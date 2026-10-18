@@ -16,13 +16,13 @@ Scripts are JavaScript. They run sandboxed in WebAssembly (QuickJS), on the serv
 
 ## Trying a script before you save it
 
-The top of the Transform tab is the **test input**: the request your scripts run against when you test them.
+Under the scripts, **Try your scripts** runs them without sending anything:
 
-- **Captured request** uses the request selected in the list, or the latest one.
-- **Sample payload** lets you write or paste a request: method, path, headers (one `Name: value` per line) and body. Start from a preset such as a JSON event, a ping or a form post, or click **Edit a copy** on a captured request to change it. The sample is remembered per endpoint in your browser.
-- **What your script gets as req** shows the exact `req` the input produces, including `req.json`.
+1. Pick what to try it on: a captured request, a sample (JSON event, push event, ping, form post, GET with no body), or your own request.
+2. Check the request it shows: method, path, headers and `req.json` (or `req.body`). Click **Edit** to change any of them, or to paste your own payload. Your own request is remembered per endpoint in your browser.
+3. Click **Run**. It runs your unsaved transform and reply in the server's order and shows what would be forwarded (a line diff of the body, plus any header, method and path changes), whether it would be skipped, and the reply the sender would get.
 
-**Dry run** runs your unsaved transform and reply on the test input, in the server's order. It shows what would be forwarded, with a line diff of the body and a list of header, method and path changes, and the reply the sender would get. Nothing is sent: the forward target isn't called, and with sync forwarding `req.forward_response` is a stand-in `200 {"ok":true}`.
+Nothing is sent: the forward target isn't called, and with sync forwarding `req.forward_response` is a stand-in `200 {"ok":true}`.
 
 ## What a script gets
 

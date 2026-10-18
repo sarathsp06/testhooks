@@ -16,8 +16,7 @@
 	import RequestDetail from '$lib/components/RequestDetail.svelte';
 	import ForwardConfig from '$lib/components/ForwardConfig.svelte';
 	import TransformConfig from '$lib/components/TransformConfig.svelte';
-	import TestInput from '$lib/components/TestInput.svelte';
-	import DryRun from '$lib/components/DryRun.svelte';
+	import TryIt from '$lib/components/TryIt.svelte';
 	import type { CapturedRequest, CapturedResponse, Endpoint, ResponseNeededData, ResponseInfoData, ForwardResponse, ForwardResultData } from '$lib/types';
 	import { Copy, Wifi, WifiOff, Trash2, Server, Monitor, Settings, Code2, Download, Inbox, Check, XCircle, AlertTriangle, MessageSquare, BookOpen, AlertCircle, Loader2, Play } from 'lucide-svelte';
 	import Tooltip from '$lib/components/Tooltip.svelte';
@@ -55,8 +54,6 @@
 	let showResponseReqRef = $state(false);
 	let responseValidating = $state(false);
 	let responseValidationResult = $state<{ valid: boolean; error?: string } | null>(null);
-	let responseTesting = $state(false);
-	let responseTestResult = $state<import('$lib/wasm').ResponseHandlerResult | null>(null);
 
 	// Resolve the endpoint by slug -> get ID -> load requests
 	async function init(s: string) {
@@ -360,7 +357,6 @@
 		customResponseScript = DEFAULT_RESPONSE_SCRIPTS.javascript;
 		scriptSaved = false;
 		responseValidationResult = null;
-		responseTestResult = null;
 	}
 
 	function toggleCustomResponse() {
@@ -390,24 +386,6 @@
 		}
 	}
 
-	async function handleResponseTest() {
-		const req = testInput;
-		if (!req) return;
-		if (!isWasmReady()) {
-			await initWasm();
-		}
-		if (!isWasmReady()) return;
-		responseTesting = true;
-		responseTestResult = null;
-		try {
-			responseTestResult = await runResponseHandler(
-				customResponseScript || DEFAULT_RESPONSE_SCRIPTS.javascript,
-				req
-			);
-		} finally {
-			responseTesting = false;
-		}
-	}
 
 	function saveTransformScript() {
 		// Use endpointStore.current (reactive) instead of the local `endpoint`
@@ -717,13 +695,6 @@
 						{/if}
 					{:else if rightTab === 'transform'}
 						<div class="p-4 max-w-2xl">
-							<div class="mb-6">
-								<TestInput
-									slug={ep.slug}
-									captured={requestsStore.selected ?? requestsStore.items[0] ?? null}
-									bind:request={testInput}
-								/>
-							</div>
 							<div class="mb-4 flex items-start justify-between">
 								<div>
 									<h3 class="text-sm font-semibold mb-1 flex items-center">
@@ -851,19 +822,6 @@
 											{/if}
 											Validate
 										</button>
-										<button
-											onclick={handleResponseTest}
-											disabled={responseTesting || !testInput || !customResponseScript}
-											class="text-[11px] px-2.5 py-1 rounded border border-[var(--border)] hover:bg-[var(--bg-hover)] text-[var(--text-muted)] hover:text-[var(--text)] transition-colors flex items-center gap-1 disabled:opacity-50"
-											title={!testInput ? 'Choose a test input above' : 'Run the handler on the test input'}
-										>
-											{#if responseTesting}
-												<Loader2 class="w-3 h-3 animate-spin" />
-											{:else}
-												<Play class="w-3 h-3" />
-											{/if}
-											Test
-										</button>
 									</div>
 
 									{#if showResponseExample}
@@ -901,20 +859,6 @@
 											{/if}
 										</div>
 									{/if}
-
-									{#if responseTestResult}
-										<div class="bg-[var(--bg-card)] border border-[var(--border)] rounded">
-											<div class="px-3 py-2 text-xs font-medium text-[var(--text-muted)] border-b border-[var(--border)] flex items-center justify-between">
-												<span>Handler Result</span>
-												<span class="{responseTestResult.ok ? 'text-[var(--green)]' : 'text-[var(--red)]'}">{responseTestResult.duration}ms</span>
-											</div>
-											{#if responseTestResult.ok}
-												<pre class="px-3 py-2 text-xs font-mono text-[var(--text)] overflow-x-auto max-h-60 whitespace-pre">{JSON.stringify(responseTestResult.response, null, 2)}</pre>
-											{:else}
-												<div class="px-3 py-2 text-xs text-[var(--red)]">{responseTestResult.error}</div>
-											{/if}
-										</div>
-									{/if}
 								</div>
 							{:else}
 								<div class="text-xs text-[var(--text-muted)] italic bg-[var(--bg)] border border-[var(--border)] rounded-lg px-3 py-4 text-center">
@@ -924,8 +868,11 @@
 
 							{#if transformEnabled || customResponseEnabled}
 								<div class="mt-6">
-									<DryRun
-										request={testInput}
+									<TryIt
+										captured={requestsStore.items}
+										selected={requestsStore.selected ?? null}
+										slug={ep.slug}
+										bind:request={testInput}
 										transformScript={transformEnabled && !transformLegacy ? transformScript || DEFAULT_SCRIPTS.javascript : ''}
 										handlerScript={customResponseEnabled && !customResponseLegacy ? customResponseScript || DEFAULT_RESPONSE_SCRIPTS.javascript : ''}
 										forwardUrl={ep.config?.forward_url}

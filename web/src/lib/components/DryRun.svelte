@@ -30,6 +30,15 @@
 	let running = $state(false);
 	let result = $state<Result | null>(null);
 
+	// A result is for one request and one version of the scripts; drop it when
+	// either changes so it's never stale.
+	$effect(() => {
+		void request;
+		void transformScript;
+		void handlerScript;
+		result = null;
+	});
+
 	// Stand-in for the forward target's reply, so handlers that read
 	// req.forward_response can be tried without calling the target.
 	const sampleUpstream: ForwardResponse = {
@@ -131,20 +140,17 @@
 	}
 </script>
 
-<div class="flex flex-col gap-3 bg-[var(--bg-card)] border border-[var(--border)] rounded-lg p-3">
+<div class="flex flex-col gap-3">
 	<div class="flex items-center justify-between gap-2 flex-wrap">
-		<div>
-			<h3 class="text-sm font-semibold">Dry run</h3>
-			<p class="text-xs text-[var(--text-muted)]">Runs your unsaved scripts on the test input, in the same order the server does: transform, forward, reply.</p>
-		</div>
+		<p class="text-xs text-[var(--text-muted)]">Runs your unsaved scripts in the server's order: transform, forward, reply. Nothing is actually sent.</p>
 		<button
 			onclick={run}
 			disabled={running || !request}
-			class="text-xs px-3 py-1.5 rounded bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white transition-colors flex items-center gap-1.5 disabled:opacity-50"
-			title={request ? 'Run both scripts on the test input' : 'Choose a test input first'}
+			class="text-xs px-4 py-1.5 rounded bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white transition-colors flex items-center gap-1.5 disabled:opacity-50"
+			title={request ? 'Run your scripts on this request' : 'Pick a request to try first'}
 		>
 			{#if running}<Loader2 class="w-3 h-3 animate-spin" />{:else}<Play class="w-3 h-3" />{/if}
-			Dry run
+			Run
 		</button>
 	</div>
 
