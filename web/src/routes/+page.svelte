@@ -2,25 +2,9 @@
 	import { goto } from '$app/navigation';
 	import { createEndpoint, listEndpoints, deleteEndpoint } from '$lib/api';
 	import { getWebhookURL, formatTime, copyToClipboard } from '$lib/utils';
-	import { SUPPORTED_LANGUAGES, DEFAULT_SCRIPTS, DEFAULT_RESPONSE_SCRIPTS, initWasm, isWasmReady, validateResponseHandler, type TransformLanguage } from '$lib/wasm';
+	import { DEFAULT_SCRIPTS, DEFAULT_RESPONSE_SCRIPTS, initWasm, isWasmReady, validateResponseHandler } from '$lib/wasm';
 	import CodeEditor from '$lib/components/CodeEditor.svelte';
-	import {
-		Trash2,
-		Copy,
-		ExternalLink,
-		Server,
-		Monitor,
-		ChevronDown,
-		ChevronRight,
-		Send,
-		Code2,
-		MessageSquare,
-		Webhook,
-		X,
-		Check,
-		AlertTriangle,
-		Loader2
-	} from 'lucide-svelte';
+	import { Trash2, Copy, ChevronRight, Plus, X, Check, AlertTriangle, Loader2 } from 'lucide-svelte';
 	import type { Endpoint, EndpointConfig } from '$lib/types';
 
 	let endpoints = $state<Endpoint[]>([]);
@@ -42,29 +26,56 @@
 	let newForwardUrl = $state('');
 	let newForwardMode = $state<'async' | 'sync'>('async');
 
-	// Advanced: Transform
+	// Advanced: Transform (JavaScript)
 	let newTransformEnabled = $state(false);
-	let newTransformLanguage = $state<TransformLanguage>('javascript');
 	let newTransformScript = $state('');
 
-	// Advanced: Custom Response (script-based)
+	// Advanced: Custom Response (JavaScript)
 	let newCustomResponseEnabled = $state(false);
-	let newCustomResponseLanguage = $state<TransformLanguage>('javascript');
 	let newCustomResponseScript = $state('');
 	let newResponseValidating = $state(false);
 	let newResponseValidationResult = $state<{ valid: boolean; error?: string } | null>(null);
 
-	async function handleNewResponseValidate() {
-		if (!isWasmReady(newCustomResponseLanguage)) {
-			await initWasm(newCustomResponseLanguage);
+	const modes = [
+		{
+			id: 'server',
+			title: 'On the server',
+			description: 'Always on. Requests are saved and forwarded even when this tab is closed.'
+		},
+		{
+			id: 'browser',
+			title: 'In this browser tab',
+			description: 'Forward to localhost from your machine, like a tunnel. Works while the tab is open.'
 		}
-		if (!isWasmReady(newCustomResponseLanguage)) return;
+	] as const;
+
+	const steps = [
+		{ title: 'Create an endpoint', text: 'You get a unique URL like', code: '/h/a1b2c3d4' },
+		{ title: 'Send it a request', text: "Paste the URL into a service's webhook settings, or send a sample with one click." },
+		{ title: 'Inspect, then go further', text: 'See headers and body, then add a transform, a forward target or a custom reply.' }
+	];
+
+	const advancedSummary = $derived(
+		[
+			newForwardUrl.trim() ? 'forwarding' : '',
+			newTransformEnabled ? 'transform' : '',
+			newCustomResponseEnabled ? 'custom reply' : ''
+		]
+			.filter(Boolean)
+			.join(', ')
+	);
+
+	async function handleNewResponseValidate() {
+		if (!isWasmReady('javascript')) {
+			await initWasm('javascript');
+		}
+		if (!isWasmReady('javascript')) return;
 		newResponseValidating = true;
 		newResponseValidationResult = null;
 		try {
 			newResponseValidationResult = await validateResponseHandler(
-				newCustomResponseScript || DEFAULT_RESPONSE_SCRIPTS[newCustomResponseLanguage],
-				newCustomResponseLanguage
+				newCustomResponseScript || DEFAULT_RESPONSE_SCRIPTS.javascript,
+				'javascript'
 			);
 		} finally {
 			newResponseValidating = false;
@@ -91,14 +102,14 @@
 		newForwardUrl = '';
 		newForwardMode = 'async';
 		newTransformEnabled = false;
-		newTransformLanguage = 'javascript';
 		newTransformScript = '';
 		newCustomResponseEnabled = false;
-		newCustomResponseLanguage = 'javascript';
 		newCustomResponseScript = '';
 	}
 
-	async function handleCreate() {
+	async function handleCreate(e?: SubmitEvent) {
+		e?.preventDefault();
+		if (creating) return;
 		creating = true;
 		createError = null;
 		try {
@@ -108,15 +119,14 @@
 				config.forward_url = newForwardUrl.trim();
 				config.forward_mode = newForwardMode;
 			}
+			// Scripts are JavaScript, the server's default language.
 			if (newTransformEnabled && newTransformScript.trim()) {
 				config.wasm_script = newTransformScript;
-				config.transform_language = newTransformLanguage;
 			}
 			if (newCustomResponseEnabled && newCustomResponseScript.trim()) {
 				config.custom_response = {
 					enabled: true,
-					script: newCustomResponseScript,
-					language: newCustomResponseLanguage
+					script: newCustomResponseScript
 				};
 			}
 
@@ -172,236 +182,192 @@
 	$effect(() => {
 		loadEndpoints();
 	});
-
 </script>
 
-<div class="min-h-screen">
-	<!-- ===== CREATE ENDPOINT SECTION ===== -->
-	<section id="create-section" class="pt-10 pb-6 bg-[var(--bg)]">
-		<div class="max-w-3xl mx-auto px-6">
-			<div class="mb-6">
-				<h1 class="text-2xl font-semibold tracking-tight">Capture, inspect and forward webhooks</h1>
-				<p class="mt-1.5 text-sm text-[var(--text-muted)]">
-					Create an endpoint, point a webhook sender at its URL and watch each request arrive live.
-					In browser mode your tab can also forward requests to localhost.
-					<a href="https://sarathsp06.github.io/testhooks/getting-started/quickstart/" target="_blank" rel="noopener noreferrer" class="text-[var(--accent)] hover:underline">How it works</a>
+{#snippet sectionHeading(text: string)}
+	<h2 class="m-0 font-mono text-[13px] font-medium tracking-[0.04em] uppercase text-soft">{text}</h2>
+{/snippet}
+
+{#snippet errorBanner(message: string, onDismiss: () => void)}
+	<div class="px-3.5 py-2.5 rounded-[10px] border border-danger/25 bg-danger/5 text-sm text-danger flex items-center justify-between gap-3">
+		<span>{message}</span>
+		<button type="button" onclick={onDismiss} class="p-1 rounded hover:bg-danger/10 transition-colors" aria-label="Dismiss">
+			<X class="w-3.5 h-3.5" />
+		</button>
+	</div>
+{/snippet}
+
+<div class="flex-1 flex flex-col bg-page">
+	<div class="flex-1 w-full max-w-[1240px] mx-auto px-4 sm:px-6 pt-12 sm:pt-[72px] pb-16 flex flex-col gap-12 sm:gap-14">
+		<!-- ===== CREATE ===== -->
+		<section class="flex flex-col gap-7 max-w-[760px]">
+			<div class="flex flex-col gap-3.5">
+				<h1 class="m-0 text-[clamp(34px,5vw,52px)] leading-[1.05] tracking-[-0.035em] font-semibold text-ink">
+					Get a webhook URL in one click.
+				</h1>
+				<p class="m-0 text-lg leading-[1.55] text-body">
+					Point any service at it and watch requests arrive here as they happen. Then transform them, forward them, or script the reply.
 				</p>
 			</div>
-			<div class="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl overflow-hidden">
-				<div class="px-6 pt-6 pb-4">
-					<div class="flex items-center gap-3 mb-1">
-						<Webhook class="w-5 h-5 text-[var(--accent)]" />
-						<h2 class="text-lg font-semibold font-fira">Create New Endpoint</h2>
-					</div>
-					<p class="text-xs text-[var(--text-muted)] mb-4 ml-8">Get a unique URL to capture, inspect, and forward webhooks in real time.</p>
 
-					<!-- Row 1: Name + Mode (stacked on phones) -->
-					<div class="flex flex-col sm:flex-row gap-3 mb-3">
+			<form onsubmit={handleCreate} class="flex flex-col gap-[18px] bg-surface border border-line rounded-[14px] p-5 sm:p-6">
+				<div class="flex gap-3 flex-wrap items-end">
+					<label class="flex-[1_1_280px] flex flex-col gap-1.5 text-[13px] font-medium text-soft">
+						<span>Name <span class="font-normal text-faint">(optional)</span></span>
 						<input
+							type="text"
 							bind:value={newName}
-							placeholder="Endpoint name (optional)"
-							class="flex-1 min-w-0 bg-[var(--bg)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm text-[var(--text)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent)] transition-colors"
+							placeholder="stripe-payments"
+							class="font-sans text-[15px] text-ink px-3.5 py-3 border border-line-strong rounded-[10px] bg-page min-h-[46px] placeholder:text-faint/70 focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition-colors"
 						/>
-						<div class="flex gap-1 self-start bg-[var(--bg)] border border-[var(--border)] rounded-lg p-1">
-							<button
-								class="px-3 py-1.5 rounded-md text-xs font-medium transition-colors flex items-center gap-1.5 {newMode === 'server' ? 'bg-[var(--accent)] text-white' : 'text-[var(--text-muted)] hover:text-[var(--text)]'}"
-								onclick={() => (newMode = 'server')}
-								title="Stores requests in database, always-on transforms & forwarding"
-							>
-								<Server class="w-3.5 h-3.5" />Server
-							</button>
-							<button
-								class="px-3 py-1.5 rounded-md text-xs font-medium transition-colors flex items-center gap-1.5 {newMode === 'browser' ? 'bg-[var(--accent)] text-white' : 'text-[var(--text-muted)] hover:text-[var(--text)]'}"
-								onclick={() => (newMode = 'browser')}
-								title="No data stored on server, all processing in browser"
-							>
-								<Monitor class="w-3.5 h-3.5" />Browser
-							</button>
-						</div>
-					</div>
-
-					<!-- Mode description -->
-					<div class="text-[11px] text-[var(--text-muted)] mb-4 px-1">
-						{#if newMode === 'server'}
-							Requests are stored on the server. Transforms and forwarding run server-side, always-on even without a browser.
+					</label>
+					<button
+						type="submit"
+						disabled={creating}
+						class="flex-[1_1_auto] sm:flex-none justify-center text-[15px] font-medium text-on-ink bg-ink border-0 rounded-[10px] px-[22px] min-h-[46px] cursor-pointer flex items-center gap-2 hover:opacity-90 disabled:opacity-60 transition-opacity"
+					>
+						{#if creating}
+							<Loader2 class="w-4 h-4 animate-spin" />
+							Creating…
 						{:else}
-							Privacy-first: payloads never touch the server's disk. Transforms and forwarding run in your browser. Ideal for localhost targets.
+							<Plus class="w-4 h-4" strokeWidth={2.2} />
+							Create endpoint
 						{/if}
-					</div>
+					</button>
 				</div>
 
-				<!-- Advanced Configuration toggle -->
-				<button
-					class="w-full px-6 py-2.5 border-t border-[var(--border)] flex items-center gap-2 cursor-pointer select-none hover:bg-[var(--bg-hover)] transition-colors"
-					onclick={() => (showAdvanced = !showAdvanced)}
-				>
-					{#if showAdvanced}
-						<ChevronDown class="w-3.5 h-3.5 text-[var(--text-muted)]" />
-					{:else}
-						<ChevronRight class="w-3.5 h-3.5 text-[var(--text-muted)]" />
-					{/if}
-					<span class="text-xs font-medium text-[var(--text-muted)]">Advanced Configuration</span>
-					{#if newForwardUrl.trim() || newTransformEnabled || newCustomResponseEnabled}
-						<span class="text-[10px] px-1.5 py-0.5 rounded bg-[var(--accent)]/10 text-[var(--accent)]">
-							{[
-								newForwardUrl.trim() ? 'forwarding' : '',
-								newTransformEnabled ? 'transform' : '',
-								newCustomResponseEnabled ? 'custom response' : ''
-							].filter(Boolean).join(', ')}
-						</span>
-					{/if}
-				</button>
-
-				{#if showAdvanced}
-					<div class="px-6 py-4 border-t border-[var(--border)] flex flex-col gap-5">
-						<!-- Forward URL (single) -->
-						<div>
-							<div class="flex items-center gap-2 mb-2">
-								<Send class="w-3.5 h-3.5 text-[var(--text-muted)]" />
-								<span class="text-xs font-medium text-[var(--text)]">Forward URL</span>
-								<span class="text-[10px] text-[var(--text-muted)]">
-									{newMode === 'browser' ? '(browser-side fetch - localhost works)' : '(server-side HTTP - public URLs only)'}
+				<fieldset class="m-0 p-0 border-0 flex flex-col gap-2.5 min-w-0">
+					<legend class="p-0 mb-2.5 text-[13px] font-medium text-soft">Where should requests be handled?</legend>
+					<div class="grid grid-cols-[repeat(auto-fit,minmax(240px,1fr))] gap-2.5">
+						{#each modes as m (m.id)}
+							<label
+								class="flex gap-3 items-start rounded-xl px-4 py-3.5 bg-surface cursor-pointer transition-colors {newMode === m.id
+									? 'border-[1.5px] border-ink'
+									: 'border border-line hover:border-line-strong'}"
+							>
+								<input type="radio" name="mode" value={m.id} bind:group={newMode} class="mt-[3px] w-4 h-4 accent-accent shrink-0" />
+								<span class="flex flex-col gap-1">
+									<span class="text-[15px] font-semibold text-ink">{m.title}</span>
+									<span class="text-sm leading-normal text-body">{m.description}</span>
 								</span>
-							</div>
+							</label>
+						{/each}
+					</div>
+					<p class="m-0 text-[13px] text-faint">Not sure? Start on the server. You can switch any time.</p>
+				</fieldset>
+
+				<!-- Advanced configuration (collapsed) -->
+				<div class="border-t border-line -mx-5 sm:-mx-6 px-5 sm:px-6 pt-3.5">
+					<button
+						type="button"
+						onclick={() => (showAdvanced = !showAdvanced)}
+						aria-expanded={showAdvanced}
+						class="flex items-center gap-1.5 text-[13px] font-medium text-soft hover:text-ink transition-colors py-1"
+					>
+						<ChevronRight class="w-3.5 h-3.5 transition-transform {showAdvanced ? 'rotate-90' : ''}" />
+						Advanced configuration
+						{#if advancedSummary}
+							<span class="ml-1 text-xs font-normal text-accent">{advancedSummary}</span>
+						{/if}
+					</button>
+
+					{#if showAdvanced}
+						<div class="pt-4 pb-1 flex flex-col gap-6">
+							<p class="m-0 text-[13px] text-faint">All optional, and all can be changed later from the endpoint page.</p>
+
+							<!-- Forward URL -->
 							<div class="flex flex-col gap-2">
+								<label for="forward-url" class="text-[13px] font-medium text-soft">
+									Forward to
+									<span class="font-normal text-faint">
+										{newMode === 'browser' ? '(sent from this tab, so localhost works)' : '(sent from the server, so it must be reachable from there)'}
+									</span>
+								</label>
 								<input
+									id="forward-url"
 									bind:value={newForwardUrl}
 									placeholder="https://example.com/webhook or http://localhost:3000/hook"
 									oninput={() => (forwardUrlError = null)}
 									onblur={validateForwardUrl}
-									class="bg-[var(--bg)] border border-[var(--border)] rounded-lg px-3 py-1.5 text-sm text-[var(--text)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent)] {forwardUrlError ? 'border-red-500/50' : ''} transition-colors"
+									class="font-sans text-sm text-ink px-3 py-2.5 border rounded-[10px] bg-page placeholder:text-faint/70 focus:outline-none focus:border-accent transition-colors {forwardUrlError ? 'border-danger/60' : 'border-line-strong'}"
 								/>
 								{#if forwardUrlError}
-									<p class="text-[11px] text-[var(--red)] px-1">{forwardUrlError}</p>
+									<p class="m-0 text-xs text-danger">{forwardUrlError}</p>
 								{/if}
 								{#if newForwardUrl.trim()}
-									<div class="flex items-center gap-3">
-										<span class="text-[11px] text-[var(--text-muted)]">Mode:</span>
-										<div class="flex items-center border border-[var(--border)] rounded-lg overflow-hidden">
-											<button
-												onclick={() => (newForwardMode = 'async')}
-												class="text-[11px] px-3 py-1 transition-colors {newForwardMode === 'async'
-													? 'bg-[var(--accent)] text-white'
-													: 'text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)]'}"
-											>
-												Async
-											</button>
-											<button
-												onclick={() => (newForwardMode = 'sync')}
-												class="text-[11px] px-3 py-1 transition-colors {newForwardMode === 'sync'
-													? 'bg-[var(--accent)] text-white'
-													: 'text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)]'}"
-											>
-												Sync
-											</button>
+									<div class="flex items-center gap-3 flex-wrap">
+										<div class="flex items-center border border-line-strong rounded-lg overflow-hidden" role="radiogroup" aria-label="Forward mode">
+											{#each [{ id: 'async', label: 'Async' }, { id: 'sync', label: 'Sync' }] as const as fm (fm.id)}
+												<button
+													type="button"
+													role="radio"
+													aria-checked={newForwardMode === fm.id}
+													onclick={() => (newForwardMode = fm.id)}
+													class="text-xs px-3 py-1.5 transition-colors {newForwardMode === fm.id ? 'bg-ink text-on-ink' : 'text-soft hover:bg-chip'}"
+												>
+													{fm.label}
+												</button>
+											{/each}
 										</div>
-										<span class="text-[10px] text-[var(--text-muted)]">
-											{newForwardMode === 'async' ? 'Fire-and-forget, does not block response' : 'Waits for target response, usable in handler'}
+										<span class="text-xs text-faint">
+											{newForwardMode === 'async' ? "Doesn't wait for the target before replying." : "Waits for the target's response, so your reply script can use it."}
 										</span>
 									</div>
 								{/if}
 							</div>
-						</div>
 
-						<!-- Transform Script -->
-						<div>
-							<div class="flex items-center justify-between mb-2">
-								<div class="flex items-center gap-2">
-									<Code2 class="w-3.5 h-3.5 text-[var(--text-muted)]" />
-									<span class="text-xs font-medium text-[var(--text)]">Transform Script</span>
-								</div>
-								<label class="flex items-center gap-2 cursor-pointer">
-									<span class="text-[10px] text-[var(--text-muted)]">{newTransformEnabled ? 'Enabled' : 'Disabled'}</span>
-									<input
-										type="checkbox"
-										bind:checked={newTransformEnabled}
-										class="w-3.5 h-3.5 rounded border-[var(--border)] accent-[var(--accent)]"
-									/>
+							<!-- Transform -->
+							<div class="flex flex-col gap-2">
+								<label class="flex items-center justify-between gap-3 cursor-pointer">
+									<span class="text-[13px] font-medium text-soft">
+										Transform <span class="font-normal text-faint">(JavaScript, reshapes each request)</span>
+									</span>
+									<input type="checkbox" bind:checked={newTransformEnabled} class="w-4 h-4 accent-accent" />
 								</label>
-							</div>
-
-							{#if newTransformEnabled}
-								<div class="flex flex-col gap-2">
-									<div class="flex items-center gap-2">
-										<span class="text-[11px] text-[var(--text-muted)]">Language:</span>
-										<div class="flex items-center border border-[var(--border)] rounded-lg overflow-hidden">
-											{#each SUPPORTED_LANGUAGES as lang}
-												<button
-													onclick={() => { newTransformLanguage = lang.id; newTransformScript = ''; }}
-													class="text-[11px] px-2.5 py-1 transition-colors {newTransformLanguage === lang.id
-														? 'bg-[var(--accent)] text-white'
-														: 'text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)]'}"
-												>
-													{lang.label}
-												</button>
-											{/each}
-										</div>
-										{#if !newTransformScript}
-											<button
-												onclick={() => (newTransformScript = DEFAULT_SCRIPTS[newTransformLanguage])}
-												class="text-[11px] px-2 py-1 rounded-lg border border-[var(--border)] hover:bg-[var(--bg-hover)] text-[var(--text-muted)] hover:text-[var(--text)] transition-colors"
-											>
-												Insert template
-											</button>
-										{/if}
-									</div>
+								{#if newTransformEnabled}
+									{#if !newTransformScript}
+										<button
+											type="button"
+											onclick={() => (newTransformScript = DEFAULT_SCRIPTS.javascript)}
+											class="self-start text-xs px-2.5 py-1.5 rounded-lg border border-line-strong text-soft hover:bg-chip transition-colors"
+										>
+											Insert example
+										</button>
+									{/if}
 									<CodeEditor
 										value={newTransformScript}
 										onchange={(v) => (newTransformScript = v)}
-										placeholder={DEFAULT_SCRIPTS[newTransformLanguage].split('\n')[0]}
+										placeholder={DEFAULT_SCRIPTS.javascript.split('\n')[0]}
 										minHeight="140px"
-										language={newTransformLanguage}
+										language="javascript"
 									/>
-								</div>
-							{/if}
-						</div>
-
-						<!-- Custom Response (script-based) -->
-						<div>
-							<div class="flex items-center justify-between mb-2">
-								<div class="flex items-center gap-2">
-									<MessageSquare class="w-3.5 h-3.5 text-[var(--text-muted)]" />
-									<span class="text-xs font-medium text-[var(--text)]">Custom Response</span>
-									<span class="text-[10px] text-[var(--text-muted)]">(what webhook senders receive back)</span>
-								</div>
-								<label class="flex items-center gap-2 cursor-pointer">
-									<span class="text-[10px] text-[var(--text-muted)]">{newCustomResponseEnabled ? 'Enabled' : 'Disabled'}</span>
-									<input
-										type="checkbox"
-										bind:checked={newCustomResponseEnabled}
-										class="w-3.5 h-3.5 rounded border-[var(--border)] accent-[var(--accent)]"
-									/>
-								</label>
+								{/if}
 							</div>
 
-							{#if newCustomResponseEnabled}
-								<div class="flex flex-col gap-2">
-									<div class="flex items-center gap-2">
-										<span class="text-[11px] text-[var(--text-muted)]">Language:</span>
-										<div class="flex items-center border border-[var(--border)] rounded-lg overflow-hidden">
-											{#each SUPPORTED_LANGUAGES as lang}
-												<button
-													onclick={() => { newCustomResponseLanguage = lang.id; newCustomResponseScript = ''; }}
-													class="text-[11px] px-2.5 py-1 transition-colors {newCustomResponseLanguage === lang.id
-														? 'bg-[var(--accent)] text-white'
-														: 'text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)]'}"
-												>
-													{lang.label}
-												</button>
-											{/each}
-										</div>
+							<!-- Custom response -->
+							<div class="flex flex-col gap-2">
+								<label class="flex items-center justify-between gap-3 cursor-pointer">
+									<span class="text-[13px] font-medium text-soft">
+										Custom reply <span class="font-normal text-faint">(JavaScript, what the sender gets back)</span>
+									</span>
+									<input type="checkbox" bind:checked={newCustomResponseEnabled} class="w-4 h-4 accent-accent" />
+								</label>
+								{#if newCustomResponseEnabled}
+									<div class="flex items-center gap-2 flex-wrap">
 										{#if !newCustomResponseScript}
 											<button
-												onclick={() => (newCustomResponseScript = DEFAULT_RESPONSE_SCRIPTS[newCustomResponseLanguage])}
-												class="text-[11px] px-2 py-1 rounded-lg border border-[var(--border)] hover:bg-[var(--bg-hover)] text-[var(--text-muted)] hover:text-[var(--text)] transition-colors"
+												type="button"
+												onclick={() => (newCustomResponseScript = DEFAULT_RESPONSE_SCRIPTS.javascript)}
+												class="text-xs px-2.5 py-1.5 rounded-lg border border-line-strong text-soft hover:bg-chip transition-colors"
 											>
-												Insert template
+												Insert example
 											</button>
 										{/if}
 										<button
+											type="button"
 											onclick={handleNewResponseValidate}
 											disabled={newResponseValidating || !newCustomResponseScript}
-											class="text-[11px] px-2.5 py-1 rounded-lg border border-[var(--border)] hover:bg-[var(--bg-hover)] text-[var(--text-muted)] hover:text-[var(--text)] transition-colors flex items-center gap-1 disabled:opacity-50"
+											class="text-xs px-2.5 py-1.5 rounded-lg border border-line-strong text-soft hover:bg-chip transition-colors flex items-center gap-1 disabled:opacity-50"
 										>
 											{#if newResponseValidating}
 												<Loader2 class="w-3 h-3 animate-spin" />
@@ -411,175 +377,154 @@
 											Validate
 										</button>
 									</div>
-									{#if newMode === 'server' && newCustomResponseLanguage !== 'javascript'}
-										<p class="text-[10px] text-[var(--yellow)]">Server mode only supports JavaScript. {newCustomResponseLanguage === 'lua' ? 'Lua' : 'Jsonnet'} will only run when the browser tab is open.</p>
-									{/if}
 									<CodeEditor
 										value={newCustomResponseScript}
 										onchange={(v) => (newCustomResponseScript = v)}
-										placeholder={DEFAULT_RESPONSE_SCRIPTS[newCustomResponseLanguage].split('\n')[0]}
+										placeholder={DEFAULT_RESPONSE_SCRIPTS.javascript.split('\n')[0]}
 										minHeight="140px"
-										language={newCustomResponseLanguage}
+										language="javascript"
 									/>
-
 									{#if newResponseValidationResult}
-										<div class="text-xs px-3 py-2 rounded border {newResponseValidationResult.valid ? 'border-green-500/30 bg-green-500/5 text-[var(--green)]' : 'border-red-500/30 bg-red-500/5 text-[var(--red)]'}">
+										<div
+											class="text-xs px-3 py-2 rounded-lg border flex items-center gap-1.5 {newResponseValidationResult.valid
+												? 'border-accent/30 bg-accent/5 text-accent'
+												: 'border-danger/30 bg-danger/5 text-danger'}"
+										>
 											{#if newResponseValidationResult.valid}
-												<span class="flex items-center gap-1"><Check class="w-3 h-3" /> Handler script is valid</span>
+												<Check class="w-3 h-3" /> Reply script is valid
 											{:else}
-												<span class="flex items-center gap-1"><AlertTriangle class="w-3 h-3" /> {newResponseValidationResult.error}</span>
+												<AlertTriangle class="w-3 h-3" /> {newResponseValidationResult.error}
 											{/if}
 										</div>
 									{/if}
-								</div>
-							{/if}
+								{/if}
+							</div>
 						</div>
-					</div>
-				{/if}
+					{/if}
+				</div>
 
-				<!-- Error message -->
 				{#if createError}
-					<div class="mx-6 mt-4 px-3 py-2 rounded bg-red-500/10 border border-red-500/20 text-sm text-[var(--red)] flex items-center justify-between">
-						<span>{createError}</span>
-						<button onclick={() => (createError = null)} class="ml-2 p-0.5 rounded hover:bg-red-500/20 transition-colors">
-							<X class="w-3.5 h-3.5" />
-						</button>
-					</div>
+					{@render errorBanner(createError, () => (createError = null))}
 				{/if}
+			</form>
+		</section>
 
-				<!-- Create button -->
-				<div class="px-6 py-4 border-t border-[var(--border)]">
-					<button
-						onclick={handleCreate}
-						disabled={creating}
-						class="w-full bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white rounded-xl px-4 py-2.5 text-sm font-medium transition-colors disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-blue-500/20"
-					>
-						<Webhook class="w-4 h-4" />
-						{creating ? 'Creating...' : 'Create Endpoint'}
-					</button>
-				</div>
+		<!-- ===== HOW IT WORKS ===== -->
+		<section class="flex flex-col gap-4">
+			{@render sectionHeading('How it works')}
+			<ol class="m-0 p-0 list-none grid grid-cols-[repeat(auto-fit,minmax(240px,1fr))] gap-3">
+				{#each steps as step, i}
+					<li class="flex gap-3.5 items-start bg-surface border border-line rounded-xl p-[18px]">
+						<span class="flex-none w-7 h-7 rounded-full bg-ink text-on-ink text-[13px] font-mono flex items-center justify-center">{i + 1}</span>
+						<span class="flex flex-col gap-1">
+							<span class="text-[15px] font-semibold text-ink">{step.title}</span>
+							<span class="text-sm leading-normal text-body">
+								{step.text}{#if step.code}&nbsp;<span class="font-mono text-[13px] text-ink">{step.code}</span>.{/if}
+							</span>
+						</span>
+					</li>
+				{/each}
+			</ol>
+		</section>
+
+		<!-- ===== ENDPOINTS ===== -->
+		<section class="flex flex-col gap-4">
+			<div class="flex items-baseline justify-between gap-3 flex-wrap">
+				{@render sectionHeading(endpoints.length > 0 ? `Your endpoints (${endpoints.length})` : 'Your endpoints')}
+				<span class="text-[13px] text-faint">Saved in this browser</span>
 			</div>
-		</div>
-	</section>
 
-	<!-- ===== ENDPOINTS LIST ===== -->
-	<section class="pt-4 pb-12 bg-[var(--bg)]">
-		<div class="max-w-3xl mx-auto px-6">
 			{#if deleteError}
-				<div class="mb-3 px-3 py-2 rounded bg-red-500/10 border border-red-500/20 text-sm text-[var(--red)] flex items-center justify-between">
-					<span>{deleteError}</span>
-					<button onclick={() => (deleteError = null)} class="ml-2 p-0.5 rounded hover:bg-red-500/20 transition-colors">
-						<X class="w-3.5 h-3.5" />
-					</button>
-				</div>
+				{@render errorBanner(deleteError, () => (deleteError = null))}
 			{/if}
-			<h2 class="text-lg font-semibold font-fira mb-4">
-				Your Endpoints
-				{#if endpoints.length > 0}
-					<span class="text-sm font-normal text-[var(--text-muted)] ml-2">({endpoints.length})</span>
-				{/if}
-			</h2>
 
 			{#if loading}
-				<div class="text-center py-12 text-[var(--text-muted)]">Loading...</div>
+				<div class="border border-dashed border-line-dashed rounded-xl px-6 py-8 text-center text-sm text-faint">Loading…</div>
 			{:else if loadError}
-				<div class="px-4 py-3 rounded bg-red-500/10 border border-red-500/20 text-sm text-[var(--red)] flex items-center justify-between">
+				<div class="px-3.5 py-2.5 rounded-[10px] border border-danger/25 bg-danger/5 text-sm text-danger flex items-center justify-between gap-3">
 					<span>{loadError}</span>
-					<button onclick={loadEndpoints} class="ml-2 text-xs underline hover:no-underline">Retry</button>
+					<button type="button" onclick={loadEndpoints} class="text-xs underline hover:no-underline">Retry</button>
 				</div>
 			{:else if endpoints.length === 0}
-				<div class="text-center py-12 text-[var(--text-muted)]">
-					<p class="mb-2">No endpoints yet.</p>
-					<p class="text-sm">Create one above to get started.</p>
+				<div class="border border-dashed border-line-dashed rounded-xl px-6 py-8 text-center flex flex-col gap-1.5 items-center">
+					<span class="text-[15px] font-medium text-ink">No endpoints yet</span>
+					<span class="text-sm text-body">The ones you create show up here, so you can come back to them.</span>
 				</div>
 			{:else}
-				<div class="flex flex-col gap-2">
+				<ul class="m-0 p-0 list-none flex flex-col gap-2">
 					{#each endpoints as ep (ep.id)}
-						<div class="bg-[var(--bg)] border border-[var(--border)] rounded-lg p-4 hover:border-[var(--accent)]/30 transition-colors group">
-							<div class="flex items-center justify-between">
-								<a href="/{ep.slug}" class="flex-1 min-w-0">
-									<div class="flex items-center gap-3">
-										<span class="text-sm font-mono text-[var(--accent)]">{ep.slug}</span>
-										{#if ep.name}
-											<span class="text-sm text-[var(--text)] truncate">{ep.name}</span>
-										{/if}
-										<span class="text-[10px] px-1.5 py-0.5 rounded {ep.mode === 'server' ? 'bg-blue-500/10 text-blue-400' : 'bg-purple-500/10 text-purple-400'} flex items-center gap-1">
-											{#if ep.mode === 'server'}<Server class="w-2.5 h-2.5" />{:else}<Monitor class="w-2.5 h-2.5" />{/if}
-											{ep.mode}
-										</span>
-										<!-- Config badges -->
-										{#if ep.config?.forward_url}
-											<span class="text-[10px] px-1.5 py-0.5 rounded bg-green-500/10 text-[var(--green)]">
-												forward
-											</span>
-										{/if}
-										{#if ep.config?.wasm_script}
-											<span class="text-[10px] px-1.5 py-0.5 rounded bg-orange-500/10 text-[var(--orange)]">
-												{ep.config.transform_language ?? 'js'} transform
-											</span>
-										{/if}
-									</div>
-									<div class="text-xs text-[var(--text-muted)] mt-1">
-										Created {formatTime(ep.created_at)} &middot; <code class="text-[10px]">{getWebhookURL(ep.slug)}</code>
-									</div>
-								</a>
+						<li class="bg-surface border border-line rounded-xl hover:border-line-strong transition-colors flex items-center gap-2 pr-2">
+							<a href="/{ep.slug}" class="flex-1 min-w-0 px-4 py-3.5 flex flex-col gap-1 no-underline">
+								<span class="flex items-center gap-2 flex-wrap">
+									<span class="text-[15px] font-semibold text-ink truncate">{ep.name || ep.slug}</span>
+									<span class="text-xs font-medium text-soft bg-chip rounded-md px-2 py-0.5">{ep.mode === 'server' ? 'Server' : 'Browser'}</span>
+									{#if ep.config?.wasm_script}
+										<span class="text-xs font-medium text-soft bg-chip rounded-md px-2 py-0.5">Transform</span>
+									{/if}
+									{#if ep.config?.forward_url}
+										<span class="text-xs font-medium text-soft bg-chip rounded-md px-2 py-0.5">Forward</span>
+									{/if}
+								</span>
+								<span class="text-[13px] text-faint flex gap-x-2 flex-wrap min-w-0">
+									<span class="font-mono truncate max-w-full">/h/{ep.slug}</span>
+									<span>· Created {formatTime(ep.created_at)}</span>
+								</span>
+							</a>
 
-								<div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+							<div class="flex items-center gap-1 shrink-0">
+								{#if deleteConfirm === ep.id}
 									<button
+										type="button"
+										onclick={() => handleDelete(ep.id)}
+										class="text-[13px] font-medium px-3 min-h-9 rounded-lg bg-danger/10 text-danger hover:bg-danger/15 transition-colors"
+									>
+										Delete
+									</button>
+									<button
+										type="button"
+										onclick={() => (deleteConfirm = null)}
+										class="text-[13px] px-3 min-h-9 rounded-lg text-soft hover:bg-chip transition-colors"
+									>
+										Cancel
+									</button>
+								{:else}
+									<button
+										type="button"
 										onclick={() => handleCopy(ep.slug)}
-										class="p-2 rounded hover:bg-[var(--bg-hover)] text-[var(--text-muted)] hover:text-[var(--text)] transition-colors"
+										class="w-10 h-10 rounded-lg flex items-center justify-center text-faint hover:text-ink hover:bg-chip transition-colors"
 										title="Copy webhook URL"
+										aria-label="Copy webhook URL"
 									>
 										{#if copied === ep.slug}
-											<span class="text-[10px] text-[var(--green)]">Copied!</span>
+											<Check class="w-4 h-4 text-accent" />
 										{:else}
 											<Copy class="w-4 h-4" />
 										{/if}
 									</button>
-									<a
-										href="/{ep.slug}"
-										class="p-2 rounded hover:bg-[var(--bg-hover)] text-[var(--text-muted)] hover:text-[var(--text)] transition-colors"
-										title="Open"
+									<button
+										type="button"
+										onclick={() => (deleteConfirm = ep.id)}
+										class="w-10 h-10 rounded-lg flex items-center justify-center text-faint hover:text-danger hover:bg-danger/10 transition-colors"
+										title="Delete endpoint"
+										aria-label="Delete endpoint"
 									>
-										<ExternalLink class="w-4 h-4" />
-									</a>
-									{#if deleteConfirm === ep.id}
-										<button
-											onclick={() => handleDelete(ep.id)}
-											class="text-[10px] px-2 py-1 rounded bg-red-500/10 text-[var(--red)] hover:bg-red-500/20 transition-colors"
-										>
-											Confirm
-										</button>
-										<button
-											onclick={() => (deleteConfirm = null)}
-											class="text-[10px] px-2 py-1 rounded hover:bg-[var(--bg-hover)] text-[var(--text-muted)] transition-colors"
-										>
-											Cancel
-										</button>
-									{:else}
-										<button
-											onclick={() => (deleteConfirm = ep.id)}
-											class="p-2 rounded hover:bg-red-500/10 text-[var(--text-muted)] hover:text-[var(--red)] transition-colors"
-											title="Delete endpoint"
-										>
-											<Trash2 class="w-4 h-4" />
-										</button>
-									{/if}
-								</div>
+										<Trash2 class="w-4 h-4" />
+									</button>
+								{/if}
 							</div>
-						</div>
+						</li>
 					{/each}
-				</div>
+				</ul>
 			{/if}
-		</div>
-	</section>
+		</section>
+	</div>
 
-	<footer class="py-6 border-t border-[var(--border)]">
-		<div class="max-w-3xl mx-auto px-6 flex items-center justify-between gap-4 text-xs text-[var(--text-muted)]">
+	<footer class="border-t border-line">
+		<div class="max-w-[1240px] mx-auto px-4 sm:px-6 py-5 flex justify-between gap-3 flex-wrap text-[13px] text-faint">
 			<span>testhooks · self-hosted webhook inspector</span>
 			<span class="flex gap-4">
-				<a href="https://sarathsp06.github.io/testhooks/" target="_blank" rel="noopener noreferrer" class="hover:text-[var(--accent)] transition-colors">Docs</a>
-				<a href="https://github.com/sarathsp06/testhooks" target="_blank" rel="noopener noreferrer" class="hover:text-[var(--accent)] transition-colors">GitHub</a>
+				<a href="https://sarathsp06.github.io/testhooks/" target="_blank" rel="noopener noreferrer" class="underline hover:text-accent transition-colors">Docs</a>
+				<a href="https://github.com/sarathsp06/testhooks" target="_blank" rel="noopener noreferrer" class="underline hover:text-accent transition-colors">GitHub</a>
 			</span>
 		</div>
 	</footer>
