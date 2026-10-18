@@ -47,9 +47,9 @@ A clean shutdown loses nothing; a crash loses at most the last 30 seconds. If th
 In-memory mode is meant for one person testing locally. For a shared or public instance, use PostgreSQL.
 
 :::caution[Needs one long-running process]
-In-memory data lives in a single process. On serverless platforms such as Vercel, Netlify Functions or AWS Lambda, requests are spread across short-lived instances that each have their own memory, so endpoints created on one instance are missing on the next and webhook URLs return 404. A snapshot file doesn't help there either, because each instance has its own temporary disk. Those platforms also don't keep WebSockets open, so the live view and browser mode won't work.
+In-memory data lives in a single process. On platforms that spread requests across several short-lived instances, such as Vercel, Netlify Functions or AWS Lambda, each instance has its own memory, so endpoints created on one instance are missing on the next and webhook URLs return 404. A snapshot file doesn't help there either, because each instance has its own temporary disk.
 
-Run Testhooks as one long-running process instead: your machine, a VPS, or a container host (Fly.io, Railway, Render and similar) with a single instance.
+Run in-memory Testhooks as one long-running process: your machine, a VPS, or a container host (Fly.io, Railway, Render and similar) with a single instance. On Vercel, use PostgreSQL; see [Deploy on Vercel](../../deployment/vercel/).
 :::
 
 ### With PostgreSQL

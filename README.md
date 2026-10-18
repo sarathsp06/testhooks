@@ -65,6 +65,7 @@ Notes:
 - Pin a release with `TESTHOOKS_VERSION=v1.1.0` in front of `sh`.
 - In-memory mode is for one person testing locally. Add `SNAPSHOT_PATH=./testhooks.snapshot` to keep data across restarts (saved every 30 s and on shutdown).
 - With PostgreSQL, migrations run on startup and the server waits up to 60 s for the database.
+- Deploying to Vercel? Use PostgreSQL (session mode, not a transaction pooler) and follow [Deploy on Vercel](https://sarathsp06.github.io/testhooks/deployment/vercel/), which has a one-click button.
 
 ### From source
 
@@ -198,7 +199,7 @@ Development:
 ### Running in production
 
 - Use PostgreSQL; in-memory mode is for local testing.
-- Run it as one long-running server or container (a VPS, Fly.io, Railway, Render), not on serverless functions such as Vercel: WebSockets don't stay open there, and in-memory endpoints vanish between instances.
+- Prefer one long-running server or container (a VPS, Fly.io, Railway, Render). On platforms that run several instances, such as Vercel, use PostgreSQL (in-memory endpoints vanish between instances) and expect live updates and browser mode to reach only browsers on the same instance. See [Deploy on Vercel](https://sarathsp06.github.io/testhooks/deployment/vercel/).
 - Set `AUTH_TOKEN` and `ALLOWED_ORIGINS`. Without them anyone who can reach the server can read every endpoint.
 - Put it behind a TLS-terminating reverse proxy and list that proxy in `TRUSTED_PROXIES` so rate limiting sees real client IPs.
 - `GET /healthz` returns `200` when the database is reachable and `503` when it isn't. Use it for liveness and readiness checks.

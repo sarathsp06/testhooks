@@ -51,6 +51,7 @@ export default defineConfig({
 					label: 'Deployment',
 					items: [
 						{ label: 'Running in production', slug: 'deployment/production' },
+						{ label: 'Deploy on Vercel', slug: 'deployment/vercel' },
 						{ label: 'Releasing', slug: 'deployment/releasing' },
 					],
 				},

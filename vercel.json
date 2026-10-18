@@ -1,0 +1,5 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "go",
+  "buildCommand": "cd web && npm ci && npm run build && cd .. && go build -trimpath -ldflags=\"-s -w -X main.version=${VERCEL_GIT_COMMIT_SHA:-vercel}\" -o \"$VERCEL_OUTPUT_FILE\" ./cmd/testhooks"
+}
