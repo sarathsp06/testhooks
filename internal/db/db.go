@@ -5,6 +5,7 @@ import (
 	"embed"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -26,13 +27,29 @@ type Pool struct {
 var ErrInvalidURL = errors.New("invalid DATABASE_URL")
 
 // Connect creates a new connection pool and runs migrations.
-func Connect(ctx context.Context, databaseURL string) (*Pool, error) {
+//
+// serverless picks pool defaults for platforms like Vercel, where many short-
+// lived instances share the database's connection limit: a few connections
+// per instance, none held open while idle. pool_max_conns, pool_min_conns and
+// pool_max_conn_idle_time in the URL override the defaults either way.
+func Connect(ctx context.Context, databaseURL string, serverless bool) (*Pool, error) {
 	cfg, err := pgxpool.ParseConfig(databaseURL)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrInvalidURL, err)
 	}
-	cfg.MaxConns = 20
-	cfg.MinConns = 2
+	maxConns, minConns, idle := int32(20), int32(2), 30*time.Minute
+	if serverless {
+		maxConns, minConns, idle = 3, 0, 30*time.Second
+	}
+	if !urlSets(databaseURL, "pool_max_conns") {
+		cfg.MaxConns = maxConns
+	}
+	if !urlSets(databaseURL, "pool_min_conns") {
+		cfg.MinConns = minConns
+	}
+	if !urlSets(databaseURL, "pool_max_conn_idle_time") {
+		cfg.MaxConnIdleTime = idle
+	}
 	cfg.MaxConnLifetime = 30 * time.Minute
 
 	pool, err := pgxpool.NewWithConfig(ctx, cfg)
@@ -51,6 +68,11 @@ func Connect(ctx context.Context, databaseURL string) (*Pool, error) {
 	}
 
 	return &Pool{pool}, nil
+}
+
+// urlSets reports whether a connection string (URL or key=value form) sets key.
+func urlSets(databaseURL, key string) bool {
+	return strings.Contains(databaseURL, key+"=")
 }
 
 func runMigrations(databaseURL string) error {

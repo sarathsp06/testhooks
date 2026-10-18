@@ -27,6 +27,12 @@ Use a **session-mode** or **direct** connection, not a transaction-mode pooler:
 
 Transaction-mode poolers hand each query to a different backend connection. The Postgres driver caches prepared statements per connection, so queries fail intermittently with errors like `prepared statement "stmtcache_…" already exists`, and migrations can leave a lock behind.
 
+### Connection limits
+
+Every Vercel instance opens its own connections, and a deploy briefly runs the old and new instances side by side. A session pooler caps clients for the whole project (Supabase's free tier allows 15), so on Vercel each instance uses at most 3 connections and closes idle ones after 30 seconds.
+
+If startup logs `max clients reached in session mode`, the pooler is full. Lower the per-instance limit by adding `pool_max_conns` to the URL, for example `...postgres?pool_max_conns=2`, or raise the pool size in your database provider's settings. `pool_min_conns` and `pool_max_conn_idle_time` work the same way.
+
 If a pasted connection string has a trailing newline, Testhooks trims it. A string that still can't be parsed stops startup with `invalid DATABASE_URL`, with the password redacted.
 
 ## What works differently on Vercel

@@ -88,7 +88,13 @@ func main() {
 	} else {
 		// Connect to Postgres and run migrations, retrying while the database comes
 		// up (common in container orchestration where start order isn't guaranteed).
-		pool, err := connectWithRetry(ctx, cfg.DatabaseURL, 60*time.Second, log)
+		// Vercel kills an instance that isn't listening within 30s, so give up
+		// sooner there and log the real database error instead.
+		wait := 60 * time.Second
+		if cfg.OnVercel {
+			wait = 20 * time.Second
+		}
+		pool, err := connectWithRetry(ctx, cfg.DatabaseURL, wait, cfg.OnVercel, log)
 		if err != nil {
 			log.Fatal().Err(err).Msg("failed to connect to database")
 		}
@@ -278,12 +284,12 @@ func main() {
 
 // connectWithRetry calls db.Connect with exponential backoff until it succeeds,
 // maxWait elapses, or ctx is cancelled.
-func connectWithRetry(ctx context.Context, databaseURL string, maxWait time.Duration, log zerolog.Logger) (*db.Pool, error) {
+func connectWithRetry(ctx context.Context, databaseURL string, maxWait time.Duration, serverless bool, log zerolog.Logger) (*db.Pool, error) {
 	deadline := time.Now().Add(maxWait)
 	delay := 500 * time.Millisecond
 	for attempt := 1; ; attempt++ {
 		attemptCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-		pool, err := db.Connect(attemptCtx, databaseURL)
+		pool, err := db.Connect(attemptCtx, databaseURL, serverless)
 		cancel()
 		if err == nil {
 			return pool, nil

@@ -67,7 +67,8 @@ The pruner deletes the oldest requests beyond these limits every `PRUNE_INTERVAL
 
 ## Startup and shutdown
 
-- On startup, the server retries the database connection for up to 60 seconds, so it tolerates the database starting at the same time.
+- On startup, the server retries the database connection for up to 60 seconds (20 on Vercel), so it tolerates the database starting at the same time.
+- Each instance keeps up to 20 database connections (3 on Vercel). Set `pool_max_conns` in `DATABASE_URL` to change it.
 - On `SIGTERM` or `SIGINT` it stops accepting connections and gives in-flight requests and background forwards up to 10 seconds to finish. Give your orchestrator a termination grace period above that.
 
 ## Database failures
