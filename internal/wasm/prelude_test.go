@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 )
 
 // Covers the script API from prelude.js: req.json, header helpers, null to skip.
@@ -152,5 +153,32 @@ func TestRunResponseHandler_Prelude(t *testing.T) {
 	}
 	if out.Status != 201 || out.Body != "Ada abc" {
 		t.Errorf("got %+v", out)
+	}
+}
+
+// qjs ignores MaxExecutionTime; the runner must still stop runaway scripts.
+func TestTimeout_StopsInfiniteLoop(t *testing.T) {
+	r := newTestRunner(t)
+	r.timeout = 300 * time.Millisecond
+	input := TransformInput{Method: "POST", Path: "/", Headers: map[string][]string{}}
+
+	start := time.Now()
+	_, err := r.Transform(context.Background(), `function transform(req) { while (true) {} }`, input)
+	if err == nil || !strings.Contains(err.Error(), "was stopped") {
+		t.Fatalf("err = %v, want timeout", err)
+	}
+	if d := time.Since(start); d > 3*time.Second {
+		t.Fatalf("took %s, want about 300ms", d)
+	}
+
+	_, err = r.RunResponseHandler(context.Background(), `function handler(req) { for (;;) {} }`, input, nil)
+	if err == nil || !strings.Contains(err.Error(), "was stopped") {
+		t.Fatalf("handler err = %v, want timeout", err)
+	}
+
+	// The runner still works afterwards.
+	out, err := r.Transform(context.Background(), `function transform(req) { req.path = "/ok"; return req; }`, input)
+	if err != nil || out.Path != "/ok" {
+		t.Fatalf("after timeout: out=%+v err=%v", out, err)
 	}
 }

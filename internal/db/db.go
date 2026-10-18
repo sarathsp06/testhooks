@@ -5,6 +5,7 @@ import (
 	"embed"
 	"errors"
 	"fmt"
+	"net/url"
 	"strings"
 	"time"
 
@@ -75,13 +76,30 @@ func urlSets(databaseURL, key string) bool {
 	return strings.Contains(databaseURL, key+"=")
 }
 
+// migrationURL drops pgx's pool_* settings from the URL. The migrator connects
+// with lib/pq, which sends unknown parameters to the server and fails on them.
+func migrationURL(databaseURL string) string {
+	u, err := url.Parse(databaseURL)
+	if err != nil || u.RawQuery == "" {
+		return databaseURL
+	}
+	q := u.Query()
+	for k := range q {
+		if strings.HasPrefix(k, "pool_") {
+			q.Del(k)
+		}
+	}
+	u.RawQuery = q.Encode()
+	return u.String()
+}
+
 func runMigrations(databaseURL string) error {
 	d, err := iofs.New(migrationsFS, "migrations")
 	if err != nil {
 		return fmt.Errorf("open migrations fs: %w", err)
 	}
 
-	m, err := migrate.NewWithSourceInstance("iofs", d, databaseURL)
+	m, err := migrate.NewWithSourceInstance("iofs", d, migrationURL(databaseURL))
 	if err != nil {
 		return fmt.Errorf("create migrator: %w", err)
 	}

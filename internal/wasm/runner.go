@@ -165,22 +165,10 @@ func (r *Runner) Transform(ctx context.Context, script string, input TransformIn
 	}
 	defer release()
 
-	// Create a fresh runtime for this execution (MED-005: no state leakage).
-	rt, err := qjs.New(r.option)
-	if err != nil {
-		return nil, fmt.Errorf("create runtime: %w", err)
-	}
-	defer rt.Close()
-
-	program := buildProgram(script, "__th_runTransform", inputJSON)
-
-	val, err := rt.Eval("transform.js", qjs.Code(program))
+	resultJSON, err := r.eval(ctx, "transform.js", buildProgram(script, "__th_runTransform", inputJSON))
 	if err != nil {
 		return nil, fmt.Errorf("exec transform: %w", err)
 	}
-	defer val.Free()
-
-	resultJSON := val.String()
 
 	// M-07: Check output size limit to prevent OOM from malicious scripts.
 	if len(resultJSON) > r.maxOutputSize {
@@ -243,27 +231,11 @@ func (r *Runner) RunResponseHandler(ctx context.Context, script string, input Tr
 	}
 	defer release()
 
-	// Create a fresh runtime for this execution (MED-005: no state leakage).
-	rt, err := qjs.New(r.option)
-	if err != nil {
-		return nil, fmt.Errorf("create runtime: %w", err)
-	}
-	defer rt.Close()
-
-	program := buildProgram(script, "__th_runHandler", inputJSON)
-
-	val, err := rt.Eval("handler.js", qjs.Code(program))
+	resultJSON, err := r.eval(ctx, "handler.js", buildProgram(script, "__th_runHandler", inputJSON))
 	if err != nil {
 		return nil, fmt.Errorf("exec handler: %w", err)
 	}
-	defer val.Free()
-
-	if val.IsUndefined() || val.IsNull() {
-		// No handler defined or handler returned null — use default response
-		return nil, nil
-	}
-
-	resultJSON := val.String()
+	// No handler defined, or it returned null: use the default response.
 	if resultJSON == "null" {
 		return nil, nil
 	}
@@ -290,6 +262,58 @@ func (r *Runner) acquire(ctx context.Context) (func(), error) {
 	case <-ctx.Done():
 		return nil, fmt.Errorf("waiting for wasm runtime: %w", ctx.Err())
 	}
+}
+
+// eval runs a program in a fresh runtime (MED-005: no state leakage) and
+// returns its value as a string. The run is cut off at r.timeout: qjs ignores
+// Option.MaxExecutionTime (its interrupt handler is compiled out), so the
+// deadline goes through the runtime's context, which wazero enforces.
+func (r *Runner) eval(ctx context.Context, file, program string) (result string, err error) {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	opt := r.option
+	opt.Context = ctx
+	opt.CloseOnContextDone = true
+	rt, err := qjs.New(opt)
+	if err != nil {
+		return "", fmt.Errorf("create runtime: %w", err)
+	}
+	// After a timeout the module is closed and qjs panics on any further call,
+	// including Close; there's nothing left to free then.
+	defer func() {
+		defer func() { _ = recover() }()
+		rt.Close()
+	}()
+
+	// Start the clock once the runtime exists, so creating it (slow the
+	// first time, while the module compiles) doesn't count against the script.
+	var timedOut atomic.Bool
+	timer := time.AfterFunc(r.timeout, func() { timedOut.Store(true); cancel() })
+	defer timer.Stop()
+
+	// qjs panics rather than returning an error when the module is closed
+	// mid-run, so a timeout surfaces here.
+	defer func() {
+		if p := recover(); p != nil {
+			result = ""
+			if timedOut.Load() {
+				err = fmt.Errorf("script took longer than %s and was stopped", r.timeout)
+			} else {
+				err = fmt.Errorf("script runtime failed: %v", p)
+			}
+		}
+	}()
+
+	val, err := rt.Eval(file, qjs.Code(program))
+	if err != nil {
+		if timedOut.Load() {
+			return "", fmt.Errorf("script took longer than %s and was stopped", r.timeout)
+		}
+		return "", err
+	}
+	defer val.Free()
+	return val.String(), nil
 }
 
 // buildProgram wraps a user script with the shared prelude and calls the given

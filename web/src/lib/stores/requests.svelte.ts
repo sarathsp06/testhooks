@@ -79,6 +79,8 @@ export function getRequestsStore() {
 
 		/** Prepend a new request from the WebSocket stream */
 		prepend(req: CapturedRequest) {
+			// Open the very first request so a new user sees it right away.
+			if (items.length === 0 && !selectedId) selectedId = req.id;
 			items = [req, ...items];
 			total += 1;
 		},

@@ -118,8 +118,11 @@
 							}
 						}
 
-						// Step 2: Forward (if configured)
-						const fwdUrl = dropped ? undefined : ep.config?.forward_url;
+						// Step 2: Forward (if configured). With a custom reply on, the server
+						// also sends response_needed for this request, and that flow does the
+						// forward; doing it here too would deliver it twice.
+						const crActive = !!(ep.config?.custom_response?.enabled && ep.config?.custom_response?.script && !customResponseLegacy);
+						const fwdUrl = dropped || crActive ? undefined : ep.config?.forward_url;
 						if (fwdUrl) {
 							const fwdMode = ep.config?.forward_mode || 'async';
 							if (fwdMode === 'async') {
