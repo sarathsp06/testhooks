@@ -9,7 +9,7 @@
 	}: {
 		endpoint: Endpoint;
 		/** Switch the endpoint page to one of its configuration tabs. */
-		onOpenTab: (tab: 'transform' | 'settings') => void;
+		onOpenTab: (tab: 'transform' | 'reply' | 'settings') => void;
 	} = $props();
 
 	const SAMPLE_EVENT = {
@@ -74,7 +74,7 @@
 	{/if}
 {/snippet}
 
-{#snippet stepAction(on: boolean, label: string, tab: 'transform' | 'settings')}
+{#snippet stepAction(on: boolean, label: string, tab: 'transform' | 'reply' | 'settings')}
 	<button
 		type="button"
 		onclick={() => onOpenTab(tab)}
@@ -228,7 +228,7 @@
 						{/if}
 					</span>
 				</span>
-				{@render stepAction(hasReply, 'Change', 'transform')}
+				{@render stepAction(hasReply, 'Change', 'reply')}
 			</li>
 		</ol>
 		<a

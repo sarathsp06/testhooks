@@ -14,15 +14,17 @@ Scripts are JavaScript. They run sandboxed in WebAssembly (QuickJS), on the serv
 - A script has 5 seconds to finish.
 - On the server, memory is capped at 64 MB and the result at 1 MB.
 
-## Trying a script before you save it
+## Writing and trying a script
 
-Under the scripts, **Try your scripts** runs them without sending anything:
+The endpoint page shows the pipeline at the top: **Capture → Transform → Forward → Reply**. Click **Edit** on Transform, or **Change** on Reply, to open its editor. **Test a transform on this** on any request opens the transform editor with that request loaded.
 
-1. Pick what to try it on: a captured request, a sample (JSON event, push event, ping, form post, GET with no body), or your own request.
-2. Check the request it shows: method, path, headers and `req.json` (or `req.body`). Click **Edit** to change any of them, or to paste your own payload. Your own request is remembered per endpoint in your browser.
-3. Click **Run**. It runs your unsaved transform and reply in the server's order and shows what would be forwarded (a line diff of the body, plus any header, method and path changes), whether it would be skipped, and the reply the sender would get.
+The editor has three columns:
 
-Nothing is sent: the forward target isn't called, and with sync forwarding `req.forward_response` is a stand-in `200 {"ok":true}`.
+1. **Input:** pick what to try it on (a captured request, a sample, or your own request) and see the `req` your script gets. **Edit** lets you change the method, path, headers or body.
+2. **Your transform** (or **Your reply**): the script, with **Start from** examples above it.
+3. **What will be forwarded** (or **What the sender gets**): updates as you type, with a line diff of the body for a transform.
+
+Below, **Check it against more traffic** runs the script on recent captured requests and points out any it throws on. Nothing is sent while you try a script, and nothing is saved until you click **Save**. Untick **Run on every request** to keep a script saved without running it.
 
 ## What a script gets
 

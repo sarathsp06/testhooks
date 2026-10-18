@@ -4,6 +4,7 @@
 	import { ModeWatcher, toggleMode, mode } from 'mode-watcher';
 	import AuthPrompt from '$lib/components/AuthPrompt.svelte';
 	import { auth } from '$lib/auth.svelte';
+	import { page } from '$app/state';
 
 	function signOut() {
 		auth.signOut();
@@ -12,6 +13,9 @@
 	}
 
 	let { children } = $props();
+
+	// Endpoint screens draw their own header (breadcrumb, URL, editor actions).
+	const ownHeader = $derived(page.route.id === '/[slug]');
 </script>
 
 <ModeWatcher />
@@ -19,6 +23,7 @@
 
 <div class="min-h-screen flex flex-col">
 	<!-- 56px + 1px border: the endpoint page sizes itself to 100vh - 57px. -->
+	{#if !ownHeader}
 	<header class="border-b border-line bg-page">
 		<div class="max-w-[1240px] mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-3">
 			<a href="/" class="flex items-center gap-2.5 text-ink no-underline">
@@ -73,6 +78,7 @@
 			</nav>
 		</div>
 	</header>
+	{/if}
 
 	<main class="flex-1 flex flex-col">
 		{@render children()}

@@ -13,7 +13,8 @@
 		placeholder = '',
 		readonly = false,
 		minHeight = '120px',
-		language = 'javascript'
+		language = 'javascript',
+		bare = false
 	}: {
 		value?: string;
 		onchange?: (value: string) => void;
@@ -21,6 +22,8 @@
 		readonly?: boolean;
 		minHeight?: string;
 		language?: 'javascript' | 'json';
+		/** No border; blends into a dark code panel. */
+		bare?: boolean;
 	} = $props();
 
 	let container: HTMLDivElement;
@@ -45,9 +48,10 @@
 			oneDark,
 			EditorView.lineWrapping,
 			EditorView.theme({
-				'&': { minHeight, fontSize: '13px' },
-				'.cm-scroller': { overflow: 'auto' },
-				'.cm-content': { fontFamily: "'JetBrains Mono', 'Fira Code', monospace" },
+				'&': { minHeight, fontSize: '13px', ...(bare ? { backgroundColor: 'var(--code)', height: '100%' } : {}) },
+				'.cm-scroller': { overflow: 'auto', lineHeight: bare ? '1.75' : 'inherit' },
+				'.cm-content': { fontFamily: "'Geist Mono', ui-monospace, monospace" },
+				...(bare ? { '.cm-activeLine, .cm-activeLineGutter': { backgroundColor: 'transparent' }, '.cm-gutters': { backgroundColor: 'var(--code)', border: '0' } } : {}),
 				'.cm-gutters': {
 					backgroundColor: 'transparent',
 					borderRight: '1px solid var(--border)'
@@ -107,4 +111,4 @@
 	});
 </script>
 
-<div bind:this={container} class="border border-[var(--border)] rounded overflow-hidden"></div>
+<div bind:this={container} class={bare ? "h-full overflow-hidden" : "border border-[var(--border)] rounded overflow-hidden"}></div>

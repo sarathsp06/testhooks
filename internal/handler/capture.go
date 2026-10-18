@@ -266,7 +266,7 @@ func (c *Capture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Run WASM transform if configured (both modes — server runs it here,
 	// browser mode runs it server-side too so the pipeline is consistent).
 	transformApplied := false
-	if epConfig.WASMScript != "" && config.IsJavaScript(epConfig.TransformLanguage) && c.wasmRunner != nil && c.wasmRunner.Ready() && !isBrowserMode {
+	if epConfig.WASMScript != "" && !epConfig.TransformDisabled && config.IsJavaScript(epConfig.TransformLanguage) && c.wasmRunner != nil && c.wasmRunner.Ready() && !isBrowserMode {
 		transformInput := wasm.TransformInput{
 			Method:      r.Method,
 			Path:        fullPath,

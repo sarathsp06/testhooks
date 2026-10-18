@@ -25,6 +25,9 @@ type EndpointConfig struct {
 	// UI can show the script and ask for a rewrite.
 	TransformLanguage string `json:"transform_language,omitempty"`
 
+	// TransformDisabled keeps the script saved but stops it running.
+	TransformDisabled bool `json:"transform_disabled,omitempty"`
+
 	// CustomResponse configures a programmable response handler that determines
 	// what the capture endpoint returns to the webhook sender. The user writes a
 	// script (JS/Lua/Jsonnet) that receives the request and returns {status, headers, body}.

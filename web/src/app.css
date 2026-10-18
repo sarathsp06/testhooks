@@ -104,3 +104,22 @@ body {
 .font-fira {
 	font-family: var(--font-mono);
 }
+
+/* JSON highlighting in request views (light values from the design). */
+:root {
+	--json-key: #1d4ed8;
+	--json-str: #1a7f4b;
+	--json-num: #b45309;
+	--row-selected: #f2f7f3;
+	--method-get: #1d4ed8;
+}
+.dark {
+	--json-key: #7aa2f7;
+	--json-str: #5bd08f;
+	--json-num: #f0a35e;
+	--row-selected: #15211b;
+	--method-get: #7aa2f7;
+}
+.json-key { color: var(--json-key); }
+.json-str { color: var(--json-str); }
+.json-num { color: var(--json-num); }

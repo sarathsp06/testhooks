@@ -16,6 +16,8 @@ export interface EndpointConfig {
 	wasm_script?: string;
 	// Only JavaScript runs; 'lua' and 'jsonnet' may still be stored by older versions.
 	transform_language?: 'javascript' | 'lua' | 'jsonnet';
+	/** The script stays saved but doesn't run */
+	transform_disabled?: boolean;
 	custom_response?: CustomResponse;
 	persist_requests?: boolean;
 	signature?: SignatureConfig;
