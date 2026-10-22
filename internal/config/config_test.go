@@ -275,3 +275,45 @@ func TestLoad_StripHeaders(t *testing.T) {
 		}
 	}
 }
+
+func TestLoad_EncryptionKeys(t *testing.T) {
+	const k1 = "1111111111111111111111111111111111111111111111111111111111111111"
+	const k2 = "2222222222222222222222222222222222222222222222222222222222222222"
+
+	t.Setenv("ENCRYPTION_KEYS", "")
+	t.Setenv("ENCRYPTION_PRIMARY_KEY_ID", "")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if kr, err := cfg.EncryptionKeyring(); kr != nil || err != nil {
+		t.Errorf("no keys: keyring = %v, %v; want nil", kr, err)
+	}
+
+	// One key needs no primary ID.
+	t.Setenv("ENCRYPTION_KEYS", "k1="+k1)
+	if _, err := Load(); err != nil {
+		t.Errorf("single key: %v", err)
+	}
+
+	t.Setenv("ENCRYPTION_KEYS", "k1="+k1+", k2="+k2)
+	t.Setenv("ENCRYPTION_PRIMARY_KEY_ID", "k2")
+	if _, err := Load(); err != nil {
+		t.Errorf("two keys with primary: %v", err)
+	}
+
+	bad := []struct{ keys, primary string }{
+		{"k1=" + k1 + ",k2=" + k2, ""}, // primary required
+		{"k1=" + k1, "k9"},             // unknown primary
+		{"k1=abc", ""},                 // short key
+		{k1, ""},                       // missing id
+		{"", "k1"},                     // primary without keys
+	}
+	for _, tt := range bad {
+		t.Setenv("ENCRYPTION_KEYS", tt.keys)
+		t.Setenv("ENCRYPTION_PRIMARY_KEY_ID", tt.primary)
+		if _, err := Load(); err == nil {
+			t.Errorf("ENCRYPTION_KEYS=%q PRIMARY=%q: want error", tt.keys, tt.primary)
+		}
+	}
+}

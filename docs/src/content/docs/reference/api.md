@@ -118,7 +118,8 @@ Returns `{"requests": [...], "total": 123, "limit": 50, "offset": 0}`, newest fi
 | `custom_response.script` | string | Response handler script |
 | `custom_response.language` | `javascript` | Language of the handler. Older `lua` and `jsonnet` scripts are kept but not run |
 | `persist_requests` | bool | Store browser-mode requests in the database too |
-| `signature.secret` | string | HMAC secret for [signature verification](../../guides/signatures/) |
+| `signature.secret` | string | HMAC secret for [signature verification](../../guides/signatures/). Write-only: omit it to keep the stored secret, send `""` to remove it. Never returned |
+| `signature.secret_set` | bool | Returned instead of the secret when one is stored. Ignored on input |
 | `signature.public_key` | string | Hex Ed25519 public key |
 | `signature.enforce` | bool | Reject invalid signatures with `401` |
 

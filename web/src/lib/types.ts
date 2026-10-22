@@ -26,7 +26,10 @@ export interface EndpointConfig {
 
 /** Standard Webhooks verification keys (as sent by Sparrow, Svix, etc). */
 export interface SignatureConfig {
+	/** Write-only: sent to set or replace the HMAC secret ("" removes it). Never returned. */
 	secret?: string;
+	/** Returned instead of the secret when one is stored (encrypted). */
+	secret_set?: boolean;
 	public_key?: string;
 	enforce?: boolean;
 }

@@ -17,11 +17,11 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/sarathsp06/testhooks/internal/config"
+	"github.com/sarathsp06/testhooks/internal/crypto"
 	"github.com/sarathsp06/testhooks/internal/db"
 	"github.com/sarathsp06/testhooks/internal/forward"
 	"github.com/sarathsp06/testhooks/internal/hub"
 	"github.com/sarathsp06/testhooks/internal/middleware"
-	"github.com/sarathsp06/testhooks/internal/signature"
 	"github.com/sarathsp06/testhooks/internal/wasm"
 )
 
@@ -60,6 +60,7 @@ type Capture struct {
 	browserResponseTimeout time.Duration
 	trustedProxies         []*net.IPNet
 	stripHeaders           headerMatcher
+	secrets                secretBox
 	log                    zerolog.Logger
 	asyncSlots             chan struct{}
 	asyncWG                sync.WaitGroup
@@ -85,6 +86,11 @@ func NewCapture(store Store, h *hub.Hub, fwd *forward.Forwarder, wr *wasm.Runner
 // are stored, shown or forwarded. See config.Config.StripHeaders for patterns.
 func (c *Capture) SetStripHeaders(patterns []string) {
 	c.stripHeaders = newHeaderMatcher(patterns)
+}
+
+// SetEncryption sets the service that decrypts stored signature secrets.
+func (c *Capture) SetEncryption(svc *crypto.Service) {
+	c.secrets = secretBox{svc: svc}
 }
 
 // Shutdown waits for in-flight async forwards to finish, or for ctx to end.
@@ -224,7 +230,7 @@ func (c *Capture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	epConfig := config.ParseEndpointConfig(endpoint.Config)
 
 	// Verify Standard Webhooks signature (e.g. Sparrow deliveries) if configured.
-	req.Signature = checkSignature(epConfig, r.Header, body, time.Now())
+	req.Signature = c.secrets.check(epConfig, r.Header, body, time.Now())
 
 	// ── STEP 1: Store (server mode, or browser mode with persist_requests) ──
 	if !isBrowserMode {
@@ -680,29 +686,6 @@ func (c *Capture) publishForwardResult(slug string, reqID string, result forward
 func defaultResponseBody(reqID string) string {
 	data, _ := json.Marshal(map[string]string{"status": "ok", "id": reqID})
 	return string(data)
-}
-
-// checkSignature verifies a request against the endpoint's Standard Webhooks
-// keys, using receivedAt as the clock for the timestamp tolerance check (so
-// stored requests can be re-verified later). Returns nil if not configured.
-func checkSignature(cfg config.EndpointConfig, h http.Header, body []byte, receivedAt time.Time) *signature.Result {
-	if cfg.Signature == nil {
-		return nil
-	}
-	return signature.Check(cfg.Signature.Secret, cfg.Signature.PublicKey, h, body, receivedAt)
-}
-
-// annotateSignatures fills in Signature for stored requests, which don't
-// persist the result. Headers are stored as the JSON-encoded http.Header.
-func annotateSignatures(cfg config.EndpointConfig, reqs ...*db.CapturedRequest) {
-	if cfg.Signature == nil {
-		return
-	}
-	for _, r := range reqs {
-		var h http.Header
-		_ = json.Unmarshal(r.Headers, &h)
-		r.Signature = checkSignature(cfg, h, r.Body, r.CreatedAt)
-	}
 }
 
 // GenerateSlug creates a random 8-character hex slug.

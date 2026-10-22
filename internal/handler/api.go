@@ -8,6 +8,7 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/sarathsp06/testhooks/internal/config"
+	"github.com/sarathsp06/testhooks/internal/crypto"
 	"github.com/sarathsp06/testhooks/internal/db"
 )
 
@@ -17,7 +18,8 @@ type API struct {
 	hub interface {
 		RemoveBuffer(slug string)
 	}
-	log zerolog.Logger
+	log     zerolog.Logger
+	secrets secretBox
 }
 
 // NewAPI creates a new API handler.
@@ -28,6 +30,33 @@ func NewAPI(store Store, hub interface{ RemoveBuffer(slug string) }, log zerolog
 		hub: hub,
 		log: log.With().Str("component", "api").Logger(),
 	}
+}
+
+// SetEncryption sets the service that encrypts signature secrets at rest.
+// Without one, saving a secret is rejected.
+func (a *API) SetEncryption(svc *crypto.Service) {
+	a.secrets = secretBox{svc: svc}
+}
+
+// sealConfig encrypts the signature secret in cfg, keeping the one in old when
+// cfg doesn't set it. It writes the error response and returns false on failure.
+func (a *API) sealConfig(w http.ResponseWriter, cfg, old json.RawMessage) (json.RawMessage, bool) {
+	sealed, err := a.secrets.seal(cfg, old)
+	if errors.Is(err, errNoEncryptionKeys) {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return nil, false
+	}
+	if err != nil {
+		a.log.Error().Err(err).Msg("failed to seal signature secret")
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+		return nil, false
+	}
+	return sealed, true
+}
+
+// writeEndpoint responds with ep, its signature secret redacted.
+func (a *API) writeEndpoint(w http.ResponseWriter, status int, ep *db.Endpoint) {
+	writeJSON(w, status, a.secrets.redact(*ep))
 }
 
 // --- Endpoint handlers ---
@@ -64,6 +93,10 @@ func (a *API) CreateEndpoint(w http.ResponseWriter, r *http.Request) {
 	if len(body.Config) > 0 && string(body.Config) != "null" {
 		cfg = body.Config
 	}
+	cfg, ok := a.sealConfig(w, cfg, nil)
+	if !ok {
+		return
+	}
 
 	// Extract client identity for UX convenience (not access control).
 	clientID := r.Header.Get("X-Client-ID")
@@ -75,7 +108,7 @@ func (a *API) CreateEndpoint(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
 		return
 	}
-	writeJSON(w, http.StatusCreated, ep)
+	a.writeEndpoint(w, http.StatusCreated, ep)
 }
 
 // ListEndpoints handles GET /api/endpoints.
@@ -107,7 +140,7 @@ func (a *API) ListEndpoints(w http.ResponseWriter, r *http.Request) {
 		endpoints = []db.Endpoint{}
 	}
 	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"endpoints": endpoints,
+		"endpoints": a.secrets.redactAll(endpoints),
 		"limit":     limit,
 		"offset":    offset,
 	})
@@ -121,7 +154,7 @@ func (a *API) GetEndpoint(w http.ResponseWriter, r *http.Request) {
 		a.writeLookupError(w, err, "endpoint")
 		return
 	}
-	writeJSON(w, http.StatusOK, ep)
+	a.writeEndpoint(w, http.StatusOK, ep)
 }
 
 // GetEndpointBySlug handles GET /api/slug/{slug}.
@@ -132,7 +165,7 @@ func (a *API) GetEndpointBySlug(w http.ResponseWriter, r *http.Request) {
 		a.writeLookupError(w, err, "endpoint")
 		return
 	}
-	writeJSON(w, http.StatusOK, ep)
+	a.writeEndpoint(w, http.StatusOK, ep)
 }
 
 // UpdateEndpoint handles PATCH /api/endpoints/{id}.
@@ -178,7 +211,11 @@ func (a *API) UpdateEndpoint(w http.ResponseWriter, r *http.Request) {
 		mode = *body.Mode
 	}
 	if body.Config != nil {
-		config = *body.Config
+		sealed, ok := a.sealConfig(w, *body.Config, existing.Config)
+		if !ok {
+			return
+		}
+		config = sealed
 	}
 
 	ep, err := a.db.UpdateEndpoint(r.Context(), id, name, mode, config)
@@ -187,7 +224,7 @@ func (a *API) UpdateEndpoint(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
 		return
 	}
-	writeJSON(w, http.StatusOK, ep)
+	a.writeEndpoint(w, http.StatusOK, ep)
 }
 
 // DeleteEndpoint handles DELETE /api/endpoints/{id}.
@@ -252,7 +289,7 @@ func (a *API) ListRequests(w http.ResponseWriter, r *http.Request) {
 	}
 	epConfig := config.ParseEndpointConfig(ep.Config)
 	for i := range reqs {
-		annotateSignatures(epConfig, &reqs[i])
+		a.secrets.annotate(epConfig, &reqs[i])
 	}
 
 	// Also return total count.
@@ -275,7 +312,7 @@ func (a *API) GetRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if ep, err := a.db.GetEndpointByID(r.Context(), req.EndpointID); err == nil {
-		annotateSignatures(config.ParseEndpointConfig(ep.Config), req)
+		a.secrets.annotate(config.ParseEndpointConfig(ep.Config), req)
 	}
 	writeJSON(w, http.StatusOK, req)
 }

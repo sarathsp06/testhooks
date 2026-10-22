@@ -8,12 +8,13 @@
 		onUpdate
 	}: {
 		endpoint: Endpoint;
-		onUpdate: (patch: { name?: string; mode?: 'server' | 'browser'; config?: Record<string, unknown> }) => void;
+		onUpdate: (patch: { name?: string; mode?: 'server' | 'browser'; config?: Record<string, unknown> }) => void | Promise<void>;
 	} = $props();
 
 	let editName = $state('');
 	let urlError = $state('');
 	let saved = $state(false);
+	let saveError = $state('');
 
 	// Forward URL and mode from endpoint config
 	let forwardUrl = $state('');
@@ -21,7 +22,10 @@
 	let persistRequests = $state(false);
 
 	// Standard Webhooks signature verification
+	// The secret is write-only: the server only says whether one is stored.
 	let sigSecret = $state('');
+	let secretSet = $state(false);
+	let clearSecret = $state(false);
 	let sigPublicKey = $state('');
 	let sigEnforce = $state(false);
 
@@ -34,12 +38,15 @@
 		forwardUrl = (endpoint.config?.forward_url as string) ?? '';
 		forwardMode = ((endpoint.config?.forward_mode as string) || 'async') as 'sync' | 'async';
 		persistRequests = !!endpoint.config?.persist_requests;
-		sigSecret = endpoint.config?.signature?.secret ?? '';
+		sigSecret = '';
+		secretSet = !!endpoint.config?.signature?.secret_set;
+		clearSecret = false;
 		sigPublicKey = endpoint.config?.signature?.public_key ?? '';
 		sigEnforce = !!endpoint.config?.signature?.enforce;
 	});
 
 	const isServerMode = $derived(endpoint.mode === 'server');
+	const hasSecret = $derived(sigSecret.trim() !== '' || (secretSet && !clearSecret));
 
 	// Track whether settings have unsaved changes
 	let dirty = $state(false);
@@ -70,36 +77,43 @@
 
 	function handleNameBlur() {
 		if (editName !== endpoint.name) {
-			onUpdate({ name: editName });
+			Promise.resolve(onUpdate({ name: editName })).catch((e) => (saveError = e.message));
 		}
 	}
 
 	function handleModeChange(mode: 'server' | 'browser') {
 		if (mode !== endpoint.mode) {
-			onUpdate({ mode });
+			Promise.resolve(onUpdate({ mode })).catch((e) => (saveError = e.message));
 		}
 	}
 
-	function saveSettings() {
+	async function saveSettings() {
 		// Validate forward URL before saving
 		if (!validateUrl(forwardUrl)) return;
 
-		onUpdate({
-			config: {
-				...endpoint.config,
-				forward_url: forwardUrl.trim() || undefined,
-				forward_mode: forwardUrl.trim() ? forwardMode : undefined,
-				persist_requests: persistRequests || undefined,
-				signature:
-					sigSecret.trim() || sigPublicKey.trim()
-						? {
-								secret: sigSecret.trim() || undefined,
-								public_key: sigPublicKey.trim() || undefined,
-								enforce: sigEnforce || undefined
-							}
-						: undefined
-			}
-		});
+		saveError = '';
+		try {
+			await onUpdate({
+				config: {
+					...endpoint.config,
+					forward_url: forwardUrl.trim() || undefined,
+					forward_mode: forwardUrl.trim() ? forwardMode : undefined,
+					persist_requests: persistRequests || undefined,
+					signature:
+						hasSecret || sigPublicKey.trim()
+							? {
+									// Omitted keeps the stored secret; "" removes it.
+									secret: sigSecret.trim() || (clearSecret ? '' : undefined),
+									public_key: sigPublicKey.trim() || undefined,
+									enforce: sigEnforce || undefined
+								}
+							: undefined
+				}
+			});
+		} catch (e) {
+			saveError = e instanceof Error ? e.message : 'Failed to save settings';
+			return;
+		}
 
 		dirty = false;
 		saved = true;
@@ -294,11 +308,22 @@
 		</p>
 		<div class="flex flex-col gap-3">
 			<label class="flex flex-col gap-1">
-				<span class="text-xs text-[var(--text-muted)]">Secret (HMAC, v1)</span>
+				<span class="text-xs text-[var(--text-muted)] flex items-center gap-2">
+					Secret (HMAC, v1)
+					{#if secretSet && !clearSecret && !sigSecret}
+						<span class="text-[var(--green)]">saved, encrypted</span>
+						<button
+							type="button"
+							onclick={() => { clearSecret = true; markDirty(); }}
+							class="ml-auto text-[var(--text-muted)] hover:text-[var(--red)] transition-colors"
+						>Remove</button>
+					{/if}
+				</span>
 				<input
 					bind:value={sigSecret}
 					oninput={markDirty}
-					placeholder="whsec_..."
+					type="password"
+					placeholder={secretSet && !clearSecret ? 'Saved. Paste a new secret to replace it' : 'whsec_...'}
 					autocomplete="off"
 					spellcheck="false"
 					class="w-full bg-[var(--bg)] border border-[var(--border)] rounded px-3 py-1.5 text-sm font-mono text-[var(--text)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent)]"
@@ -315,7 +340,7 @@
 					class="w-full bg-[var(--bg)] border border-[var(--border)] rounded px-3 py-1.5 text-sm font-mono text-[var(--text)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent)]"
 				/>
 			</label>
-			{#if sigSecret.trim() || sigPublicKey.trim()}
+			{#if hasSecret || sigPublicKey.trim()}
 				<label class="flex items-center gap-3 cursor-pointer group">
 					<button
 						role="switch"
@@ -335,6 +360,9 @@
 
 	<!-- Save Settings button -->
 	<div class="flex items-center justify-end gap-3 pt-2">
+		{#if saveError}
+			<span class="text-xs text-[var(--red)]">{saveError}</span>
+		{/if}
 		{#if saved}
 			<span class="text-xs text-[var(--green)] flex items-center gap-1">
 				<Check class="w-3 h-3" /> Settings saved

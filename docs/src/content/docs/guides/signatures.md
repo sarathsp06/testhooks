@@ -33,6 +33,34 @@ Each request in the list is now marked **signed** or **sig invalid**. The reques
 
 Verification uses the time each request was received, so stored requests still show the right result later.
 
+## How secrets are stored
+
+The HMAC secret is write-only. Once saved, the API and the UI only say that a secret is set (`"secret_set": true`); paste a new one to replace it, or choose **Remove**. The Ed25519 public key isn't secret and is shown as saved.
+
+Secrets are stored with envelope encryption, the same scheme [Sparrow](https://github.com/sarathsp06/sparrow) uses. Each secret is encrypted with its own random data key (AES-256-GCM), and that data key is encrypted with a key encryption key (KEK) from `ENCRYPTION_KEYS`. The database or snapshot file alone isn't enough to read a secret.
+
+Set a key before saving secrets on a persistent server:
+
+```bash
+ENCRYPTION_KEYS=k1=$(openssl rand -hex 32)
+```
+
+Keep the key somewhere safe. Without it, stored secrets can't be decrypted, and endpoints that enforce signatures reject every request until you paste the secrets again.
+
+### Rotate the key
+
+1. Add a new key and make it primary, keeping the old one:
+
+   ```bash
+   ENCRYPTION_KEYS=k1=<old key>,k2=<new key>
+   ENCRYPTION_PRIMARY_KEY_ID=k2
+   ```
+
+2. Restart. On startup Testhooks rewraps every secret's data key with `k2`, and logs how many it changed. The secrets themselves aren't re-encrypted.
+3. Once every instance runs with the new settings, remove `k1` from `ENCRYPTION_KEYS`.
+
+Secrets saved before encryption existed are encrypted the same way the first time Testhooks starts with a key.
+
 ## Reject bad signatures
 
 Turn on **Reject invalid signatures with 401** to make the endpoint answer like a real receiver: requests with a missing or invalid signature get `401 Unauthorized`.

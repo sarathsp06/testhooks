@@ -8,6 +8,7 @@ import (
 
 	"github.com/caarlos0/env/v11"
 	"github.com/rs/zerolog/log"
+	"github.com/sarathsp06/testhooks/internal/crypto"
 )
 
 // Config holds all application configuration, parsed from environment variables.
@@ -99,6 +100,16 @@ type Config struct {
 	// value or "none" strips nothing. Unset means "default".
 	StripHeaders string `env:"STRIP_HEADERS"`
 
+	// Comma-separated key encryption keys (KEKs) for secrets stored at rest,
+	// such as signature secrets, each "<key-id>=<64-char-hex-key>". Generate
+	// one with: openssl rand -hex 32. To rotate, add a new key and make it
+	// primary; values are rewrapped on startup, then the old key can go.
+	EncryptionKeys string `env:"ENCRYPTION_KEYS"`
+
+	// ID of the key in EncryptionKeys that encrypts new values. Required when
+	// there is more than one key.
+	EncryptionPrimaryKeyID string `env:"ENCRYPTION_PRIMARY_KEY_ID"`
+
 	// API route timeout in seconds (for non-WebSocket HTTP routes).
 	APITimeoutSeconds int `env:"API_TIMEOUT_SECONDS" envDefault:"30"`
 
@@ -138,6 +149,39 @@ func (c *Config) defaultStripHeaders() string {
 		return DefaultStripHeaders + "," + vercelStripHeaders
 	}
 	return DefaultStripHeaders
+}
+
+// EncryptionKeyring parses EncryptionKeys and EncryptionPrimaryKeyID. It
+// returns nil when no keys are configured.
+func (c *Config) EncryptionKeyring() (*crypto.Keyring, error) {
+	var keys []crypto.Key
+	for _, entry := range strings.Split(c.EncryptionKeys, ",") {
+		entry = strings.TrimSpace(entry)
+		if entry == "" {
+			continue
+		}
+		id, raw, ok := strings.Cut(entry, "=")
+		id, raw = strings.TrimSpace(id), strings.TrimSpace(raw)
+		if !ok || id == "" {
+			return nil, fmt.Errorf("ENCRYPTION_KEYS: invalid entry (want <key-id>=<64-char-hex-key>)")
+		}
+		key, err := crypto.ParseKey(raw)
+		if err != nil || key == nil {
+			return nil, fmt.Errorf("ENCRYPTION_KEYS: invalid key for %q: want 64 hex characters (openssl rand -hex 32)", id)
+		}
+		keys = append(keys, crypto.Key{ID: id, Material: key})
+	}
+	if len(keys) == 0 {
+		if strings.TrimSpace(c.EncryptionPrimaryKeyID) != "" {
+			return nil, fmt.Errorf("ENCRYPTION_PRIMARY_KEY_ID is set but ENCRYPTION_KEYS is empty")
+		}
+		return nil, nil
+	}
+	keyring, err := crypto.NewKeyring(keys, strings.TrimSpace(c.EncryptionPrimaryKeyID))
+	if err != nil {
+		return nil, fmt.Errorf("ENCRYPTION_KEYS / ENCRYPTION_PRIMARY_KEY_ID: %w", err)
+	}
+	return keyring, nil
 }
 
 // ParsedTrustedProxies returns the parsed CIDR networks from TrustedProxies.
@@ -243,6 +287,9 @@ func Load() (*Config, error) {
 	}
 	if cfg.MaxWASMOutputSize < 1024 {
 		return nil, fmt.Errorf("MAX_WASM_OUTPUT_SIZE must be >= 1024, got %d", cfg.MaxWASMOutputSize)
+	}
+	if _, err := cfg.EncryptionKeyring(); err != nil {
+		return nil, err
 	}
 
 	return cfg, nil

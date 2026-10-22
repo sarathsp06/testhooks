@@ -20,6 +20,7 @@ import (
 
 	"github.com/sarathsp06/testhooks/internal/cleanup"
 	"github.com/sarathsp06/testhooks/internal/config"
+	"github.com/sarathsp06/testhooks/internal/crypto"
 	"github.com/sarathsp06/testhooks/internal/db"
 	"github.com/sarathsp06/testhooks/internal/db/memstore"
 	"github.com/sarathsp06/testhooks/internal/forward"
@@ -103,6 +104,19 @@ func main() {
 	}
 	defer store.Close()
 
+	// Encryption for signature secrets at rest. Memory-only storage dies with
+	// the process, so a per-process key is enough there; anything persistent
+	// needs ENCRYPTION_KEYS, or saving a secret is refused.
+	cryptoSvc, err := encryptionService(cfg, log)
+	if err != nil {
+		log.Fatal().Err(err).Msg("failed to set up encryption")
+	}
+	if n, err := handler.ResealSecrets(ctx, store, cryptoSvc, log); err != nil {
+		log.Error().Err(err).Msg("failed to reseal signature secrets")
+	} else if n > 0 {
+		log.Info().Int("endpoints", n).Str("primary_key", cryptoSvc.PrimaryKeyID()).Msg("encrypted or rewrapped signature secrets")
+	}
+
 	// In-memory pub/sub hub with TTL sweep and subscriber limits.
 	h := hub.New(cfg.RingBufferSize, cfg.RingBufferTTLSeconds, cfg.MaxSubscribersPerSlug)
 	defer h.Stop()
@@ -125,8 +139,10 @@ func main() {
 	capture := handler.NewCapture(store, h, fwd, wasmRunner, cfg.MaxBodySize, trustedProxies, log)
 	stripHeaders := cfg.ParsedStripHeaders()
 	capture.SetStripHeaders(stripHeaders)
+	capture.SetEncryption(cryptoSvc)
 	log.Info().Strs("strip_headers", stripHeaders).Msg("stripping headers from captured requests (set STRIP_HEADERS to change)")
 	api := handler.NewAPI(store, h, log)
+	api.SetEncryption(cryptoSvc)
 	ws := handler.NewWS(store, h, log, allowedOrigins)
 
 	// Build the HTTP router using Go 1.22+ stdlib patterns.
@@ -335,4 +351,29 @@ func spaHandler(root fs.FS) http.Handler {
 		f.Close()
 		fileServer.ServeHTTP(w, r)
 	})
+}
+
+// encryptionService builds the service that encrypts signature secrets from
+// ENCRYPTION_KEYS. Without keys it uses a random per-process key for
+// memory-only storage and is disabled otherwise.
+func encryptionService(cfg *config.Config, log zerolog.Logger) (*crypto.Service, error) {
+	keyring, err := cfg.EncryptionKeyring()
+	if err != nil {
+		return nil, err
+	}
+	if keyring == nil {
+		if cfg.DatabaseURL != "memory" || cfg.SnapshotPath != "" {
+			log.Warn().Msg("ENCRYPTION_KEYS is not set: signature secrets can't be saved (generate a key with: openssl rand -hex 32)")
+			return nil, nil
+		}
+		_, key, err := crypto.GenerateKey()
+		if err != nil {
+			return nil, err
+		}
+		if keyring, err = crypto.NewKeyring([]crypto.Key{{ID: "ephemeral", Material: key}}, ""); err != nil {
+			return nil, err
+		}
+		log.Info().Msg("signature secrets encrypted with a per-process key (in-memory storage)")
+	}
+	return crypto.NewServiceFromKeyring(keyring)
 }

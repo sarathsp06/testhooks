@@ -48,8 +48,13 @@ type EndpointConfig struct {
 
 // SignatureConfig holds the keys used to verify Standard Webhooks signatures.
 // Set Secret, PublicKey, or both; a request verifies if either matches.
+//
+// The HMAC secret is write-only: the API accepts it as Secret, stores it
+// envelope-encrypted as SecretEnc, and only ever reports SecretSet.
 type SignatureConfig struct {
-	Secret    string `json:"secret,omitempty"`     // HMAC secret ("whsec_..." or raw) for v1 signatures
+	Secret    string `json:"secret,omitempty"`     // HMAC secret ("whsec_..." or raw) for v1 signatures; plaintext only on input or in configs saved before encryption
+	SecretEnc string `json:"secret_enc,omitempty"` // base64 envelope (see internal/crypto) holding the HMAC secret
+	SecretSet bool   `json:"secret_set,omitempty"` // set in API responses when a secret is stored
 	PublicKey string `json:"public_key,omitempty"` // hex Ed25519 public key for v1a signatures
 	// Enforce rejects requests that fail verification with 401, as a real
 	// receiver should. Senders like Sparrow treat 401 as permanent (no retry).

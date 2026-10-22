@@ -371,7 +371,12 @@
 			}
 			return;
 		}
-		endpointStore.update(patch);
+		await endpointStore.update(patch);
+		if (endpointStore.error) {
+			const msg = endpointStore.error;
+			endpointStore.clearError();
+			throw new Error(msg);
+		}
 	}
 
 	function exportAllJSON() {
