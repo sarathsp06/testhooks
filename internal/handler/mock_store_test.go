@@ -200,6 +200,24 @@ func (m *mockStore) GetRequest(_ context.Context, id string) (*db.CapturedReques
 	return r, nil
 }
 
+func (m *mockStore) SetRequestForwardResult(_ context.Context, id string, result json.RawMessage) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if r, ok := m.requests[id]; ok {
+		r.ForwardResult = result
+	}
+	return nil
+}
+
+func (m *mockStore) SetRequestResponseInfo(_ context.Context, id string, info json.RawMessage) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if r, ok := m.requests[id]; ok {
+		r.ResponseInfo = info
+	}
+	return nil
+}
+
 func (m *mockStore) DeleteRequest(_ context.Context, id string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()

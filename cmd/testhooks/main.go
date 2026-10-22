@@ -140,6 +140,7 @@ func main() {
 	stripHeaders := cfg.ParsedStripHeaders()
 	capture.SetStripHeaders(stripHeaders)
 	capture.SetEncryption(cryptoSvc)
+	capture.SetMaxStoredResponse(cfg.MaxStoredResponseSize)
 	log.Info().Strs("strip_headers", stripHeaders).Msg("stripping headers from captured requests (set STRIP_HEADERS to change)")
 	api := handler.NewAPI(store, h, log)
 	api.SetEncryption(cryptoSvc)

@@ -32,6 +32,8 @@ Every message is `{"type": "...", "data": {...}}`.
 | `forward_result` | A server-side forward finishes | `request_id`, `url`, `status_code`, `ok`, `latency_ms`, `error`, `response_body`, `response_headers`, `content_type` |
 | `response_needed` | A browser-mode endpoint with a response handler needs the tab to compute a response | `request_id`, `request` |
 
+Both are also stored with server-mode requests and returned by [`GET /api/requests/{reqId}`](../api/), so a page opened later, or connected to a different server instance, still shows them.
+
 `source` in `response_info` is one of `default`, `handler`, `forward_passthrough` or `signature` (rejected by signature enforcement).
 
 Browser-mode endpoints buffer recent `request` messages in memory, so a client that reconnects within `RING_BUFFER_TTL_SECONDS` first receives what it missed.

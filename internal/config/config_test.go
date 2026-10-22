@@ -317,3 +317,22 @@ func TestLoad_EncryptionKeys(t *testing.T) {
 		}
 	}
 }
+
+func TestLoad_MaxStoredResponseSize(t *testing.T) {
+	t.Setenv("MAX_STORED_RESPONSE_SIZE", "")
+	os.Unsetenv("MAX_STORED_RESPONSE_SIZE")
+	cfg, err := Load()
+	if err != nil || cfg.MaxStoredResponseSize != 64*1024 {
+		t.Fatalf("default = %d, %v; want 65536", cfg.MaxStoredResponseSize, err)
+	}
+	t.Setenv("MAX_STORED_RESPONSE_SIZE", "0")
+	if cfg, err := Load(); err != nil || cfg.MaxStoredResponseSize != 0 {
+		t.Errorf("0 = %v, %v; want allowed", cfg, err)
+	}
+	for _, bad := range []string{"-1", "20000000"} {
+		t.Setenv("MAX_STORED_RESPONSE_SIZE", bad)
+		if _, err := Load(); err == nil {
+			t.Errorf("MAX_STORED_RESPONSE_SIZE=%s: want error", bad)
+		}
+	}
+}

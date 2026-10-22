@@ -136,3 +136,39 @@ func TestSnapshot(t *testing.T) {
 		t.Fatal("corrupt snapshot loaded without error")
 	}
 }
+
+func TestRequestOutcomes(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "testhooks.snapshot")
+	s, err := memstore.New(path, zerolog.Nop())
+	if err != nil {
+		t.Fatal(err)
+	}
+	ep, _ := s.CreateEndpoint(ctx, "abc", "", "server", "", nil)
+	r := &db.CapturedRequest{EndpointID: ep.ID}
+	s.InsertRequest(ctx, r)
+
+	s.SetRequestForwardResult(ctx, r.ID, []byte(`{"status_code":202}`))
+	s.SetRequestResponseInfo(ctx, r.ID, []byte(`{"status":200}`))
+	// Unknown IDs are ignored, like an UPDATE that matches no row.
+	if err := s.SetRequestForwardResult(ctx, "missing", []byte(`{}`)); err != nil {
+		t.Errorf("unknown id: %v", err)
+	}
+
+	got, _ := s.GetRequest(ctx, r.ID)
+	if string(got.ForwardResult) != `{"status_code":202}` || string(got.ResponseInfo) != `{"status":200}` {
+		t.Fatalf("GetRequest = %s, %s", got.ForwardResult, got.ResponseInfo)
+	}
+
+	// Both survive a snapshot round trip.
+	s.Close()
+	s2, err := memstore.New(path, zerolog.Nop())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s2.Close()
+	reqs, _ := s2.ListRequests(ctx, ep.ID, 50, 0)
+	if len(reqs) != 1 || string(reqs[0].ForwardResult) != `{"status_code":202}` || string(reqs[0].ResponseInfo) != `{"status":200}` {
+		t.Fatalf("restored = %+v", reqs)
+	}
+}

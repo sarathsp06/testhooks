@@ -36,6 +36,7 @@ Testhooks is configured entirely with environment variables. A `.env` file in th
 | `MAX_BODY_SIZE` | `524288` | Maximum captured body in bytes. Larger requests get `413` |
 | `MAX_REQUESTS_PER_ENDPOINT` | `500` | Oldest requests beyond this count are pruned |
 | `MAX_ENDPOINT_STORAGE_BYTES` | `10485760` | Oldest requests beyond this many stored bytes per endpoint are pruned |
+| `MAX_STORED_RESPONSE_SIZE` | `65536` | Bytes of a reply body stored with each request: the forward target's reply and the response sent back. Longer bodies are cut and marked truncated; the live view still shows them whole. Not counted in `MAX_ENDPOINT_STORAGE_BYTES`. `0` stores status and headers only; at most 10 MB |
 | `PRUNE_INTERVAL_SECONDS` | `60` | How often pruning runs |
 
 ## Browser mode and WebSocket

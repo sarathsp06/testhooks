@@ -390,6 +390,20 @@
 		URL.revokeObjectURL(url);
 	}
 
+	// A forward result is recorded when the forward finishes, which for async
+	// forwards is after the request was listed, and the live message only
+	// reaches tabs connected to the server instance that did the forwarding.
+	// Fetch the request again when one is selected without a result.
+	const refreshed = new Set<string>();
+	$effect(() => {
+		const sel = requestsStore.selected;
+		const ep = endpointStore.current;
+		if (!sel || !ep || ep.mode !== 'server' || !ep.config?.forward_url || refreshed.has(sel.id)) return;
+		if (requestsStore.getForwardResult(sel.id)) return;
+		refreshed.add(sel.id);
+		requestsStore.refresh(sel.id);
+	});
+
 	// Show a request straight away, as the inspect view expects one selected.
 	$effect(() => {
 		if (!requestsStore.selectedId && requestsStore.items.length) requestsStore.select(requestsStore.items[0].id);

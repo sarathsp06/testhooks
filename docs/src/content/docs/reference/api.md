@@ -94,12 +94,30 @@ Returns `{"requests": [...], "total": 123, "limit": 50, "offset": 0}`, newest fi
   "ip": "203.0.113.7",
   "size": 17,
   "created_at": "2026-10-16T23:04:01.12Z",
-  "signature": { "status": "verified", "scheme": "v1", "webhook_id": "msg_123" }
+  "signature": { "status": "verified", "scheme": "v1", "webhook_id": "msg_123" },
+  "forward_result": {
+    "request_id": "299e2e41-2c91-4baf-bc2d-9e38034667fe",
+    "url": "https://example.com/hook",
+    "status_code": 202,
+    "ok": true,
+    "latency_ms": 84,
+    "response_body": "{\"received\":true}",
+    "response_headers": { "Content-Type": "application/json" },
+    "content_type": "application/json"
+  },
+  "response_info": {
+    "request_id": "299e2e41-2c91-4baf-bc2d-9e38034667fe",
+    "status": 200,
+    "body": "{\"status\":\"ok\",\"id\":\"299e2e41-2c91-4baf-bc2d-9e38034667fe\"}",
+    "content_type": "application/json",
+    "source": "default"
+  }
 }
 ```
 
 - `body` is plain text when it looks like text (`body_encoding: "text"`), otherwise base64 (`body_encoding: "base64"`).
 - `signature` appears only when [signature verification](../../guides/signatures/) is configured.
+- `forward_result` is the forward target's reply and `response_info` the response sent back to the caller, in the same shape as the [`forward_result` and `response_info` WebSocket messages](../websocket/). They're stored for server-mode requests (and browser-mode ones with `persist_requests`). An async forward fills in `forward_result` when it finishes, so it can be missing just after capture. Bodies longer than [`MAX_STORED_RESPONSE_SIZE`](../configuration/) are cut, with `response_body_truncated` or `body_truncated` set.
 
 ### Delete requests
 

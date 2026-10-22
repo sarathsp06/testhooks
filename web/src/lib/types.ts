@@ -62,6 +62,10 @@ export interface CapturedRequest {
 	size: number;
 	created_at: string;
 	signature?: SignatureResult;
+	/** The forward target's reply, recorded by the server (server mode). */
+	forward_result?: ForwardResultData;
+	/** The response sent back to the caller, recorded by the server (server mode). */
+	response_info?: ResponseInfoData;
 }
 
 export interface PaginatedRequests {
@@ -88,6 +92,8 @@ export interface ForwardResultData {
 	response_body?: string;
 	response_headers?: Record<string, string>;
 	content_type?: string;
+	/** Set on a stored result whose response_body was cut to MAX_STORED_RESPONSE_SIZE. */
+	response_body_truncated?: boolean;
 }
 
 /** Data payload for a response_info message (server tells browser what response was sent). */
@@ -97,7 +103,9 @@ export interface ResponseInfoData {
 	headers?: Record<string, string>;
 	body?: string;
 	content_type?: string;
-	source: 'default' | 'handler' | 'forward_passthrough';
+	source: 'default' | 'handler' | 'forward_passthrough' | 'signature';
+	/** Set on a stored response whose body was cut to MAX_STORED_RESPONSE_SIZE. */
+	body_truncated?: boolean;
 }
 
 /** Data payload for a response_needed message from the server. */
@@ -138,7 +146,9 @@ export interface CapturedResponse {
 	body?: string;
 	content_type?: string;
 	/** Where the response came from */
-	source: 'default' | 'handler' | 'forward_passthrough';
+	source: 'default' | 'handler' | 'forward_passthrough' | 'signature';
+	/** The stored copy of body was cut to MAX_STORED_RESPONSE_SIZE. */
+	body_truncated?: boolean;
 }
 
 export interface TransformResult {

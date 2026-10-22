@@ -46,7 +46,8 @@ If a pasted connection string has a trailing newline, Testhooks trims it. A stri
 
 **Live updates only reach browsers on the same instance.** Vercel can run several instances, and each WebSocket stays on the instance that accepted it. Testhooks pushes a captured request to the browsers connected to the instance that received it:
 
-- **Server mode** works: every request is stored in PostgreSQL, so anything the live view misses appears when you reload.
+- **Server mode** works: every request is stored in PostgreSQL, along with the forward target's reply and the response sent back, so anything the live view misses appears when you reload or open the request.
+- **Prefer sync forwarding.** An async forward runs after Testhooks has answered the sender, and Vercel may pause the instance once that response is sent, so the forward can be cut short. Sync forwarding finishes before the response.
 - **Browser mode** is unreliable: requests aren't stored, so a webhook that lands on a different instance than your tab never reaches it, and browser-computed custom responses fall back to the default. Use server mode on Vercel, or run Testhooks as [one long-running server](../production/) for browser mode.
 
 ## Build details

@@ -2,7 +2,7 @@
  * Svelte 5 rune-based store for captured requests.
  */
 import type { CapturedRequest, CapturedResponse, ForwardResultData } from '$lib/types';
-import { listRequests, deleteRequest as apiDeleteRequest, deleteAllRequests as apiDeleteAll } from '$lib/api';
+import { listRequests, getRequest, deleteRequest as apiDeleteRequest, deleteAllRequests as apiDeleteAll } from '$lib/api';
 
 let items = $state<CapturedRequest[]>([]);
 let total = $state(0);
@@ -35,7 +35,11 @@ export function getRequestsStore() {
 
 		/** Get the captured HTTP response for a given request ID. */
 		getResponse(requestId: string): CapturedResponse | undefined {
-			return responses.get(requestId);
+			const live = responses.get(requestId);
+			if (live) return live;
+			// Otherwise the one the server recorded with the request.
+			const info = items.find((r) => r.id === requestId)?.response_info;
+			return info && { status: info.status, headers: info.headers, body: info.body, content_type: info.content_type, source: info.source, body_truncated: info.body_truncated };
 		},
 
 		/** Attach a captured HTTP response to a request by ID. */
@@ -47,7 +51,17 @@ export function getRequestsStore() {
 
 		/** Get the forward target's response for a given request ID. */
 		getForwardResult(requestId: string): ForwardResultData | undefined {
-			return forwardResults.get(requestId);
+			return forwardResults.get(requestId) ?? items.find((r) => r.id === requestId)?.forward_result;
+		},
+
+		/** Reload one request from the server, to pick up a forward result recorded after it was listed. */
+		async refresh(requestId: string) {
+			try {
+				const fresh = await getRequest(requestId);
+				items = items.map((r) => (r.id === requestId ? fresh : r));
+			} catch {
+				// Keep what we have; the detail view says no result was recorded.
+			}
 		},
 
 		/** Attach a forward target response to a request by ID. */

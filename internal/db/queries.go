@@ -57,6 +57,12 @@ type CapturedRequest struct {
 	Size        int             `json:"size"`
 	CreatedAt   time.Time       `json:"created_at"`
 
+	// ForwardResult is the forward target's reply and ResponseInfo the
+	// response sent back to the caller, in the same JSON shape as the
+	// forward_result and response_info WebSocket messages. Set after insert.
+	ForwardResult json.RawMessage `json:"forward_result,omitempty"`
+	ResponseInfo  json.RawMessage `json:"response_info,omitempty"`
+
 	// Signature is the Standard Webhooks verification result. Not stored:
 	// computed from the endpoint's config when the request is served.
 	Signature *signature.Result `json:"signature,omitempty"`
@@ -258,7 +264,7 @@ func (p *Pool) InsertRequest(ctx context.Context, r *CapturedRequest) error {
 // ListRequests returns requests for an endpoint, paginated.
 func (p *Pool) ListRequests(ctx context.Context, endpointID string, limit, offset int) ([]CapturedRequest, error) {
 	rows, err := p.Query(ctx,
-		`SELECT id, endpoint_id, method, path, headers, query, body, content_type, ip, size, created_at
+		`SELECT id, endpoint_id, method, path, headers, query, body, content_type, ip, size, created_at, forward_result, response_info
 		 FROM requests WHERE endpoint_id = $1
 		 ORDER BY created_at DESC
 		 LIMIT $2 OFFSET $3`,
@@ -272,7 +278,7 @@ func (p *Pool) ListRequests(ctx context.Context, endpointID string, limit, offse
 	var reqs []CapturedRequest
 	for rows.Next() {
 		var r CapturedRequest
-		if err := rows.Scan(&r.ID, &r.EndpointID, &r.Method, &r.Path, &r.Headers, &r.Query, &r.Body, &r.ContentType, &r.IP, &r.Size, &r.CreatedAt); err != nil {
+		if err := rows.Scan(&r.ID, &r.EndpointID, &r.Method, &r.Path, &r.Headers, &r.Query, &r.Body, &r.ContentType, &r.IP, &r.Size, &r.CreatedAt, &r.ForwardResult, &r.ResponseInfo); err != nil {
 			return nil, err
 		}
 		reqs = append(reqs, r)
@@ -284,13 +290,25 @@ func (p *Pool) ListRequests(ctx context.Context, endpointID string, limit, offse
 func (p *Pool) GetRequest(ctx context.Context, id string) (*CapturedRequest, error) {
 	r := &CapturedRequest{}
 	err := p.QueryRow(ctx,
-		`SELECT id, endpoint_id, method, path, headers, query, body, content_type, ip, size, created_at
+		`SELECT id, endpoint_id, method, path, headers, query, body, content_type, ip, size, created_at, forward_result, response_info
 		 FROM requests WHERE id = $1`, id,
-	).Scan(&r.ID, &r.EndpointID, &r.Method, &r.Path, &r.Headers, &r.Query, &r.Body, &r.ContentType, &r.IP, &r.Size, &r.CreatedAt)
+	).Scan(&r.ID, &r.EndpointID, &r.Method, &r.Path, &r.Headers, &r.Query, &r.Body, &r.ContentType, &r.IP, &r.Size, &r.CreatedAt, &r.ForwardResult, &r.ResponseInfo)
 	if err != nil {
 		return nil, mapNotFound(err)
 	}
 	return r, nil
+}
+
+// SetRequestForwardResult records the forward target's reply for a request.
+func (p *Pool) SetRequestForwardResult(ctx context.Context, id string, result json.RawMessage) error {
+	_, err := p.Exec(ctx, `UPDATE requests SET forward_result = $2 WHERE id = $1`, id, result)
+	return err
+}
+
+// SetRequestResponseInfo records the response sent back for a request.
+func (p *Pool) SetRequestResponseInfo(ctx context.Context, id string, info json.RawMessage) error {
+	_, err := p.Exec(ctx, `UPDATE requests SET response_info = $2 WHERE id = $1`, id, info)
+	return err
 }
 
 // DeleteRequest deletes a single request by ID.

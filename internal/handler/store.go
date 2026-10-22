@@ -22,6 +22,8 @@ type Store interface {
 	InsertRequest(ctx context.Context, r *db.CapturedRequest) error
 	ListRequests(ctx context.Context, endpointID string, limit, offset int) ([]db.CapturedRequest, error)
 	GetRequest(ctx context.Context, id string) (*db.CapturedRequest, error)
+	SetRequestForwardResult(ctx context.Context, id string, result json.RawMessage) error
+	SetRequestResponseInfo(ctx context.Context, id string, info json.RawMessage) error
 	DeleteRequest(ctx context.Context, id string) error
 	DeleteAllRequests(ctx context.Context, endpointID string) error
 	CountRequests(ctx context.Context, endpointID string) (int, error)

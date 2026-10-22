@@ -60,6 +60,7 @@ type Capture struct {
 	browserResponseTimeout time.Duration
 	trustedProxies         []*net.IPNet
 	stripHeaders           headerMatcher
+	maxStoredResponse      int
 	secrets                secretBox
 	log                    zerolog.Logger
 	asyncSlots             chan struct{}
@@ -77,6 +78,7 @@ func NewCapture(store Store, h *hub.Hub, fwd *forward.Forwarder, wr *wasm.Runner
 		browserResponseTimeout: 10 * time.Second,
 		trustedProxies:         trustedProxies,
 		stripHeaders:           newHeaderMatcher(strings.Split(config.DefaultStripHeaders, ",")),
+		maxStoredResponse:      defaultMaxStoredResponse,
 		log:                    log.With().Str("component", "capture").Logger(),
 		asyncSlots:             make(chan struct{}, maxAsyncForwards),
 	}
@@ -86,6 +88,12 @@ func NewCapture(store Store, h *hub.Hub, fwd *forward.Forwarder, wr *wasm.Runner
 // are stored, shown or forwarded. See config.Config.StripHeaders for patterns.
 func (c *Capture) SetStripHeaders(patterns []string) {
 	c.stripHeaders = newHeaderMatcher(patterns)
+}
+
+// SetMaxStoredResponse sets how many bytes of a reply body are stored with a
+// request. See config.Config.MaxStoredResponseSize.
+func (c *Capture) SetMaxStoredResponse(n int) {
+	c.maxStoredResponse = n
 }
 
 // SetEncryption sets the service that decrypts stored signature secrets.
@@ -110,12 +118,12 @@ func (c *Capture) Shutdown(ctx context.Context) error {
 
 // forwardAsync runs a fire-and-forget forward in the background, bounded by
 // asyncSlots. When saturated the forward is skipped rather than queued.
-func (c *Capture) forwardAsync(slug, reqID string, fwdReq forward.Request, target string) {
+func (c *Capture) forwardAsync(slug, reqID string, stored bool, fwdReq forward.Request, target string) {
 	select {
 	case c.asyncSlots <- struct{}{}:
 	default:
 		c.log.Warn().Str("slug", slug).Str("request_id", reqID).Msg("async forward skipped: too many in flight")
-		c.publishForwardResult(slug, reqID, forward.Result{URL: target, Error: "skipped: too many forwards in flight"})
+		c.publishForwardResult(slug, reqID, stored, forward.Result{URL: target, Error: "skipped: too many forwards in flight"})
 		return
 	}
 	c.asyncWG.Add(1)
@@ -138,8 +146,8 @@ func (c *Capture) forwardAsync(slug, reqID string, fwdReq forward.Request, targe
 			c.log.Warn().Str("url", result.URL).Str("error", result.Error).
 				Int("status", result.StatusCode).Msg("async forward failed")
 		}
-		// Publish forward result to browser for display (arrives after webhook response).
-		c.publishForwardResult(slug, reqID, result)
+		// Publish and record the forward result (arrives after the webhook response).
+		c.publishForwardResult(slug, reqID, stored, result)
 	}()
 }
 
@@ -233,12 +241,16 @@ func (c *Capture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	req.Signature = c.secrets.check(epConfig, r.Header, body, time.Now())
 
 	// ── STEP 1: Store (server mode, or browser mode with persist_requests) ──
+	// stored says whether req has a row to record the forward result and
+	// response on.
+	stored := false
 	if !isBrowserMode {
 		if err := c.db.InsertRequest(r.Context(), req); err != nil {
 			c.log.Error().Err(err).Msg("failed to store request")
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
 		}
+		stored = true
 	} else if epConfig.PersistRequests {
 		// Browser mode with persistence: store in DB but continue with browser pipeline.
 		// Use the already-generated ID and timestamp. InsertRequest will overwrite them
@@ -246,6 +258,8 @@ func (c *Capture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if err := c.db.InsertRequest(r.Context(), req); err != nil {
 			// Non-fatal for browser mode: log and continue with WS relay.
 			c.log.Warn().Err(err).Str("slug", slug).Msg("browser-mode persist failed, continuing with WS relay")
+		} else {
+			stored = true
 		}
 	}
 
@@ -257,7 +271,7 @@ func (c *Capture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusUnauthorized)
 		json.NewEncoder(w).Encode(map[string]string{"error": "invalid webhook signature", "detail": req.Signature.Error})
-		c.publishResponseInfo(slug, req.ID, http.StatusUnauthorized, nil, "invalid webhook signature", "application/json", "signature")
+		c.publishResponseInfo(slug, req.ID, stored, http.StatusUnauthorized, nil, "invalid webhook signature", "application/json", "signature")
 		return
 	}
 
@@ -314,7 +328,7 @@ func (c *Capture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				if isBrowserMode {
 					defStatus = http.StatusAccepted
 				}
-				c.publishResponseInfo(slug, req.ID, defStatus, nil, defaultResponseBody(req.ID), "application/json", "default")
+				c.publishResponseInfo(slug, req.ID, stored, defStatus, nil, defaultResponseBody(req.ID), "application/json", "default")
 				return
 			}
 
@@ -364,7 +378,7 @@ func (c *Capture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if epConfig.CustomResponse != nil && epConfig.CustomResponse.Enabled && epConfig.CustomResponse.Script != "" &&
 			config.IsJavaScript(epConfig.CustomResponse.Language) {
 			if c.hub.HasSubscribers(slug) {
-				c.handleBrowserResponse(w, r, slug, req, epConfig, body)
+				c.handleBrowserResponse(w, r, slug, req, stored, epConfig, body)
 				return
 			}
 			c.log.Debug().Str("slug", slug).Msg("browser-mode custom response: no subscribers, using default")
@@ -374,7 +388,7 @@ func (c *Capture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		data, _ := json.Marshal(req)
 		c.hub.Publish(endpoint.Slug, hub.Message{Type: "request", Data: data}, true)
 		c.writeDefaultResponse(w, true, req.ID)
-		c.publishResponseInfo(slug, req.ID, http.StatusAccepted, nil, defaultResponseBody(req.ID), "application/json", "default")
+		c.publishResponseInfo(slug, req.ID, stored, http.StatusAccepted, nil, defaultResponseBody(req.ID), "application/json", "default")
 		return
 	}
 
@@ -408,7 +422,7 @@ func (c *Capture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 
 			// Publish forward result to browser for display.
-			c.publishForwardResult(slug, req.ID, result)
+			c.publishForwardResult(slug, req.ID, stored, result)
 
 			// Build ForwardResponse for the handler (even on failure, so the handler can inspect it).
 			respHeaders := make(map[string]string)
@@ -427,7 +441,7 @@ func (c *Capture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			// Async: fire-and-forget, don't block the webhook response.
 			// Clone headers: the goroutine outlives this request.
 			fwdReq.Headers = http.Header(fwdReq.Headers).Clone()
-			c.forwardAsync(slug, req.ID, fwdReq, epConfig.ForwardURL)
+			c.forwardAsync(slug, req.ID, stored, fwdReq, epConfig.ForwardURL)
 		}
 	}
 
@@ -456,7 +470,7 @@ func (c *Capture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				if status == 0 {
 					status = http.StatusOK
 				}
-				c.publishResponseInfo(slug, req.ID, status, respHeaders, output.Body, ct, "handler")
+				c.publishResponseInfo(slug, req.ID, stored, status, respHeaders, output.Body, ct, "handler")
 				return
 			}
 		}
@@ -476,19 +490,19 @@ func (c *Capture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if fwdResponse.Body != "" {
 			w.Write([]byte(fwdResponse.Body))
 		}
-		c.publishResponseInfo(slug, req.ID, status, fwdResponse.Headers, fwdResponse.Body, fwdResponse.ContentType, "forward_passthrough")
+		c.publishResponseInfo(slug, req.ID, stored, status, fwdResponse.Headers, fwdResponse.Body, fwdResponse.ContentType, "forward_passthrough")
 		return
 	}
 
 	// ── STEP 5: Default HTTP Response ──
 	c.writeDefaultResponse(w, false, req.ID)
-	c.publishResponseInfo(slug, req.ID, http.StatusOK, nil, defaultResponseBody(req.ID), "application/json", "default")
+	c.publishResponseInfo(slug, req.ID, stored, http.StatusOK, nil, defaultResponseBody(req.ID), "application/json", "default")
 }
 
 // handleBrowserResponse holds the HTTP connection open, sends a response_needed
 // message to the browser via WebSocket, and waits for the browser to return
 // a computed response (or times out).
-func (c *Capture) handleBrowserResponse(w http.ResponseWriter, r *http.Request, slug string, req *db.CapturedRequest, epConfig config.EndpointConfig, body []byte) {
+func (c *Capture) handleBrowserResponse(w http.ResponseWriter, r *http.Request, slug string, req *db.CapturedRequest, stored bool, epConfig config.EndpointConfig, body []byte) {
 	// Register a pending response channel before publishing.
 	respCh, cleanup := c.hub.WaitForResponse(slug, req.ID)
 	defer cleanup()
@@ -552,13 +566,13 @@ func (c *Capture) handleBrowserResponse(w http.ResponseWriter, r *http.Request, 
 			w.Write([]byte(result.Body))
 		}
 		c.log.Debug().Str("slug", slug).Str("request_id", req.ID).Int("status", status).Msg("browser response applied")
-		c.publishResponseInfo(slug, req.ID, status, respHeaders, result.Body, ct, "handler")
+		c.publishResponseInfo(slug, req.ID, stored, status, respHeaders, result.Body, ct, "handler")
 
 	case <-ctx.Done():
 		// Timeout — browser didn't respond in time. Send default.
 		c.log.Warn().Str("slug", slug).Str("request_id", req.ID).Dur("timeout", c.browserResponseTimeout).Msg("browser response timed out, using default")
 		c.writeDefaultResponse(w, true, req.ID)
-		c.publishResponseInfo(slug, req.ID, http.StatusAccepted, nil, defaultResponseBody(req.ID), "application/json", "default")
+		c.publishResponseInfo(slug, req.ID, stored, http.StatusAccepted, nil, defaultResponseBody(req.ID), "application/json", "default")
 	}
 }
 
@@ -619,11 +633,14 @@ type responseInfoPayload struct {
 	Body        string            `json:"body,omitempty"`
 	ContentType string            `json:"content_type,omitempty"`
 	Source      string            `json:"source"` // "default", "handler", "forward_passthrough"
+	// BodyTruncated is set on the stored copy when Body was cut short.
+	BodyTruncated bool `json:"body_truncated,omitempty"`
 }
 
 // publishResponseInfo sends a response_info message over the WS hub so the
-// browser can display the HTTP response that was sent back to the webhook caller.
-func (c *Capture) publishResponseInfo(slug string, reqID string, status int, headers map[string]string, body string, contentType string, source string) {
+// browser can display the HTTP response that was sent back to the webhook
+// caller, and records it on the request when stored is true.
+func (c *Capture) publishResponseInfo(slug string, reqID string, stored bool, status int, headers map[string]string, body string, contentType string, source string) {
 	payload := responseInfoPayload{
 		RequestID:   reqID,
 		Status:      status,
@@ -638,6 +655,39 @@ func (c *Capture) publishResponseInfo(slug string, reqID string, status int, hea
 		return
 	}
 	c.hub.Publish(slug, hub.Message{Type: "response_info", Data: data}, false)
+	if stored {
+		payload.Body, payload.BodyTruncated = c.truncateStored(payload.Body)
+		c.record(reqID, "response_info", payload, c.db.SetRequestResponseInfo)
+	}
+}
+
+// defaultMaxStoredResponse caps reply bodies kept with a request unless
+// SetMaxStoredResponse says otherwise. Live updates carry the whole body;
+// storage keeps the start, so a large reply doesn't escape the per-endpoint
+// storage budget, which counts request bodies only.
+const defaultMaxStoredResponse = 64 << 10
+
+func (c *Capture) truncateStored(body string) (string, bool) {
+	if len(body) <= c.maxStoredResponse {
+		return body, false
+	}
+	return body[:c.maxStoredResponse], true
+}
+
+// record saves a forward result or response on its request. It runs after
+// the webhook may have been answered (async forwards finish later), so it
+// doesn't use the request's context.
+func (c *Capture) record(reqID, what string, payload any, save func(context.Context, string, json.RawMessage) error) {
+	data, err := json.Marshal(payload)
+	if err != nil {
+		c.log.Warn().Err(err).Str("request_id", reqID).Msgf("failed to marshal %s", what)
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := save(ctx, reqID, data); err != nil {
+		c.log.Warn().Err(err).Str("request_id", reqID).Msgf("failed to record %s", what)
+	}
 }
 
 // forwardResultPayload is the JSON shape for a forward_result WS message.
@@ -651,11 +701,14 @@ type forwardResultPayload struct {
 	ResponseBody    string            `json:"response_body,omitempty"`
 	ResponseHeaders map[string]string `json:"response_headers,omitempty"`
 	ContentType     string            `json:"content_type,omitempty"`
+	// ResponseBodyTruncated is set on the stored copy when ResponseBody was cut short.
+	ResponseBodyTruncated bool `json:"response_body_truncated,omitempty"`
 }
 
 // publishForwardResult sends a forward_result message over the WS hub so the
-// browser can display the forward target's response.
-func (c *Capture) publishForwardResult(slug string, reqID string, result forward.Result) {
+// browser can display the forward target's response, and records it on the
+// request when stored is true.
+func (c *Capture) publishForwardResult(slug string, reqID string, stored bool, result forward.Result) {
 	respHeaders := make(map[string]string)
 	for k, v := range result.ResponseHeaders {
 		if len(v) > 0 {
@@ -680,6 +733,10 @@ func (c *Capture) publishForwardResult(slug string, reqID string, result forward
 		return
 	}
 	c.hub.Publish(slug, hub.Message{Type: "forward_result", Data: data}, false)
+	if stored {
+		payload.ResponseBody, payload.ResponseBodyTruncated = c.truncateStored(payload.ResponseBody)
+		c.record(reqID, "forward_result", payload, c.db.SetRequestForwardResult)
+	}
 }
 
 // defaultResponseBody returns a safe JSON response body string. L-06.

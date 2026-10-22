@@ -189,11 +189,11 @@
 				{@render step('3 · forward', forwardResult.status_code > 0 ? statusLine(forwardResult.status_code) : 'Failed', forwardResult.error || hostOf(forwardResult.url), 'bad')}
 			{/if}
 		{:else}
-			{@render step('3 · forward', 'Sent', `${hostOf(cfg.forward_url)} · result not shown`)}
+			{@render step('3 · forward', 'Sent', `${hostOf(cfg.forward_url)} · ${endpoint.mode === 'server' ? 'no result recorded' : 'result not shown'}`)}
 		{/if}
 
 		{#if response}
-			{@render step('4 · reply', statusLine(response.status), response.source === 'handler' ? 'custom reply' : response.source === 'forward_passthrough' ? "forward target's reply" : 'default response')}
+			{@render step('4 · reply', statusLine(response.status), response.source === 'handler' ? 'custom reply' : response.source === 'forward_passthrough' ? "forward target's reply" : response.source === 'signature' ? 'signature rejected' : 'default response')}
 		{:else if cfg.custom_response?.enabled}
 			{@render step('4 · reply', 'Custom reply', 'status not shown')}
 		{:else}
@@ -244,13 +244,16 @@
 		{:else}
 			{#if !forwardResult || fwdPending}
 				<p class="m-0 px-5 py-[18px] text-[13px] text-body">
-					{#if !cfg.forward_url}This endpoint doesn't forward.{:else if fwdPending}Waiting for the forward target…{:else}The forward target's reply is shown for requests that arrive while this page is open.{/if}
+					{#if !cfg.forward_url}This endpoint doesn't forward.{:else if fwdPending}Waiting for the forward target…{:else if endpoint.mode === 'server'}No forward result was recorded for this request. Requests captured before results were saved have none, and so does an async forward that never finished.{:else}In browser mode, the forward target's reply is shown for requests that arrive while this page is open.{/if}
 				</p>
 			{:else}
 				<div class="px-5 pt-[18px] font-mono text-[13px] {forwardResult.ok ? 'text-accent' : 'text-danger'}">
 					{forwardResult.status_code > 0 ? statusLine(forwardResult.status_code) : 'No response'} · {forwardResult.latency_ms} ms{#if forwardResult.error && forwardResult.error !== '__pending__'} · {forwardResult.error}{/if}
 				</div>
 				{@render kv(Object.entries(forwardResult.response_headers ?? {}), 'No headers.')}
+				{#if forwardResult.response_body_truncated}
+					<p class="m-0 px-5 pt-[14px] text-[13px] text-body">The reply was longer than the server stores (<code class="font-mono">MAX_STORED_RESPONSE_SIZE</code>, 64 KB by default), so only its start is shown.</p>
+				{/if}
 				<div class="border-t border-line">
 					{@render bodyView(pretty(forwardResult.response_body ?? ''), parseJSON(forwardResult.response_body ?? '') !== undefined)}
 				</div>

@@ -44,6 +44,12 @@ type Config struct {
 	// Max body size in bytes for captured requests (default 512KB).
 	MaxBodySize int64 `env:"MAX_BODY_SIZE" envDefault:"524288"`
 
+	// Max bytes of a reply body stored with a request: the forward target's
+	// reply and the response sent back. Longer bodies are cut and marked
+	// truncated; live updates still carry the whole body. Not counted in
+	// MaxEndpointStorageBytes. 0 stores status and headers only (default 64KB).
+	MaxStoredResponseSize int `env:"MAX_STORED_RESPONSE_SIZE" envDefault:"65536"`
+
 	// Max total body storage in bytes per endpoint — oldest requests are pruned
 	// when an endpoint exceeds this budget (default 10MB).
 	MaxEndpointStorageBytes int64 `env:"MAX_ENDPOINT_STORAGE_BYTES" envDefault:"10485760"`
@@ -266,6 +272,9 @@ func Load() (*Config, error) {
 	}
 	if cfg.MaxRequestsPerEndpoint < 1 || cfg.MaxRequestsPerEndpoint > 100000 {
 		return nil, fmt.Errorf("MAX_REQUESTS_PER_ENDPOINT must be between 1 and 100000, got %d", cfg.MaxRequestsPerEndpoint)
+	}
+	if cfg.MaxStoredResponseSize < 0 || cfg.MaxStoredResponseSize > 10*1024*1024 {
+		return nil, fmt.Errorf("MAX_STORED_RESPONSE_SIZE must be between 0 and 10MB, got %d", cfg.MaxStoredResponseSize)
 	}
 	if cfg.MaxEndpointStorageBytes < 1024 || cfg.MaxEndpointStorageBytes > 1024*1024*1024 {
 		return nil, fmt.Errorf("MAX_ENDPOINT_STORAGE_BYTES must be between 1KB and 1GB, got %d", cfg.MaxEndpointStorageBytes)

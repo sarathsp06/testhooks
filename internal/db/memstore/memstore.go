@@ -211,6 +211,29 @@ func (s *Store) GetRequest(_ context.Context, id string) (*db.CapturedRequest, e
 	return &c, nil
 }
 
+// SetRequestForwardResult records the forward target's reply for a request.
+// Unknown IDs are ignored, as an UPDATE matching no row is in Postgres.
+func (s *Store) SetRequestForwardResult(_ context.Context, id string, result json.RawMessage) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if r, ok := s.byID[id]; ok {
+		r.ForwardResult = append(json.RawMessage(nil), result...)
+		s.dirty.Store(true)
+	}
+	return nil
+}
+
+// SetRequestResponseInfo records the response sent back for a request.
+func (s *Store) SetRequestResponseInfo(_ context.Context, id string, info json.RawMessage) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if r, ok := s.byID[id]; ok {
+		r.ResponseInfo = append(json.RawMessage(nil), info...)
+		s.dirty.Store(true)
+	}
+	return nil
+}
+
 func (s *Store) DeleteRequest(_ context.Context, id string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
