@@ -7,7 +7,7 @@ Testhooks has to be reachable from the internet for webhook providers to deliver
 
 ## Checklist
 
-- **Set `AUTH_TOKEN`.** Without it, anyone who can reach the server can list, read and delete every endpoint and request.
+- **Set `AUTH_TOKEN`.** Without it, anyone who finds the server can read every captured webhook, change endpoint settings (including where requests are forwarded) and delete everything. See [Authentication](#authentication).
 - **Set `ALLOWED_ORIGINS`** to the origin you serve the UI from, such as `https://hooks.example.com`.
 - **Terminate TLS** in a reverse proxy or load balancer in front of Testhooks.
 - **Set `TRUSTED_PROXIES`** to that proxy's CIDR so rate limiting and the captured client IP use the real client address.
@@ -16,7 +16,22 @@ Testhooks has to be reachable from the internet for webhook providers to deliver
 
 ## Authentication
 
-With `AUTH_TOKEN` set, only the paths that carry data need the token:
+`AUTH_TOKEN` is one shared password for the whole instance. It decides who can look at and change things, not who can send webhooks.
+
+### Without it
+
+Anyone who can reach the server has the same access you do. They can:
+
+- list every endpoint and read every captured request: bodies, headers and anything else a sender included;
+- change endpoint settings, for example point forwarding at their own server to receive copies of future webhooks;
+- delete endpoints and requests;
+- watch webhooks arrive live.
+
+Leave it unset only for local use, or for a deliberately public demo with nothing sensitive in it.
+
+### With it
+
+Every path that reads or changes data needs the token:
 
 | Path | Access |
 |---|---|
@@ -26,9 +41,16 @@ With `AUTH_TOKEN` set, only the paths that carry data need the token:
 | `/healthz` | Public, for orchestrator probes |
 | Everything else (the UI) | Public. The UI bundle holds no data, and it has to load to show the sign-in prompt |
 
+A missing or wrong token gets `401 Unauthorized`, and the attempt is logged with the client IP. Tokens are compared in constant time. Generate one with `openssl rand -hex 32`.
+
 When the UI gets a `401`, it asks for the token, checks it against the server and stores it in that browser's `localStorage`. Requests that were waiting retry automatically and the live view reconnects. If the token changes on the server, the UI says the saved token was rejected and asks again. Use the sign-out button in the header to forget the token.
 
-Failed attempts are logged with the client IP.
+### What it doesn't do
+
+- **It doesn't stop anyone sending webhooks.** Capture URLs stay open, so anyone who knows a slug can post to it. They can't see anything back. To reject forged deliveries, turn on [signature verification](../../guides/signatures/) with **Reject invalid signatures**.
+- **It doesn't separate users.** Everyone with the token sees every endpoint. Changing it signs everyone out until they enter the new one.
+- **It doesn't encrypt anything.** Captured requests are stored as they arrived. Only signature secrets are encrypted at rest, with [`ENCRYPTION_KEYS`](../../guides/signatures/#how-secrets-are-stored).
+- **It's only as private as the browser.** Anyone using that browser profile can read the saved token. Sign out on shared machines.
 
 ## Behind a reverse proxy
 

@@ -12,7 +12,7 @@ Testhooks runs on Vercel's Go runtime. The repository includes a `vercel.json` t
 1. Click **Deploy with Vercel** above, or import the repository in the Vercel dashboard.
 2. Set `DATABASE_URL` to a PostgreSQL connection string. See [Choose the database connection](#choose-the-database-connection).
 3. Set `ENCRYPTION_KEYS` to `k1=` followed by the output of `openssl rand -hex 32`. It encrypts [signature secrets](../../guides/signatures/#how-secrets-are-stored) in the database; without it they can't be saved.
-4. Optionally set `AUTH_TOKEN` to require a token for the API and live view (the UI asks for it), and `ALLOWED_ORIGINS` to your deployment's URL, such as `https://testhooks-yourname.vercel.app`.
+4. Set `AUTH_TOKEN` unless this is a deliberately public demo. Without it, anyone who finds the deployment can read every captured webhook and change or delete endpoints; see [Authentication](../production/#authentication). Also set `ALLOWED_ORIGINS` to your deployment's URL, such as `https://testhooks-yourname.vercel.app`.
 5. Deploy. Migrations run automatically on the first request that starts an instance.
 
 [Fluid compute](https://vercel.com/docs/fluid-compute) must be on, because the live view uses WebSockets. It's the default for projects created on or after 23 April 2025.

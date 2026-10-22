@@ -93,7 +93,7 @@ Set options as environment variables in front of the command:
 |---|---|---|
 | `TESTHOOKS_PORT` | `8080` | Host port to publish |
 | `TESTHOOKS_VERSION` | `latest` | Image tag, for example `1.1.0` |
-| `AUTH_TOKEN` | | Require a bearer token for the UI and API |
+| `AUTH_TOKEN` | | Password for the UI and API. Set it on anything reachable from the internet; see [Authentication](../../deployment/production/#authentication) |
 | `ALLOWED_ORIGINS` | `*` | Allowed browser origins |
 | `TRUSTED_PROXIES` | | CIDRs of reverse proxies allowed to set client-IP headers |
 
