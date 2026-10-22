@@ -123,6 +123,9 @@ func main() {
 	allowedOrigins := cfg.ParsedAllowedOrigins()
 	trustedProxies := cfg.ParsedTrustedProxies()
 	capture := handler.NewCapture(store, h, fwd, wasmRunner, cfg.MaxBodySize, trustedProxies, log)
+	stripHeaders := cfg.ParsedStripHeaders()
+	capture.SetStripHeaders(stripHeaders)
+	log.Info().Strs("strip_headers", stripHeaders).Msg("stripping headers from captured requests (set STRIP_HEADERS to change)")
 	api := handler.NewAPI(store, h, log)
 	ws := handler.NewWS(store, h, log, allowedOrigins)
 

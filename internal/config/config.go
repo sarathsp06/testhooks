@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"net"
+	"os"
 	"strings"
 
 	"github.com/caarlos0/env/v11"
@@ -92,12 +93,51 @@ type Config struct {
 	// TrustedProxiesAuto reports that TrustedProxies was filled in for Vercel.
 	TrustedProxiesAuto bool
 
+	// Comma-separated headers removed from captured requests before they are
+	// stored, shown or forwarded. A trailing "*" matches a prefix
+	// ("X-Internal-*"), "default" expands to DefaultStripHeaders, and an empty
+	// value or "none" strips nothing. Unset means "default".
+	StripHeaders string `env:"STRIP_HEADERS"`
+
 	// API route timeout in seconds (for non-WebSocket HTTP routes).
 	APITimeoutSeconds int `env:"API_TIMEOUT_SECONDS" envDefault:"30"`
 
 	// Max WASM output size in bytes (default 1MB). QuickJS transform results
 	// exceeding this limit are rejected.
 	MaxWASMOutputSize int `env:"MAX_WASM_OUTPUT_SIZE" envDefault:"1048576"`
+}
+
+// DefaultStripHeaders are credentials hosting platforms add to requests on
+// their way to the app. Vercel sends an OIDC token for the project and a proxy
+// signature with every request; neither belongs to the webhook sender.
+const DefaultStripHeaders = "X-Vercel-Oidc-Token,X-Vercel-Proxy-Signature,X-Vercel-Proxy-Signature-Ts,X-Vercel-Sc-*"
+
+// vercelStripHeaders are stripped by default only on Vercel, where its proxy
+// fills Forwarded with a signature. Elsewhere Forwarded is the sender's own.
+const vercelStripHeaders = "Forwarded"
+
+// ParsedStripHeaders returns the header patterns from StripHeaders, with
+// "default" expanded.
+func (c *Config) ParsedStripHeaders() []string {
+	var patterns []string
+	for _, p := range strings.Split(c.StripHeaders, ",") {
+		p = strings.TrimSpace(p)
+		switch strings.ToLower(p) {
+		case "", "none":
+		case "default":
+			patterns = append(patterns, strings.Split(c.defaultStripHeaders(), ",")...)
+		default:
+			patterns = append(patterns, p)
+		}
+	}
+	return patterns
+}
+
+func (c *Config) defaultStripHeaders() string {
+	if c.OnVercel {
+		return DefaultStripHeaders + "," + vercelStripHeaders
+	}
+	return DefaultStripHeaders
 }
 
 // ParsedTrustedProxies returns the parsed CIDR networks from TrustedProxies.
@@ -167,6 +207,10 @@ func Load() (*Config, error) {
 	if cfg.OnVercel && strings.TrimSpace(cfg.TrustedProxies) == "" {
 		cfg.TrustedProxies = "127.0.0.1/32,::1/128"
 		cfg.TrustedProxiesAuto = true
+	}
+
+	if _, ok := os.LookupEnv("STRIP_HEADERS"); !ok {
+		cfg.StripHeaders = "default"
 	}
 
 	// L-04: Validate configuration bounds.

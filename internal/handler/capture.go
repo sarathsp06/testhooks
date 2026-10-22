@@ -59,6 +59,7 @@ type Capture struct {
 	maxBodySize            int64
 	browserResponseTimeout time.Duration
 	trustedProxies         []*net.IPNet
+	stripHeaders           headerMatcher
 	log                    zerolog.Logger
 	asyncSlots             chan struct{}
 	asyncWG                sync.WaitGroup
@@ -74,9 +75,16 @@ func NewCapture(store Store, h *hub.Hub, fwd *forward.Forwarder, wr *wasm.Runner
 		maxBodySize:            maxBodySize,
 		browserResponseTimeout: 10 * time.Second,
 		trustedProxies:         trustedProxies,
+		stripHeaders:           newHeaderMatcher(strings.Split(config.DefaultStripHeaders, ",")),
 		log:                    log.With().Str("component", "capture").Logger(),
 		asyncSlots:             make(chan struct{}, maxAsyncForwards),
 	}
+}
+
+// SetStripHeaders sets the headers removed from captured requests before they
+// are stored, shown or forwarded. See config.Config.StripHeaders for patterns.
+func (c *Capture) SetStripHeaders(patterns []string) {
+	c.stripHeaders = newHeaderMatcher(patterns)
 }
 
 // Shutdown waits for in-flight async forwards to finish, or for ctx to end.
@@ -176,6 +184,13 @@ func (c *Capture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Client IP — use trusted-proxy-aware extraction (MED-003). Read before
+	// stripping so a stripped X-Forwarded-For still yields the client address.
+	ip := middleware.ClientIP(r.RemoteAddr, r.Header.Get("X-Forwarded-For"), r.Header.Get("X-Real-Ip"), c.trustedProxies)
+
+	// Drop platform credentials before anything stores, shows or forwards them.
+	c.stripHeaders.strip(r.Header)
+
 	// Serialize headers.
 	headersJSON, _ := json.Marshal(r.Header)
 
@@ -184,9 +199,6 @@ func (c *Capture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if len(r.URL.Query()) > 0 {
 		queryJSON, _ = json.Marshal(r.URL.Query())
 	}
-
-	// Client IP — use trusted-proxy-aware extraction (MED-003).
-	ip := middleware.ClientIP(r.RemoteAddr, r.Header.Get("X-Forwarded-For"), r.Header.Get("X-Real-Ip"), c.trustedProxies)
 
 	req := &db.CapturedRequest{
 		EndpointID:  endpoint.ID,

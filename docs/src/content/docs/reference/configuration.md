@@ -23,6 +23,7 @@ Testhooks is configured entirely with environment variables. A `.env` file in th
 | `ALLOWED_ORIGINS` | `*` | Comma-separated origins allowed for CORS and WebSocket connections |
 | `ALLOWED_HEADERS` | `Content-Type,Authorization,X-Requested-With` | Comma-separated CORS request headers |
 | `TRUSTED_PROXIES` | | Comma-separated CIDRs allowed to set `X-Forwarded-For` and `X-Real-IP`. On Vercel (`VERCEL=1`) it defaults to loopback, `127.0.0.1/32,::1/128` |
+| `STRIP_HEADERS` | `default` | Comma-separated headers removed from captured requests before they are stored, shown or forwarded. A trailing `*` matches a prefix (`X-Internal-*`). `default` expands to Vercel's credentials: `X-Vercel-Oidc-Token`, `X-Vercel-Proxy-Signature`, `X-Vercel-Proxy-Signature-Ts` and `X-Vercel-Sc-*`, plus `Forwarded` on Vercel. Combine them, as in `default,X-Internal-*`. Empty or `none` strips nothing |
 | `RATE_LIMIT_RPS` | `20` | Sustained requests per second per client IP on capture and API routes. `0` disables rate limiting |
 | `RATE_LIMIT_BURST` | `40` | Burst size per client IP |
 

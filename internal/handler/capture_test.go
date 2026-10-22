@@ -388,3 +388,57 @@ func TestCapture_Signature(t *testing.T) {
 		})
 	}
 }
+
+func TestCapture_StripsHeaders(t *testing.T) {
+	store := newMockStore()
+	store.seedEndpoint("ep-1", "abc123", "Test", "server", nil)
+	capture, _ := newTestCapture(store)
+	mux := captureMux(capture)
+
+	send := func() http.Header {
+		store.mu.Lock()
+		clear(store.requests)
+		store.mu.Unlock()
+		req := httptest.NewRequest("POST", "/h/abc123", strings.NewReader("data"))
+		req.Header.Set("X-Vercel-Oidc-Token", "jwt")
+		req.Header.Set("X-Vercel-Proxy-Signature", "Bearer abc")
+		req.Header.Set("X-Vercel-Ip-Country", "US")
+		req.Header.Set("X-Internal-Trace", "1")
+		req.Header.Set("Webhook-Id", "msg_1")
+		w := httptest.NewRecorder()
+		mux.ServeHTTP(w, req)
+		if w.Code != http.StatusOK {
+			t.Fatalf("status = %d, want 200", w.Code)
+		}
+		store.mu.Lock()
+		defer store.mu.Unlock()
+		var h http.Header
+		for _, r := range store.requests {
+			json.Unmarshal(r.Headers, &h)
+		}
+		return h
+	}
+
+	// Defaults remove Vercel's credentials and keep everything else.
+	h := send()
+	for _, name := range []string{"X-Vercel-Oidc-Token", "X-Vercel-Proxy-Signature"} {
+		if h.Get(name) != "" {
+			t.Errorf("default: %s was stored", name)
+		}
+	}
+	for _, name := range []string{"X-Vercel-Ip-Country", "X-Internal-Trace", "Webhook-Id"} {
+		if h.Get(name) == "" {
+			t.Errorf("default: %s was stripped", name)
+		}
+	}
+
+	// Custom patterns replace the defaults; "*" matches a prefix.
+	capture.SetStripHeaders([]string{"x-internal-*", "X-Vercel-Ip-Country"})
+	h = send()
+	if h.Get("X-Internal-Trace") != "" || h.Get("X-Vercel-Ip-Country") != "" {
+		t.Errorf("custom: matching headers stored: %v", h)
+	}
+	if h.Get("X-Vercel-Oidc-Token") == "" || h.Get("Webhook-Id") == "" {
+		t.Errorf("custom: unmatched headers stripped: %v", h)
+	}
+}

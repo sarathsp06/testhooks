@@ -39,6 +39,8 @@ If a pasted connection string has a trailing newline, Testhooks trims it. A stri
 
 **Client IPs** are recorded correctly with no setup. When `VERCEL=1` is set and `TRUSTED_PROXIES` isn't, Testhooks trusts Vercel's proxy and reads the client address from the headers Vercel sets. Vercel overwrites those headers, so clients can't spoof them.
 
+**Vercel's credentials are stripped from captured requests.** Vercel adds an OIDC token for your project (`X-Vercel-Oidc-Token`) and a proxy signature (`X-Vercel-Proxy-Signature`, and a `sig` in `Forwarded`) to every request. Anyone who can see an endpoint could reuse them, so Testhooks removes them before storing, showing or forwarding a request. The `X-Vercel-Ip-*` location headers are kept. Change the list with [`STRIP_HEADERS`](../../reference/configuration/).
+
 **WebSockets work, with reconnects.** Vercel closes a WebSocket when the function reaches its [maximum duration](https://vercel.com/docs/functions/limitations#max-duration), 300 seconds by default. The UI reconnects automatically.
 
 **Live updates only reach browsers on the same instance.** Vercel can run several instances, and each WebSocket stays on the instance that accepted it. Testhooks pushes a captured request to the browsers connected to the instance that received it:

@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"strings"
 	"testing"
 )
 
@@ -229,5 +230,48 @@ func TestLoad_VercelTrustsLoopback(t *testing.T) {
 	}
 	if cfg.TrustedProxies != "" {
 		t.Errorf("off Vercel: TrustedProxies = %q, want empty", cfg.TrustedProxies)
+	}
+}
+
+func TestLoad_StripHeaders(t *testing.T) {
+	t.Setenv("VERCEL", "")
+	os.Unsetenv("STRIP_HEADERS")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := strings.Join(cfg.ParsedStripHeaders(), ",")
+	if got != DefaultStripHeaders {
+		t.Errorf("unset STRIP_HEADERS = %q, want %q", got, DefaultStripHeaders)
+	}
+
+	// Vercel also strips its signed Forwarded header.
+	t.Setenv("VERCEL", "1")
+	cfg, err = Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(cfg.ParsedStripHeaders(), ","); got != DefaultStripHeaders+",Forwarded" {
+		t.Errorf("on Vercel = %q, want defaults plus Forwarded", got)
+	}
+
+	tests := []struct {
+		env  string
+		want string
+	}{
+		{"", ""},
+		{"none", ""},
+		{"X-Secret, X-Internal-*", "X-Secret,X-Internal-*"},
+		{"default,X-Secret", DefaultStripHeaders + ",Forwarded,X-Secret"},
+	}
+	for _, tt := range tests {
+		t.Setenv("STRIP_HEADERS", tt.env)
+		cfg, err := Load()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := strings.Join(cfg.ParsedStripHeaders(), ","); got != tt.want {
+			t.Errorf("STRIP_HEADERS=%q: got %q, want %q", tt.env, got, tt.want)
+		}
 	}
 }
