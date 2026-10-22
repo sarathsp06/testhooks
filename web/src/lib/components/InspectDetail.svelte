@@ -10,7 +10,8 @@
 		endpoint,
 		response,
 		forwardResult,
-		onTryTransform
+		onTryTransform,
+		onDelete
 	}: {
 		request: CapturedRequest;
 		endpoint: Endpoint;
@@ -18,6 +19,8 @@
 		forwardResult?: ForwardResultData;
 		/** Open the transform editor with this request as the input. */
 		onTryTransform: () => void;
+		/** Delete this request. */
+		onDelete: () => void;
 	} = $props();
 
 	type Tab = 'body' | 'headers' | 'query' | 'forwarded' | 'fwdresponse';
@@ -148,6 +151,15 @@
 			<button type="button" onclick={doReplay} class="text-[13px] font-medium text-ink bg-surface border border-line-strong rounded-[9px] px-3.5 min-h-10 cursor-pointer hover:bg-chip">Replay</button>
 			<button type="button" onclick={onTryTransform} class="text-[13px] font-medium text-on-ink bg-ink rounded-[9px] px-3.5 min-h-10 flex items-center cursor-pointer hover:opacity-90">
 				Test a transform on this
+			</button>
+			<button
+				type="button"
+				onclick={() => confirm('Delete this request?') && onDelete()}
+				title="Delete this request"
+				aria-label="Delete this request"
+				class="text-[13px] font-medium text-soft bg-surface border border-line-strong rounded-[9px] px-3.5 min-h-10 cursor-pointer hover:text-danger hover:bg-chip"
+			>
+				Delete
 			</button>
 		</div>
 	</div>

@@ -508,6 +508,7 @@
 				</nav>
 				{#if waiting}
 					<div class="flex items-center gap-1 flex-wrap">
+						<button type="button" onclick={() => open('settings')} class="text-sm text-soft hover:text-accent px-3 py-2.5 cursor-pointer">Settings</button>
 						<a href="https://sarathsp06.github.io/testhooks/" target="_blank" rel="noopener noreferrer" class="no-underline text-sm text-soft hover:text-accent px-3 py-2.5">Docs</a>
 						<a href="https://github.com/sarathsp06/testhooks" target="_blank" rel="noopener noreferrer" class="no-underline text-sm text-soft hover:text-accent px-3 py-2.5">GitHub</a>
 					</div>
@@ -569,6 +570,9 @@
 							<button type="button" onclick={exportAllJSON} title="Download requests as JSON" aria-label="Download requests as JSON" class="w-8 h-8 rounded-md flex items-center justify-center text-faint hover:text-ink hover:bg-chip cursor-pointer"><Download class="w-4 h-4" /></button>
 							<button type="button" onclick={() => confirm('Delete all captured requests?') && handleClearAll()} title="Delete all requests" aria-label="Delete all requests" class="w-8 h-8 rounded-md flex items-center justify-center text-faint hover:text-danger hover:bg-chip cursor-pointer"><Trash2 class="w-4 h-4" /></button>
 						</div>
+						{#if requestsStore.error}
+							<p role="alert" class="m-0 px-4 py-2 text-[13px] text-danger border-b border-line">{requestsStore.error}</p>
+						{/if}
 						<ul class="m-0 p-0 list-none flex flex-col overflow-y-auto">
 							{#each shown as r (r.id)}
 								{@const fr = requestsStore.getForwardResult(r.id)}
@@ -611,6 +615,7 @@
 							response={requestsStore.getResponse(requestsStore.selected.id)}
 							forwardResult={requestsStore.getForwardResult(requestsStore.selected.id)}
 							onTryTransform={() => open('transform', requestsStore.selected?.id)}
+							onDelete={() => requestsStore.selected && requestsStore.remove(requestsStore.selected.id)}
 						/>
 					{:else}
 						<section class="flex-[999_1_560px] min-w-0 p-6 flex items-center justify-center text-sm text-body">

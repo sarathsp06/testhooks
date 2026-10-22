@@ -25,6 +25,8 @@
 	const hasTransform = $derived(!!endpoint.config?.wasm_script);
 	const hasForward = $derived(!!endpoint.config?.forward_url);
 	const hasReply = $derived(!!endpoint.config?.custom_response?.enabled);
+	const sig = $derived(endpoint.config?.signature);
+	const hasSignature = $derived(!!(sig?.secret_set || sig?.public_key));
 
 	let copiedUrl = $state(false);
 	let copiedCurl = $state(false);
@@ -195,6 +197,20 @@
 				<span class="flex-none text-xs font-medium text-accent">On</span>
 			</li>
 			<li class="flex gap-3 items-start bg-surface border border-line rounded-xl px-4 py-3.5">
+				{@render stepIcon(hasSignature)}
+				<span class="flex flex-col gap-0.5 flex-1 min-w-0">
+					<span class="text-sm font-semibold text-ink">Verify signatures</span>
+					<span class="text-[13px] text-body">
+						{#if hasSignature}
+							Checks Standard Webhooks signatures{sig?.enforce ? ' and rejects invalid ones with 401' : ''}.
+						{:else}
+							Paste the sender's webhook secret (Sparrow, Svix, Standard Webhooks) to check each signature.
+						{/if}
+					</span>
+				</span>
+				{@render stepAction(hasSignature, 'Add', 'settings')}
+			</li>
+			<li class="flex gap-3 items-start bg-surface border border-line rounded-xl px-4 py-3.5">
 				{@render stepIcon(hasTransform)}
 				<span class="flex flex-col gap-0.5 flex-1 min-w-0">
 					<span class="text-sm font-semibold text-ink">Transform</span>
@@ -239,5 +255,13 @@
 		>
 			How server and browser mode differ
 		</a>
+		<button
+			type="button"
+			onclick={() => onOpenTab('settings')}
+			class="mt-2 text-left bg-surface border border-line rounded-[12px] px-4 py-3.5 flex flex-col gap-1 cursor-pointer hover:border-line-strong"
+		>
+			<span class="text-sm font-semibold text-ink">Endpoint settings</span>
+			<span class="text-[13px] leading-normal text-body">Name, mode, forwarding, signature verification, or delete this endpoint.</span>
+		</button>
 	</aside>
 </div>
