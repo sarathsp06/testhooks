@@ -41,9 +41,9 @@ const first = installs[0];
 const site = (import.meta.env.SITE ?? 'https://sarathsp06.github.io').replace(/\/$/, '');
 const pageUrl = `${site}${base}`;
 const ogImage = `${pageUrl}og.jpg`;
-const title = 'Self-Hosted webhook.site Alternative | Testhooks';
+const title = 'Self-Hosted Webhook Tester | webhook.site Alternative';
 const description =
-	'Self-hosted webhook.site alternative: capture, inspect, verify, forward and script replies to webhooks. Open source. Your browser tab can tunnel to localhost.';
+	'Small self-hosted webhook tester: catch a webhook, edit it with a live diff, reply with any status, watch the sender react. Open-source webhook.site alternative.';
 const schema = JSON.stringify({
 	'@context': 'https://schema.org',
 	'@type': 'SoftwareApplication',
@@ -134,7 +134,7 @@ const arrow = '<path d="M1 6h37M33 1l5 5-5 5"></path>';
 					</a>
 				</div>
 				<h1>Webhooks, made for humans and for machines.</h1>
-				<p class="lede">Everything webhook.site does, on your own server. One click for you, the same API for your scripts and agents, and hard to get wrong: plain words, safe defaults, nothing saved until you say so. When your handler runs on localhost, your browser tab is the tunnel.</p>
+				<p class="lede">A small tool to test webhooks. Catch one, change its payload, reply with any status, and watch what the sender does next. What takes a paid plan or a CLI elsewhere is one click here, or one curl for your scripts. Self-hosted, open source. When your handler runs on localhost, your browser tab is the tunnel.</p>
 				<div class="hero-actions">
 					<a href={demo} class="btn btn-primary">Try the live demo</a>
 					<a href={docs} class="btn btn-secondary">Read the docs</a>
@@ -174,7 +174,7 @@ const arrow = '<path d="M1 6h37M33 1l5 5-5 5"></path>';
 				<div class="section-head narrow">
 					<span class="eyebrow mono">webhook.site has been here ten years. so why look?</span>
 					<h2>Three things to try in your first minute.</h2>
-					<p class="sub">Each one is a thing a request bin can't do, and each takes one click on the live demo. No account. Every click is also an API call, so a script or an agent can do the same with curl.</p>
+					<p class="sub">Testing a webhook is mostly poking at it: change a field, fail on purpose, see what the sender does. Elsewhere that needs a paid plan, a CLI or a config file. Here each one is a click on the live demo, no account, and the same call from curl.</p>
 				</div>
 				<div class="cards">
 					<div class="card">
@@ -295,8 +295,8 @@ const arrow = '<path d="M1 6h37M33 1l5 5-5 5"></path>';
 			<section id="features" class="band band-surface">
 				<div class="wrap features">
 					<div class="features-head">
-						<h2>For humans: plain words and safe defaults. For machines: the same API.</h2>
-						<p class="sub">One Go binary with the UI embedded. Every screen is a REST call you can make with curl. Storage is PostgreSQL, or memory for local testing.</p>
+						<h2>Everything you need to test a webhook. Nothing you don't.</h2>
+						<p class="sub">Not a webhook server, not a gateway: one Go binary with the UI embedded. Every screen is a REST call you can make with curl. Storage is PostgreSQL, or memory for local testing.</p>
 					</div>
 					<div class="grid">
 						<div class="feature"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"></rect><path d="M8 20h8M12 16v4"></path></svg><h3>Replace the tunnel</h3><p>Forward from your tab to localhost, Docker or anything your machine reaches, and the sender gets your app's reply. No CLI, daemon or account.</p></div>

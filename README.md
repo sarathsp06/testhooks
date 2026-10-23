@@ -6,7 +6,7 @@
 
 <p align="center">
   <strong>Webhooks, made for humans and for machines.</strong><br/>
-  A self-hostable <a href="https://webhook.site">webhook.site</a>: capture, inspect, verify, transform, forward and mock webhooks, one click or one curl. When your handler runs on localhost, your browser tab is the tunnel. One binary with the UI built in. See <a href="AGENTS.md">AGENTS.md</a> for the principles behind it.
+  A small, self-hostable tool to test webhooks, like <a href="https://webhook.site">webhook.site</a>: catch one, change its payload, reply with any status, watch the sender react. One click, or one curl. When your handler runs on localhost, your browser tab is the tunnel. One binary with the UI built in. See <a href="AGENTS.md">AGENTS.md</a> for the principles behind it.
 </p>
 
 <p align="center">
