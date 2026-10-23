@@ -57,6 +57,36 @@ const schema = JSON.stringify({
 	sameAs: [github, demo],
 });
 
+// Rolling feature strip under the hero. `plus` marks what webhook.site does
+// not offer (checked against its public docs, October 2026).
+const features = [
+	{ t: 'Your localhost answers the sender', plus: true },
+	{ t: 'Forward to localhost from the tab' },
+	{ t: 'Standard Webhooks signature verification', plus: true },
+	{ t: 'HMAC and Ed25519 signatures', plus: true },
+	{ t: 'Reject bad signatures with 401', plus: true },
+	{ t: 'JavaScript transforms, free', plus: true },
+	{ t: 'Scripted replies, free', plus: true },
+	{ t: 'Live diff before you save', plus: true },
+	{ t: 'Try a script on recent traffic', plus: true },
+	{ t: 'Request forwarding with retries' },
+	{ t: 'Sync or async forwarding' },
+	{ t: 'Replay any request' },
+	{ t: 'Copy as cURL' },
+	{ t: 'Export requests as JSON' },
+	{ t: 'Envelope-encrypted secrets, write-only' },
+	{ t: 'Browser mode: nothing on disk' },
+	{ t: 'Self-hosted: your server, your limits' },
+	{ t: 'In-memory mode, no database' },
+	{ t: 'PostgreSQL when you want to keep it' },
+	{ t: 'REST API and WebSocket' },
+	{ t: 'One Go binary, UI embedded' },
+	{ t: 'Self-host with scripting', plus: true },
+	{ t: 'Rate limiting and trusted proxies' },
+	{ t: 'Docker image and Vercel deploy' },
+	{ t: 'Apache 2.0' },
+];
+
 const check = '<path d="M5 12l5 5L20 7"></path>';
 const arrow = '<path d="M1 6h37M33 1l5 5-5 5"></path>';
 ---
@@ -141,7 +171,7 @@ const arrow = '<path d="M1 6h37M33 1l5 5-5 5"></path>';
 				</div>
 				<ul class="proof" aria-label="At a glance">
 					<li><b class="mono">1</b><span>Go binary, UI built in, Apache 2.0</span></li>
-					<li><b class="mono">∞</b><span>endpoints and requests, no 7-day expiry</span></li>
+					<li><b class="mono">∞</b><span>when self-hosted: your server, your limits</span></li>
 					<li><b class="mono">JS</b><span>transforms and scripted replies, free</span></li>
 					<li><b class="mono">0</b><span>installs to reach localhost: your tab is the tunnel</span></li>
 				</ul>
@@ -169,6 +199,17 @@ const arrow = '<path d="M1 6h37M33 1l5 5-5 5"></path>';
 				</div>
 			</section>
 
+			<!-- Rolling feature strip -->
+			<section class="ticker-band" aria-label="Features">
+				<div class="wrap ticker-head"><span class="eyebrow-plain">What's in the box</span><span class="ticker-legend"><span class="plus-dot"></span>not in webhook.site</span></div>
+				<div class="ticker">
+					<ul class="ticker-track">
+						{[...features, ...features].map((f, i) => (
+							<li class={f.plus ? 'tick plus' : 'tick'} aria-hidden={i >= features.length ? 'true' : undefined}>{f.plus && <span class="plus-dot"></span>}{f.t}</li>
+						))}
+					</ul>
+				</div>
+			</section>
 			<!-- Overview -->
 			<section id="overview" class="wrap why">
 				<div class="section-head narrow">
@@ -181,16 +222,19 @@ const arrow = '<path d="M1 6h37M33 1l5 5-5 5"></path>';
 						<span class="mono tag">01 · the mock</span>
 						<h3>Change a payload and see the diff before it ships</h3>
 						<p>Open a captured request, click <b class="ink">Test a transform on this</b>, type two lines of JavaScript. The diff updates as you type, it runs against your recent traffic, and nothing is saved until you say so.</p>
+						<a class="card-link" href={`${base}guides/scripts/`}>How transforms work</a>
 					</div>
 					<div class="card">
 						<span class="mono tag">02 · the reply</span>
 						<h3>Make the sender retry, on purpose</h3>
 						<p>Script a <span class="mono sm ink">500</span> reply and watch the provider's retry arrive. Then return <span class="mono sm ink">200</span>. You just tested your error handling without touching your app, and it cost nothing.</p>
+						<a class="card-link" href={`${base}guides/scripts/#custom-responses`}>How scripted replies work</a>
 					</div>
 					<div class="card card-strong">
 						<span class="mono tag accent">03 · the tunnel</span>
 						<h3>Watch your localhost answer the provider</h3>
 						<p>Point forwarding at <span class="mono sm ink">localhost</span>, turn on the local reply. The provider gets your handler's real status and body, through your browser tab. No CLI, daemon or account.</p>
+						<a class="card-link" href={`${base}guides/localhost/`}>Webhooks to localhost</a>
 					</div>
 				</div>
 				<p class="why-note">The one-liners above run Testhooks on your machine, which is enough to try it with curl. Real providers can only deliver to a URL they can reach, so for those <a href={`${base}deployment/production/`}>deploy it on a server or PaaS with a public URL</a>.</p>
@@ -301,7 +345,7 @@ const arrow = '<path d="M1 6h37M33 1l5 5-5 5"></path>';
 					<div class="grid">
 						<div class="feature"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"></rect><path d="M8 20h8M12 16v4"></path></svg><h3>Replace the tunnel</h3><p>Forward from your tab to localhost, Docker or anything your machine reaches, and the sender gets your app's reply. No CLI, daemon or account.</p></div>
 						<div class="feature"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"></rect><path d="M8 11V7a4 4 0 0 1 8 0v4"></path></svg><h3>Private by default</h3><p>In browser mode, payloads are relayed over WebSocket and never written to the server's disk.</p></div>
-						<div class="feature"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"></path><circle cx="12" cy="12" r="3"></circle></svg><h3>Live inspection</h3><p>Every request appears the instant it arrives: headers, query, body with syntax highlighting. Copy as cURL, export as JSON or CSV.</p></div>
+						<div class="feature"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"></path><circle cx="12" cy="12" r="3"></circle></svg><h3>Live inspection</h3><p>Every request appears the instant it arrives: headers, query, body with syntax highlighting. Copy as cURL, export as JSON.</p></div>
 						<div class="feature"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6l-6 6 6 6M16 6l6 6-6 6"></path></svg><h3>Script transforms</h3><p>Reshape payloads with a few lines of JavaScript, sandboxed in WASM, before they are forwarded.</p></div>
 						<div class="feature"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12h12M12 6l6 6-6 6M20 5v14"></path></svg><h3>Forward and mock</h3><p>Forward to any URL, sync or async with retries, and script the exact response the sender gets back.</p></div>
 						<div class="feature"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 3v6c0 4.5-3.4 8.3-8 9-4.6-.7-8-4.5-8-9V6l8-3z"></path><path d="M8.5 12l2.5 2.5L15.5 10"></path></svg><h3>Verify signatures</h3><p>Check Standard Webhooks signatures from Sparrow, Svix and others, and reject bad ones like a real receiver.</p></div>
@@ -314,23 +358,25 @@ const arrow = '<path d="M1 6h37M33 1l5 5-5 5"></path>';
 				<div class="wrap compare">
 					<div class="section-head narrow">
 						<span class="eyebrow mono">Side by side</span>
-						<h2>What you stop needing.</h2>
+						<h2>Where it's different, and where it isn't.</h2>
+						<p class="sub">All three catch a webhook and show it to you. The difference is what happens when you want to poke at it.</p>
 					</div>
 					<table class="cmp">
 						<thead>
 							<tr><th scope="col"></th><th scope="col">Testhooks</th><th scope="col">webhook.site</th><th scope="col">ngrok</th></tr>
 						</thead>
 						<tbody>
-							<tr><th scope="row">Nothing to install, no account</th><td class="yes">Yes</td><td class="yes">Yes</td><td class="no">Agent + login</td></tr>
-							<tr><th scope="row">Reaches localhost</th><td class="yes">From the tab</td><td class="part">From the tab</td><td class="yes">Agent</td></tr>
-							<tr><th scope="row">Your app's reply reaches the sender</th><td class="yes">Yes</td><td class="no">No</td><td class="yes">Yes</td></tr>
-							<tr><th scope="row">Script the reply</th><td class="yes">Free, JavaScript</td><td class="part">Paid tier</td><td class="part">Policy rules</td></tr>
-							<tr><th scope="row">Signature check on every request</th><td class="yes">Standard Webhooks</td><td class="no">No</td><td class="part">Metered</td></tr>
-							<tr><th scope="row">Self-host with forwarding and scripts</th><td class="yes">One binary, Apache 2.0</td><td class="part">Without scripting</td><td class="no">No</td></tr>
-							<tr><th scope="row">Stable URL on the free tier</th><td class="yes">Yours, as long as you keep it</td><td class="no">7 days, 100 requests</td><td class="no">Random per session</td></tr>
+							<tr><th scope="row">Getting a URL</th><td class="yes">One click, no account</td><td class="yes">One click, no account</td><td class="part">Install the agent, sign in</td></tr>
+							<tr><th scope="row">Changing a payload</th><td class="yes">Type JavaScript, watch the diff on real traffic, save when it's right</td><td class="part">Custom Actions, on a paid plan; edit, then run</td><td class="part">Traffic Policy rules in config</td></tr>
+							<tr><th scope="row">Scripting the reply</th><td class="yes">JavaScript, in the browser, free; preview what the sender gets</td><td class="part">Static response free; WebhookScript on a paid plan</td><td class="part">Policy rules; the app's own reply through the tunnel</td></tr>
+							<tr><th scope="row">Seeing what happened to one request</th><td class="yes">Received, transformed, forwarded, replied: each step with its result on the request</td><td class="part">Request and your configured response</td><td class="part">Request and response in the inspector</td></tr>
+							<tr><th scope="row">Reaching an app on localhost</th><td class="yes">From the tab; your app's reply goes back to the sender</td><td class="part">From the tab (XHR Redirect), fire and forget; or a CLI</td><td class="yes">Through the agent, full round trip</td></tr>
+							<tr><th scope="row">Checking a signature</th><td class="yes">Standard Webhooks, marked on every request; secrets write-only, encrypted</td><td class="no">Not built in</td><td class="part">50+ providers; metered on the free plan</td></tr>
+							<tr><th scope="row">Self-hosting</th><td class="yes">One binary with everything above</td><td class="part">Open-source edition (MIT), without Custom Actions</td><td class="no">Not offered</td></tr>
+							<tr><th scope="row">Limits on the hosted free tier</th><td class="part">Demo: 500 requests or 10 MB per endpoint, URLs public; self-hosted: your limits</td><td class="part">100 requests, 7 days, URLs public; self-hosted: your limits</td><td class="part">20k requests a month, 3 endpoints, random URL</td></tr>
 						</tbody>
 					</table>
-					<p class="cmp-note">From each product's public docs, October 2026. webhook.site's open-source edition and ngrok's free plan; their paid plans add more.</p>
+					<p class="cmp-note">From each product's public docs, October 2026: webhook.site's hosted free tier and open-source edition, ngrok's free plan. Paid plans add more on all sides. Corrections welcome on GitHub.</p>
 				</div>
 			</section>
 			<!-- Closing call to action -->
@@ -505,6 +551,21 @@ const arrow = '<path d="M1 6h37M33 1l5 5-5 5"></path>';
 			.lede { margin-top: 22px; font-size: 19px; line-height: 1.55; color: var(--text); max-width: 640px; }
 			.hero-actions { margin-top: 28px; display: flex; gap: 12px; flex-wrap: wrap; }
 			.hero-demo-note { margin-top: 12px; font-size: 14px; color: var(--faint); }
+			.ticker-band { padding: 8px 0 40px; }
+			.ticker-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
+			.ticker-legend { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--faint); }
+			.plus-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); flex: 0 0 auto; }
+			.ticker { overflow: hidden; -webkit-mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent); mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent); }
+			.ticker-track { margin: 0; padding: 0; list-style: none; display: flex; gap: 10px; width: max-content; animation: ticker 70s linear infinite; }
+			.ticker:hover .ticker-track, .ticker:focus-within .ticker-track { animation-play-state: paused; }
+			.tick { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; font-size: 14px; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px; }
+			.tick.plus { border-color: var(--accent); }
+			@keyframes ticker { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+			@media (prefers-reduced-motion: reduce) {
+				.ticker { mask-image: none; -webkit-mask-image: none; }
+				.ticker-track { animation: none; width: auto; flex-wrap: wrap; padding: 0 24px; max-width: 1160px; margin: 0 auto; box-sizing: border-box; }
+				.ticker-track li[aria-hidden='true'] { display: none; }
+			}
 			.proof { margin: 28px 0 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px 28px; max-width: 900px; }
 			.proof li { display: flex; align-items: baseline; gap: 10px; font-size: 14px; line-height: 1.4; color: var(--text); border-left: 2px solid var(--accent); padding-left: 12px; }
 			.proof b { font-size: 22px; font-weight: 500; color: var(--ink); letter-spacing: -0.02em; }
@@ -566,6 +627,9 @@ const arrow = '<path d="M1 6h37M33 1l5 5-5 5"></path>';
 			.card-strong { border-color: var(--ink); }
 			.why-note { margin-top: 20px; font-size: 15px; line-height: 1.55; color: var(--text); max-width: 760px; }
 			.card h3 { font-size: 18px; font-weight: 600; }
+			.card-link { margin-top: auto; font-size: 14px; font-weight: 500; color: var(--accent); text-decoration: none; }
+			.card-link::after { content: ' →'; }
+			.card-link:hover { text-decoration: underline; }
 			.card p { font-size: 15px; line-height: 1.55; color: var(--text); }
 			.tag { font-size: 12px; color: var(--faint); }
 			.tag.accent { color: var(--accent); }

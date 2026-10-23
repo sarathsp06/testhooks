@@ -8,7 +8,7 @@
 	import { getRequestsStore } from '$lib/stores/requests.svelte';
 	import { getWebhookURL, copyToClipboard } from '$lib/utils';
 	import { initWasm, runTransform, runResponseHandler, isLegacyLanguage } from '$lib/wasm';
-	import { forwardRequest, forwardRequestSync, forwardRequestWithResponse, relayHeaders } from '$lib/forward';
+	import { forwardRequest, forwardRequestSync, forwardRequestWithResponse, relayHeaders, explainForwardError } from '$lib/forward';
 	import { saveRequest as saveToIDB } from '$lib/idb';
 	import EndpointWaiting from '$lib/components/EndpointWaiting.svelte';
 	import InspectDetail from '$lib/components/InspectDetail.svelte';
@@ -135,7 +135,7 @@
 								requestsStore.attachForwardResult(req.id, fwdResult);
 							}).catch((err) => {
 								// Always store a result so the UI shows the error instead of nothing.
-								const message = err instanceof Error ? err.message : 'Unknown forward error';
+								const message = explainForwardError(err, fwdUrl);
 								console.warn('Browser forward error:', message);
 								requestsStore.attachForwardResult(req.id, {
 									request_id: req.id,
@@ -207,7 +207,7 @@
 										content_type: syncResult.response?.content_type
 									});
 								} catch (err) {
-									fwdError = err instanceof Error ? err.message : 'Unknown forward error';
+									fwdError = explainForwardError(err, fwdUrl);
 									console.warn('Sync forward error in response_needed:', err);
 								}
 							} else if (fwdUrl && fwdMode === 'async') {

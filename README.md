@@ -49,6 +49,7 @@ To receive real webhooks, run testhooks somewhere the sender can reach, with Pos
 - **Transform:** reshape a request with a few lines of JavaScript, or skip it.
 - **Forward and reply:** send requests on to another URL, and script what the sender gets back.
 - **Verify signatures:** Standard Webhooks (Svix, Sparrow and others), HMAC and Ed25519.
+- **Work with your AI agent:** `testhooks mcp` lets Claude Code or Cursor create an endpoint, read what the provider sent and write your handler from real traffic.
 
 The [docs](https://sarathsp06.github.io/testhooks/) cover configuration, the API and how each mode works.
 
@@ -66,4 +67,6 @@ See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
-[Apache License 2.0](LICENSE)
+The code is under the [Apache License 2.0](LICENSE): use it, change it, self-host it, for anything.
+
+The name "Testhooks" and the logo are trademarks and are not covered by the code license. Forks need their own name, and offering a hosted service under the Testhooks name needs permission. See [TRADEMARKS.md](TRADEMARKS.md).

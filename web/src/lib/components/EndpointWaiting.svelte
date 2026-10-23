@@ -2,6 +2,7 @@
 	import { getWebhookURL, copyToClipboard } from '$lib/utils';
 	import { Copy, Check, Loader2 } from 'lucide-svelte';
 	import type { Endpoint } from '$lib/types';
+	import { PROVIDER_SAMPLES, samplesByProvider, type ProviderSample } from '$lib/samples';
 
 	let {
 		endpoint,
@@ -12,12 +13,11 @@
 		onOpenTab: (tab: 'transform' | 'reply' | 'settings') => void;
 	} = $props();
 
-	const SAMPLE_EVENT = {
-		type: 'order.created',
-		id: 'evt_1a2b3c',
-		created_at: '2026-01-01T12:00:00Z',
-		data: { order_id: 'ord_42', amount: 1999, currency: 'usd' }
-	};
+	// Which sample the Send button posts. The picker is a plain <select>, so
+	// the card stays one button and one line, however many providers are listed.
+	let sampleId = $state(PROVIDER_SAMPLES[0].id);
+	const sampleGroups = samplesByProvider();
+	const sample = $derived(PROVIDER_SAMPLES.find((s) => s.id === sampleId) ?? PROVIDER_SAMPLES[0]);
 
 	const url = $derived(getWebhookURL(endpoint.slug));
 	const curlCommand = $derived(`curl -X POST \\\n  ${url} \\\n  -H 'Content-Type: application/json' \\\n  -d '{"hello":"world"}'`);
@@ -51,10 +51,11 @@
 		sampleState = 'sending';
 		sampleError = '';
 		try {
-			const res = await fetch(`/h/${endpoint.slug}`, {
+			const s: ProviderSample = sample;
+			const res = await fetch(`/h/${endpoint.slug}${s.path}`, {
 				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify(SAMPLE_EVENT)
+				headers: s.headers,
+				body: typeof s.body === 'string' ? s.body : JSON.stringify(s.body)
 			});
 			// Any reply means the request was captured; a custom reply may use any status.
 			sampleState = res.status === 404 ? 'error' : 'sent';
@@ -108,6 +109,7 @@
 			<span class="text-[13px] text-faint">
 				Any method and any path after it work, for example <span class="font-mono text-soft break-all">/h/{endpoint.slug}/events</span>.
 			</span>
+			<span class="text-[13px] text-faint">Anyone with this URL can send to it, and anyone with this page's link can read what arrived. Requests stay on this server and, by default, the oldest are pruned past 500 requests or 10 MB per endpoint. For private traffic, <a class="underline hover:text-accent" href="https://sarathsp06.github.io/testhooks/getting-started/installation/" target="_blank" rel="noopener">self-host it</a>.</span>
 		</div>
 
 		<!-- Waiting card -->
@@ -128,7 +130,22 @@
 				<div class="border-[1.5px] border-ink rounded-xl p-[18px] flex flex-col gap-3">
 					<span class="font-mono text-xs text-accent">quickest</span>
 					<span class="text-[15px] font-semibold text-ink">Send a sample from here</span>
-					<span class="text-sm leading-normal text-body">Posts an example JSON event to your URL so you can look around right away.</span>
+					<span class="text-sm leading-normal text-body">Posts an example event to your URL so you can look around right away. Pick a provider's shape if you have one in mind.</span>
+					<label class="flex flex-col gap-1 text-[13px] text-soft">
+						<span>Sample</span>
+						<select
+							bind:value={sampleId}
+							class="font-sans text-sm text-ink bg-page border border-line-strong rounded-[9px] px-3 min-h-10 focus:outline-none focus:border-accent"
+						>
+							{#each sampleGroups as g (g.provider)}
+								<optgroup label={g.provider}>
+									{#each g.items as item (item.id)}
+										<option value={item.id}>{item.label}</option>
+									{/each}
+								</optgroup>
+							{/each}
+						</select>
+					</label>
 					<div class="mt-auto flex flex-col gap-2">
 						<button
 							type="button"
