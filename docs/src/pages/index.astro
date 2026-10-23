@@ -76,7 +76,7 @@ const features = [
 	{ t: 'Export requests as JSON' },
 	{ t: 'Envelope-encrypted secrets, write-only' },
 	{ t: 'Browser mode: nothing on disk' },
-	{ t: 'No request limit, no expiry', plus: true },
+	{ t: 'Self-hosted: your server, your limits' },
 	{ t: 'In-memory mode, no database' },
 	{ t: 'PostgreSQL when you want to keep it' },
 	{ t: 'REST API and WebSocket' },
@@ -171,7 +171,7 @@ const arrow = '<path d="M1 6h37M33 1l5 5-5 5"></path>';
 				</div>
 				<ul class="proof" aria-label="At a glance">
 					<li><b class="mono">1</b><span>Go binary, UI built in, Apache 2.0</span></li>
-					<li><b class="mono">∞</b><span>endpoints and requests, no 7-day expiry</span></li>
+					<li><b class="mono">∞</b><span>when self-hosted: your server, your limits</span></li>
 					<li><b class="mono">JS</b><span>transforms and scripted replies, free</span></li>
 					<li><b class="mono">0</b><span>installs to reach localhost: your tab is the tunnel</span></li>
 				</ul>
@@ -355,23 +355,25 @@ const arrow = '<path d="M1 6h37M33 1l5 5-5 5"></path>';
 				<div class="wrap compare">
 					<div class="section-head narrow">
 						<span class="eyebrow mono">Side by side</span>
-						<h2>What you stop needing.</h2>
+						<h2>Where it's different, and where it isn't.</h2>
+						<p class="sub">All three catch a webhook and show it to you. The difference is what happens when you want to poke at it.</p>
 					</div>
 					<table class="cmp">
 						<thead>
 							<tr><th scope="col"></th><th scope="col">Testhooks</th><th scope="col">webhook.site</th><th scope="col">ngrok</th></tr>
 						</thead>
 						<tbody>
-							<tr><th scope="row">Nothing to install, no account</th><td class="yes">Yes</td><td class="yes">Yes</td><td class="no">Agent + login</td></tr>
-							<tr><th scope="row">Reaches localhost</th><td class="yes">From the tab</td><td class="part">From the tab</td><td class="yes">Agent</td></tr>
-							<tr><th scope="row">Your app's reply reaches the sender</th><td class="yes">Yes</td><td class="no">No</td><td class="yes">Yes</td></tr>
-							<tr><th scope="row">Script the reply</th><td class="yes">Free, JavaScript</td><td class="part">Paid tier</td><td class="part">Policy rules</td></tr>
-							<tr><th scope="row">Signature check on every request</th><td class="yes">Standard Webhooks</td><td class="no">No</td><td class="part">Metered</td></tr>
-							<tr><th scope="row">Self-host with forwarding and scripts</th><td class="yes">One binary, Apache 2.0</td><td class="part">Without scripting</td><td class="no">No</td></tr>
-							<tr><th scope="row">Stable URL on the free tier</th><td class="yes">Yours, as long as you keep it</td><td class="no">7 days, 100 requests</td><td class="no">Random per session</td></tr>
+							<tr><th scope="row">Getting a URL</th><td class="yes">One click, no account</td><td class="yes">One click, no account</td><td class="part">Install the agent, sign in</td></tr>
+							<tr><th scope="row">Changing a payload</th><td class="yes">Type JavaScript, watch the diff on real traffic, save when it's right</td><td class="part">Custom Actions, on a paid plan; edit, then run</td><td class="part">Traffic Policy rules in config</td></tr>
+							<tr><th scope="row">Scripting the reply</th><td class="yes">JavaScript, in the browser, free; preview what the sender gets</td><td class="part">Static response free; WebhookScript on a paid plan</td><td class="part">Policy rules; the app's own reply through the tunnel</td></tr>
+							<tr><th scope="row">Seeing what happened to one request</th><td class="yes">Received, transformed, forwarded, replied: each step with its result on the request</td><td class="part">Request and your configured response</td><td class="part">Request and response in the inspector</td></tr>
+							<tr><th scope="row">Reaching an app on localhost</th><td class="yes">From the tab; your app's reply goes back to the sender</td><td class="part">From the tab (XHR Redirect), fire and forget; or a CLI</td><td class="yes">Through the agent, full round trip</td></tr>
+							<tr><th scope="row">Checking a signature</th><td class="yes">Standard Webhooks, marked on every request; secrets write-only, encrypted</td><td class="no">Not built in</td><td class="part">50+ providers; metered on the free plan</td></tr>
+							<tr><th scope="row">Self-hosting</th><td class="yes">One binary with everything above</td><td class="part">Open-source edition (MIT), without Custom Actions</td><td class="no">Not offered</td></tr>
+							<tr><th scope="row">Limits on the hosted free tier</th><td class="part">Demo: 500 requests or 10 MB per endpoint, URLs public; self-hosted: your limits</td><td class="part">100 requests, 7 days, URLs public; self-hosted: your limits</td><td class="part">20k requests a month, 3 endpoints, random URL</td></tr>
 						</tbody>
 					</table>
-					<p class="cmp-note">From each product's public docs, October 2026. webhook.site's open-source edition and ngrok's free plan; their paid plans add more.</p>
+					<p class="cmp-note">From each product's public docs, October 2026: webhook.site's hosted free tier and open-source edition, ngrok's free plan. Paid plans add more on all sides. Corrections welcome on GitHub.</p>
 				</div>
 			</section>
 			<!-- Closing call to action -->

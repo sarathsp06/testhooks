@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
 	import { createEndpoint, listEndpoints, deleteEndpoint } from '$lib/api';
 	import { getWebhookURL, formatTime, copyToClipboard } from '$lib/utils';
@@ -183,6 +184,33 @@
 		loadEndpoints();
 	});
 </script>
+
+<svelte:head>
+	<!-- Self-referencing, so a self-hosted copy points at itself, not at the demo. -->
+	<link rel="canonical" href={page.url.origin + '/'} />
+	<meta property="og:type" content="website" />
+	<meta property="og:site_name" content="Testhooks" />
+	<meta property="og:url" content={page.url.origin + '/'} />
+	<meta property="og:title" content="Testhooks: free webhook tester, get a webhook URL in one click" />
+	<meta property="og:description" content="Capture and inspect webhooks, test Stripe, GitHub, Shopify or Slack webhooks, forward them to localhost and script the reply. Open source, self-hostable." />
+	<meta property="og:image" content={page.url.origin + '/og.jpg'} />
+	<meta name="twitter:card" content="summary_large_image" />
+	<meta name="twitter:title" content="Testhooks: free webhook tester" />
+	<meta name="twitter:description" content="Get a webhook URL in one click. Inspect, transform, forward to localhost and script the reply." />
+	<meta name="twitter:image" content={page.url.origin + '/og.jpg'} />
+	{@html `<script type="application/ld+json">${JSON.stringify({
+		'@context': 'https://schema.org',
+		'@type': 'WebApplication',
+		name: 'Testhooks',
+		applicationCategory: 'DeveloperApplication',
+		operatingSystem: 'Any',
+		browserRequirements: 'Requires JavaScript',
+		url: page.url.origin + '/',
+		description: 'Free webhook tester: get a webhook URL in one click, inspect requests, transform and forward them, including to localhost, and script the reply.',
+		offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+		sameAs: ['https://github.com/sarathsp06/testhooks', 'https://sarathsp06.github.io/testhooks/']
+	})}</script>`}
+</svelte:head>
 
 {#snippet sectionHeading(text: string)}
 	<h2 class="m-0 font-mono text-[13px] font-medium tracking-[0.04em] uppercase text-soft">{text}</h2>
@@ -521,7 +549,9 @@
 
 	<footer class="border-t border-line">
 		<div class="max-w-[1240px] mx-auto px-4 sm:px-6 py-5 flex justify-between gap-3 flex-wrap text-[13px] text-faint">
-			<span>testhooks · self-hosted webhook inspector</span>
+			<p class="m-0 max-w-[760px] leading-relaxed">
+				<span class="text-soft">testhooks</span> is a free, open-source webhook tester: a webhook URL to capture and inspect webhooks from Stripe, GitHub, Shopify, Slack or any service, verify Standard Webhooks signatures, transform payloads, forward webhooks to localhost from this tab, and script the reply the sender gets. Self-host it with one binary.
+			</p>
 			<span class="flex gap-4">
 				<a href="https://sarathsp06.github.io/testhooks/" target="_blank" rel="noopener noreferrer" class="underline hover:text-accent transition-colors">Docs</a>
 				<a href="https://github.com/sarathsp06/testhooks" target="_blank" rel="noopener noreferrer" class="underline hover:text-accent transition-colors">GitHub</a>
