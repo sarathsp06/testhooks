@@ -222,16 +222,19 @@ const arrow = '<path d="M1 6h37M33 1l5 5-5 5"></path>';
 						<span class="mono tag">01 · the mock</span>
 						<h3>Change a payload and see the diff before it ships</h3>
 						<p>Open a captured request, click <b class="ink">Test a transform on this</b>, type two lines of JavaScript. The diff updates as you type, it runs against your recent traffic, and nothing is saved until you say so.</p>
+						<a class="card-link" href={`${base}guides/scripts/`}>How transforms work</a>
 					</div>
 					<div class="card">
 						<span class="mono tag">02 · the reply</span>
 						<h3>Make the sender retry, on purpose</h3>
 						<p>Script a <span class="mono sm ink">500</span> reply and watch the provider's retry arrive. Then return <span class="mono sm ink">200</span>. You just tested your error handling without touching your app, and it cost nothing.</p>
+						<a class="card-link" href={`${base}guides/scripts/#custom-responses`}>How scripted replies work</a>
 					</div>
 					<div class="card card-strong">
 						<span class="mono tag accent">03 · the tunnel</span>
 						<h3>Watch your localhost answer the provider</h3>
 						<p>Point forwarding at <span class="mono sm ink">localhost</span>, turn on the local reply. The provider gets your handler's real status and body, through your browser tab. No CLI, daemon or account.</p>
+						<a class="card-link" href={`${base}guides/localhost/`}>Webhooks to localhost</a>
 					</div>
 				</div>
 				<p class="why-note">The one-liners above run Testhooks on your machine, which is enough to try it with curl. Real providers can only deliver to a URL they can reach, so for those <a href={`${base}deployment/production/`}>deploy it on a server or PaaS with a public URL</a>.</p>
@@ -624,6 +627,9 @@ const arrow = '<path d="M1 6h37M33 1l5 5-5 5"></path>';
 			.card-strong { border-color: var(--ink); }
 			.why-note { margin-top: 20px; font-size: 15px; line-height: 1.55; color: var(--text); max-width: 760px; }
 			.card h3 { font-size: 18px; font-weight: 600; }
+			.card-link { margin-top: auto; font-size: 14px; font-weight: 500; color: var(--accent); text-decoration: none; }
+			.card-link::after { content: ' →'; }
+			.card-link:hover { text-decoration: underline; }
 			.card p { font-size: 15px; line-height: 1.55; color: var(--text); }
 			.tag { font-size: 12px; color: var(--faint); }
 			.tag.accent { color: var(--accent); }

@@ -7,6 +7,8 @@ import starlight from '@astrojs/starlight';
 export default defineConfig({
 	site: process.env.DOCS_SITE ?? 'https://sarathsp06.github.io',
 	base: process.env.DOCS_BASE ?? '/testhooks',
+	// One URL per page in the sitemap: the base without a slash only redirects.
+	trailingSlash: 'always',
 	integrations: [
 		starlight({
 			title: 'testhooks',
@@ -15,6 +17,21 @@ export default defineConfig({
 			logo: { src: './src/assets/logo.svg', alt: 'Testhooks' },
 			favicon: '/favicon.svg',
 			head: [
+				// Social card for every docs page; the landing page sets its own.
+				{
+					tag: 'meta',
+					attrs: {
+						property: 'og:image',
+						content: `${process.env.DOCS_SITE ?? 'https://sarathsp06.github.io'}${process.env.DOCS_BASE ?? '/testhooks'}/og.jpg`,
+					},
+				},
+				{
+					tag: 'meta',
+					attrs: {
+						name: 'twitter:image',
+						content: `${process.env.DOCS_SITE ?? 'https://sarathsp06.github.io'}${process.env.DOCS_BASE ?? '/testhooks'}/og.jpg`,
+					},
+				},
 				{ tag: 'link', attrs: { rel: 'preconnect', href: 'https://fonts.googleapis.com' } },
 				{ tag: 'link', attrs: { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: '' } },
 				{
@@ -45,6 +62,7 @@ export default defineConfig({
 						{ label: 'Forwarding', slug: 'guides/forwarding' },
 						{ label: 'Transforms and custom responses', slug: 'guides/scripts' },
 						{ label: 'Verifying signed webhooks', slug: 'guides/signatures' },
+						{ label: 'Use it from an AI agent (MCP)', slug: 'guides/mcp' },
 					],
 				},
 				{

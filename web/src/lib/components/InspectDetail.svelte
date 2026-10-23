@@ -1,8 +1,10 @@
 <script lang="ts">
 	import { initWasm, runTransform } from '$lib/wasm';
 	import { copyToClipboard, formatBytes } from '$lib/utils';
-	import { bodyKind, bodyText, curlFor, highlightJSON, hostOf, parseJSON, queryString, replay, statusLine, when } from '$lib/requestutil';
-	import { fieldChanges, pretty } from '$lib/scriptdiff';
+	import { ago, bodyKind, bodyText, curlFor, eventLabel, highlightJSON, hostOf, parseJSON, queryString, replay, statusLine, when } from '$lib/requestutil';
+	import { diffLines, fieldChanges, pretty } from '$lib/scriptdiff';
+	import { toJSONSchema, toTypeScript, typeName } from '$lib/typegen';
+	import { getRequestsStore } from '$lib/stores/requests.svelte';
 	import type { CapturedRequest, CapturedResponse, Endpoint, ForwardResultData } from '$lib/types';
 
 	let {
@@ -10,6 +12,7 @@
 		endpoint,
 		response,
 		forwardResult,
+		previous,
 		onTryTransform,
 		onDelete
 	}: {
@@ -17,13 +20,15 @@
 		endpoint: Endpoint;
 		response?: CapturedResponse;
 		forwardResult?: ForwardResultData;
+		/** The request to compare with in the Diff tab. Left out: the latest earlier request on this endpoint in the loaded list. */
+		previous?: CapturedRequest | null;
 		/** Open the transform editor with this request as the input. */
 		onTryTransform: () => void;
 		/** Delete this request. */
 		onDelete: () => void;
 	} = $props();
 
-	type Tab = 'body' | 'headers' | 'query' | 'forwarded' | 'fwdresponse';
+	type Tab = 'body' | 'diff' | 'headers' | 'query' | 'forwarded' | 'fwdresponse';
 	let tab = $state<Tab>('body');
 	let copied = $state(false);
 	let replayed = $state<string | null>(null);
@@ -34,6 +39,42 @@
 	const text = $derived(bodyText(request));
 	const prettyBody = $derived(pretty(text));
 	const isJSON = $derived(bodyKind(request) === 'JSON body');
+
+	// The request before this one on the same endpoint, for the Diff tab.
+	const requestsStore = getRequestsStore();
+	const earlier = $derived.by(() => {
+		if (previous !== undefined) return previous;
+		const t = new Date(request.created_at).getTime();
+		let best: CapturedRequest | null = null;
+		for (const r of requestsStore.items) {
+			if (r.id === request.id || r.endpoint_id !== request.endpoint_id) continue;
+			const rt = new Date(r.created_at).getTime();
+			if (rt < t && (!best || rt > new Date(best.created_at).getTime())) best = r;
+		}
+		return best;
+	});
+	const diff = $derived.by(() => {
+		if (!earlier || tab !== 'diff') return null;
+		const binary = earlier.body_encoding === 'base64' || request.body_encoding === 'base64';
+		const before = pretty(bodyText(earlier));
+		const after = pretty(text);
+		return { binary, same: before === after, lines: binary ? [] : diffLines(before, after) };
+	});
+
+	// Copy the body's shape as a TypeScript type or a JSON Schema.
+	let typeMenu = $state(false);
+	let typeMenuEl = $state<HTMLElement>();
+	let typeCopied = $state(false);
+	async function copyType(kind: 'ts' | 'schema') {
+		typeMenu = false;
+		const event = eventLabel(request);
+		const name = typeName(event === 'JSON body' ? '' : event);
+		const value = parseJSON(text);
+		if (await copyToClipboard(kind === 'ts' ? toTypeScript(value, name) : toJSONSchema(value, name))) {
+			typeCopied = true;
+			setTimeout(() => (typeCopied = false), 2000);
+		}
+	}
 
 	// What the transform does to this request, using the current script.
 	type Outcome =
@@ -89,6 +130,7 @@
 
 	const tabs = $derived<{ id: Tab; label: string }[]>([
 		{ id: 'body', label: 'Body' },
+		{ id: 'diff', label: 'Diff' },
 		{ id: 'headers', label: `Headers ${headerCount}` },
 		{ id: 'query', label: 'Query' },
 		{ id: 'forwarded', label: 'What was forwarded' },
@@ -127,6 +169,11 @@
 	{/if}
 {/snippet}
 
+<svelte:window
+	onkeydown={(e) => e.key === 'Escape' && (typeMenu = false)}
+	onclick={(e) => typeMenu && !typeMenuEl?.contains(e.target as Node) && (typeMenu = false)}
+/>
+
 <section aria-label="Request detail" class="flex-[999_1_560px] min-w-0 p-6 flex flex-col gap-5">
 	<div class="flex justify-between items-start gap-4 flex-wrap">
 		<div class="flex flex-col gap-1.5 min-w-0">
@@ -148,6 +195,26 @@
 			<button type="button" onclick={copyCurl} class="text-[13px] font-medium text-ink bg-surface border border-line-strong rounded-[9px] px-3.5 min-h-10 cursor-pointer hover:bg-chip">
 				{copied ? 'Copied' : 'Copy as cURL'}
 			</button>
+			{#if isJSON}
+				<div class="relative" bind:this={typeMenuEl}>
+					<button
+						type="button"
+						onclick={() => (typeMenu = !typeMenu)}
+						aria-haspopup="menu"
+						aria-expanded={typeMenu}
+						title="Copy the shape of this body as a type, guessed from this one request"
+						class="text-[13px] font-medium text-ink bg-surface border border-line-strong rounded-[9px] px-3.5 min-h-10 cursor-pointer hover:bg-chip"
+					>
+						{typeCopied ? 'Copied' : 'Copy as type'}
+					</button>
+					{#if typeMenu}
+						<div role="menu" class="absolute right-0 top-[calc(100%+4px)] z-10 bg-surface border border-line-strong rounded-[9px] p-1 flex flex-col min-w-[190px] shadow-sm">
+							<button type="button" role="menuitem" onclick={() => copyType('ts')} class="text-left text-[13px] font-medium text-ink rounded-[7px] px-3 min-h-9 cursor-pointer hover:bg-chip">Copy TypeScript type</button>
+							<button type="button" role="menuitem" onclick={() => copyType('schema')} class="text-left text-[13px] font-medium text-ink rounded-[7px] px-3 min-h-9 cursor-pointer hover:bg-chip">Copy JSON Schema</button>
+						</div>
+					{/if}
+				</div>
+			{/if}
 			<button type="button" onclick={doReplay} class="text-[13px] font-medium text-ink bg-surface border border-line-strong rounded-[9px] px-3.5 min-h-10 cursor-pointer hover:bg-chip">Replay</button>
 			<button type="button" onclick={onTryTransform} class="text-[13px] font-medium text-on-ink bg-ink rounded-[9px] px-3.5 min-h-10 flex items-center cursor-pointer hover:opacity-90">
 				Test a transform on this
@@ -233,6 +300,21 @@
 				<p class="m-0 px-5 py-[18px] text-[13px] text-body">Binary body ({formatBytes(request.size)}). Copy as cURL or replay to send it again.</p>
 			{:else}
 				{@render bodyView(isJSON ? prettyBody : text, isJSON)}
+			{/if}
+		{:else if tab === 'diff'}
+			{#if !earlier}
+				<p class="m-0 px-5 py-[18px] text-[13px] text-body">Nothing earlier on this endpoint yet.</p>
+			{:else}
+				<div class="px-5 pt-[18px] text-[13px] text-body">
+					Compared with <span class="font-mono text-soft">{earlier.method} {earlier.path}</span> · {ago(earlier.created_at)}
+				</div>
+				{#if diff?.binary}
+					<p class="m-0 px-5 py-[18px] text-[13px] text-body">One of the bodies is binary, so there are no lines to compare.</p>
+				{:else if diff?.same}
+					<p class="m-0 px-5 py-[18px] text-[13px] text-body">Same body as the earlier request.</p>
+				{:else if diff}
+					<pre class="m-0 py-[18px] font-mono text-[13px] leading-[1.75] text-soft overflow-x-auto">{#each diff.lines as l, i (i)}<span class="block px-5 {l.kind === '+' ? 'bg-[#E6F4EC] text-[#0F5132] dark:bg-[#12301f] dark:text-[#7ee2a8]' : l.kind === '-' ? 'bg-[#FDECEA] text-[#8A1C12] dark:bg-[#3a1512] dark:text-[#f9a8a0]' : ''}">{#if l.kind !== ' '}<span aria-hidden="true">{l.kind === '+' ? '+ ' : '− '}</span>{/if}{l.text}</span>{/each}</pre>
+				{/if}
 			{/if}
 		{:else if tab === 'headers'}
 			{@render kv(Object.entries(request.headers ?? {}).map(([k, v]) => [k, v.join(', ')]), 'No headers.')}

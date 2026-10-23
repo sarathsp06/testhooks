@@ -48,6 +48,29 @@ export function relayHeaders(headers: Record<string, string> | undefined): Recor
 	return out;
 }
 
+
+/**
+ * Turn a fetch() failure into words the request page can show. A browser
+ * reports every blocked cross-origin request as the same opaque TypeError
+ * ("Failed to fetch"), so this names the likely causes and where to read on.
+ */
+export function explainForwardError(err: unknown, url: string): string {
+	const raw = err instanceof Error ? err.message : 'Unknown error';
+	const looksBlocked = err instanceof TypeError || /failed to fetch|networkerror|load failed/i.test(raw);
+	if (!looksBlocked) return raw;
+	let host = url;
+	try {
+		host = new URL(url).origin;
+	} catch {
+		// keep the raw url
+	}
+	return (
+		`The browser could not deliver to ${host}. Usual causes: your app did not answer the CORS preflight ` +
+		`(OPTIONS) or did not allow this origin, nothing is listening on that port, or Chrome's local network ` +
+		`permission was denied. Fix: see Webhooks to localhost in the docs. Browser said: ${raw}`
+	);
+}
+
 /** Build a clean headers object from the captured request. */
 function buildHeaders(req: CapturedRequest): Record<string, string> {
 	const headers: Record<string, string> = {};
@@ -92,7 +115,7 @@ export async function forwardRequest(
 			status: null,
 			ok: false,
 			latency: Math.round(performance.now() - start),
-			error: err instanceof Error ? err.message : 'Unknown error'
+			error: explainForwardError(err, url)
 		};
 	}
 }
@@ -140,7 +163,7 @@ export async function forwardRequestWithResponse(
 			status_code: 0,
 			ok: false,
 			latency_ms: Math.round(performance.now() - start),
-			error: err instanceof Error ? err.message : 'Unknown error'
+			error: explainForwardError(err, url)
 		};
 	}
 }
@@ -195,7 +218,7 @@ export async function forwardRequestSync(
 				status: null,
 				ok: false,
 				latency,
-				error: err instanceof Error ? err.message : 'Unknown error'
+				error: explainForwardError(err, url)
 			},
 			response: null
 		};

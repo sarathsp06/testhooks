@@ -26,6 +26,7 @@ import (
 	"github.com/sarathsp06/testhooks/internal/forward"
 	"github.com/sarathsp06/testhooks/internal/handler"
 	"github.com/sarathsp06/testhooks/internal/hub"
+	mcpserver "github.com/sarathsp06/testhooks/internal/mcp"
 	"github.com/sarathsp06/testhooks/internal/middleware"
 	"github.com/sarathsp06/testhooks/internal/wasm"
 	"github.com/sarathsp06/testhooks/web"
@@ -37,6 +38,18 @@ var version = "dev"
 func main() {
 	if len(os.Args) > 1 && (os.Args[1] == "--version" || os.Args[1] == "version") {
 		fmt.Println("testhooks", version)
+		return
+	}
+	if len(os.Args) > 1 && os.Args[1] == "mcp" {
+		// MCP server on stdin/stdout for AI agents; it talks to a running
+		// Testhooks over the REST API. stdout is the protocol, so no logs there.
+		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		err := mcpserver.Run(ctx, version)
+		stop()
+		if err != nil && !errors.Is(err, context.Canceled) {
+			fmt.Fprintln(os.Stderr, "testhooks mcp:", err)
+			os.Exit(1)
+		}
 		return
 	}
 
