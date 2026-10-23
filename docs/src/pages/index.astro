@@ -57,6 +57,36 @@ const schema = JSON.stringify({
 	sameAs: [github, demo],
 });
 
+// Rolling feature strip under the hero. `plus` marks what webhook.site does
+// not offer (checked against its public docs, October 2026).
+const features = [
+	{ t: 'Your localhost answers the sender', plus: true },
+	{ t: 'Forward to localhost from the tab' },
+	{ t: 'Standard Webhooks signature verification', plus: true },
+	{ t: 'HMAC and Ed25519 signatures', plus: true },
+	{ t: 'Reject bad signatures with 401', plus: true },
+	{ t: 'JavaScript transforms, free', plus: true },
+	{ t: 'Scripted replies, free', plus: true },
+	{ t: 'Live diff before you save', plus: true },
+	{ t: 'Try a script on recent traffic', plus: true },
+	{ t: 'Request forwarding with retries' },
+	{ t: 'Sync or async forwarding' },
+	{ t: 'Replay any request' },
+	{ t: 'Copy as cURL' },
+	{ t: 'Export requests as JSON' },
+	{ t: 'Envelope-encrypted secrets, write-only' },
+	{ t: 'Browser mode: nothing on disk' },
+	{ t: 'No request limit, no expiry', plus: true },
+	{ t: 'In-memory mode, no database' },
+	{ t: 'PostgreSQL when you want to keep it' },
+	{ t: 'REST API and WebSocket' },
+	{ t: 'One Go binary, UI embedded' },
+	{ t: 'Self-host with scripting', plus: true },
+	{ t: 'Rate limiting and trusted proxies' },
+	{ t: 'Docker image and Vercel deploy' },
+	{ t: 'Apache 2.0' },
+];
+
 const check = '<path d="M5 12l5 5L20 7"></path>';
 const arrow = '<path d="M1 6h37M33 1l5 5-5 5"></path>';
 ---
@@ -169,6 +199,17 @@ const arrow = '<path d="M1 6h37M33 1l5 5-5 5"></path>';
 				</div>
 			</section>
 
+			<!-- Rolling feature strip -->
+			<section class="ticker-band" aria-label="Features">
+				<div class="wrap ticker-head"><span class="eyebrow-plain">What's in the box</span><span class="ticker-legend"><span class="plus-dot"></span>not in webhook.site</span></div>
+				<div class="ticker">
+					<ul class="ticker-track">
+						{[...features, ...features].map((f, i) => (
+							<li class={f.plus ? 'tick plus' : 'tick'} aria-hidden={i >= features.length ? 'true' : undefined}>{f.plus && <span class="plus-dot"></span>}{f.t}</li>
+						))}
+					</ul>
+				</div>
+			</section>
 			<!-- Overview -->
 			<section id="overview" class="wrap why">
 				<div class="section-head narrow">
@@ -301,7 +342,7 @@ const arrow = '<path d="M1 6h37M33 1l5 5-5 5"></path>';
 					<div class="grid">
 						<div class="feature"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"></rect><path d="M8 20h8M12 16v4"></path></svg><h3>Replace the tunnel</h3><p>Forward from your tab to localhost, Docker or anything your machine reaches, and the sender gets your app's reply. No CLI, daemon or account.</p></div>
 						<div class="feature"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"></rect><path d="M8 11V7a4 4 0 0 1 8 0v4"></path></svg><h3>Private by default</h3><p>In browser mode, payloads are relayed over WebSocket and never written to the server's disk.</p></div>
-						<div class="feature"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"></path><circle cx="12" cy="12" r="3"></circle></svg><h3>Live inspection</h3><p>Every request appears the instant it arrives: headers, query, body with syntax highlighting. Copy as cURL, export as JSON or CSV.</p></div>
+						<div class="feature"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"></path><circle cx="12" cy="12" r="3"></circle></svg><h3>Live inspection</h3><p>Every request appears the instant it arrives: headers, query, body with syntax highlighting. Copy as cURL, export as JSON.</p></div>
 						<div class="feature"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6l-6 6 6 6M16 6l6 6-6 6"></path></svg><h3>Script transforms</h3><p>Reshape payloads with a few lines of JavaScript, sandboxed in WASM, before they are forwarded.</p></div>
 						<div class="feature"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12h12M12 6l6 6-6 6M20 5v14"></path></svg><h3>Forward and mock</h3><p>Forward to any URL, sync or async with retries, and script the exact response the sender gets back.</p></div>
 						<div class="feature"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 3v6c0 4.5-3.4 8.3-8 9-4.6-.7-8-4.5-8-9V6l8-3z"></path><path d="M8.5 12l2.5 2.5L15.5 10"></path></svg><h3>Verify signatures</h3><p>Check Standard Webhooks signatures from Sparrow, Svix and others, and reject bad ones like a real receiver.</p></div>
@@ -505,6 +546,21 @@ const arrow = '<path d="M1 6h37M33 1l5 5-5 5"></path>';
 			.lede { margin-top: 22px; font-size: 19px; line-height: 1.55; color: var(--text); max-width: 640px; }
 			.hero-actions { margin-top: 28px; display: flex; gap: 12px; flex-wrap: wrap; }
 			.hero-demo-note { margin-top: 12px; font-size: 14px; color: var(--faint); }
+			.ticker-band { padding: 8px 0 40px; }
+			.ticker-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
+			.ticker-legend { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--faint); }
+			.plus-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); flex: 0 0 auto; }
+			.ticker { overflow: hidden; -webkit-mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent); mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent); }
+			.ticker-track { margin: 0; padding: 0; list-style: none; display: flex; gap: 10px; width: max-content; animation: ticker 70s linear infinite; }
+			.ticker:hover .ticker-track, .ticker:focus-within .ticker-track { animation-play-state: paused; }
+			.tick { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; font-size: 14px; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px; }
+			.tick.plus { border-color: var(--accent); }
+			@keyframes ticker { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+			@media (prefers-reduced-motion: reduce) {
+				.ticker { mask-image: none; -webkit-mask-image: none; }
+				.ticker-track { animation: none; width: auto; flex-wrap: wrap; padding: 0 24px; max-width: 1160px; margin: 0 auto; box-sizing: border-box; }
+				.ticker-track li[aria-hidden='true'] { display: none; }
+			}
 			.proof { margin: 28px 0 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px 28px; max-width: 900px; }
 			.proof li { display: flex; align-items: baseline; gap: 10px; font-size: 14px; line-height: 1.4; color: var(--text); border-left: 2px solid var(--accent); padding-left: 12px; }
 			.proof b { font-size: 22px; font-weight: 500; color: var(--ink); letter-spacing: -0.02em; }
