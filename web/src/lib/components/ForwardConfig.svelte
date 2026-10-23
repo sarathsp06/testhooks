@@ -194,7 +194,7 @@
 			{#if isServerMode}
 				Requests are forwarded <strong>server-side</strong> via Go HTTP. Runs on every inbound request, even when the browser is closed. Only public URLs work (no localhost).
 			{:else}
-				Requests are forwarded <strong>from your browser</strong> via <code class="text-[10px]">fetch()</code>. Only works while this tab is open. Localhost targets work since the request originates from your machine.
+				Requests are forwarded <strong>from this tab</strong> with <code class="text-[10px]">fetch()</code>, so <code class="text-[10px]">localhost</code>, Docker and anything else your machine can reach all work. Only while this tab is open. Your app must allow the cross-origin request (CORS); see <a class="underline" href="https://sarathsp06.github.io/testhooks/guides/localhost/" target="_blank" rel="noopener">Webhooks to localhost</a>.
 			{/if}
 		</p>
 
@@ -204,7 +204,7 @@
 				<span class="text-xs text-[var(--text-muted)]">Target URL</span>
 				<input
 					bind:value={forwardUrl}
-					placeholder={isServerMode ? 'https://example.com/webhook' : 'https://example.com/webhook or http://localhost:3000'}
+					placeholder={isServerMode ? 'https://example.com/webhook' : 'http://localhost:3000/webhooks/stripe'}
 					oninput={() => { urlError = ''; markDirty(); }}
 					class="w-full bg-[var(--bg)] border border-[var(--border)] rounded px-3 py-1.5 text-sm text-[var(--text)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent)] {urlError ? 'border-[var(--red)]' : ''}"
 				/>
@@ -217,7 +217,37 @@
 			</div>
 
 			<!-- Forward Mode toggle -->
-			{#if forwardUrl.trim()}
+			{#if forwardUrl.trim() && !isServerMode}
+				<!-- Browser mode: one switch. Sync forwarding here means the sender gets the local app's reply. -->
+				<label class="flex items-start gap-3 cursor-pointer group">
+					<button
+						role="switch"
+						aria-checked={forwardMode === 'sync'}
+						aria-label="Reply to the sender with my app's response"
+						onclick={() => { forwardMode = forwardMode === 'sync' ? 'async' : 'sync'; markDirty(); }}
+						class="relative flex-shrink-0 mt-0.5 w-9 h-5 rounded-full transition-colors {forwardMode === 'sync' ? 'bg-[var(--accent)]' : 'bg-[var(--border)]'}"
+					>
+						<span
+							class="absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform {forwardMode === 'sync' ? 'translate-x-4' : ''}"
+						></span>
+					</button>
+					<span class="flex flex-col gap-0.5">
+						<span class="text-xs text-[var(--text)] group-hover:text-[var(--accent)] transition-colors">
+							Reply to the sender with my app's response
+						</span>
+						<span class="text-[10px] text-[var(--text-muted)]">
+							{#if forwardMode === 'sync'}
+								Testhooks holds the sender's request open while this tab forwards it. Your app's status, headers and body go back to the sender, like a tunnel. No reply within 10 seconds, or no tab open, and the sender gets <code class="text-[10px]">202</code>.
+								{#if endpoint.config?.custom_response?.enabled}
+									Your reply script runs after the forward and sees your app's reply as <code class="text-[10px]">req.forward_response</code>.
+								{/if}
+							{:else}
+								Off: the sender gets <code class="text-[10px]">202 Accepted</code> straight away and the forward happens in the background.
+							{/if}
+						</span>
+					</span>
+				</label>
+			{:else if forwardUrl.trim()}
 				<div class="flex items-center gap-3">
 					<span class="text-xs text-[var(--text-muted)]">Mode</span>
 					<div class="flex gap-1 bg-[var(--bg)] border border-[var(--border)] rounded p-1">

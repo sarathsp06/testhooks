@@ -374,14 +374,16 @@ func (c *Capture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// ── Browser mode: relay to browser via WS ──
 	// The browser handles its own transform/forward/handler chain.
 	if isBrowserMode {
-		// Custom response + browser connected: hold request open for browser-side handler.
-		if epConfig.CustomResponse != nil && epConfig.CustomResponse.Enabled && epConfig.CustomResponse.Script != "" &&
-			config.IsJavaScript(epConfig.CustomResponse.Language) {
+		// The tab decides the reply when a reply script is on, or when sync
+		// forwarding is on: then the tab forwards to its target (often
+		// localhost) and relays the target's reply to the sender. Either way
+		// the sender's connection is held open until the tab answers.
+		if browserDecidesReply(epConfig) {
 			if c.hub.HasSubscribers(slug) {
 				c.handleBrowserResponse(w, r, slug, req, stored, epConfig, body)
 				return
 			}
-			c.log.Debug().Str("slug", slug).Msg("browser-mode custom response: no subscribers, using default")
+			c.log.Debug().Str("slug", slug).Msg("browser-mode reply: no subscribers, using default")
 		}
 
 		// Publish to WebSocket hub.
@@ -499,6 +501,17 @@ func (c *Capture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	c.publishResponseInfo(slug, req.ID, stored, http.StatusOK, nil, defaultResponseBody(req.ID), "application/json", "default")
 }
 
+// browserDecidesReply reports whether a browser-mode endpoint's reply to the
+// sender comes from the tab: a reply script, or sync forwarding (the tab
+// forwards and relays the target's reply, so localhost can answer the sender).
+func browserDecidesReply(epConfig config.EndpointConfig) bool {
+	if epConfig.CustomResponse != nil && epConfig.CustomResponse.Enabled && epConfig.CustomResponse.Script != "" &&
+		config.IsJavaScript(epConfig.CustomResponse.Language) {
+		return true
+	}
+	return epConfig.ForwardURL != "" && epConfig.ForwardMode == "sync"
+}
+
 // handleBrowserResponse holds the HTTP connection open, sends a response_needed
 // message to the browser via WebSocket, and waits for the browser to return
 // a computed response (or times out).
@@ -565,8 +578,14 @@ func (c *Capture) handleBrowserResponse(w http.ResponseWriter, r *http.Request, 
 		if result.Body != "" {
 			w.Write([]byte(result.Body))
 		}
-		c.log.Debug().Str("slug", slug).Str("request_id", req.ID).Int("status", status).Msg("browser response applied")
-		c.publishResponseInfo(slug, req.ID, stored, status, respHeaders, result.Body, ct, "handler")
+		source := result.Source
+		switch source {
+		case "handler", "forward_passthrough", "default":
+		default:
+			source = "handler"
+		}
+		c.log.Debug().Str("slug", slug).Str("request_id", req.ID).Int("status", status).Str("source", source).Msg("browser response applied")
+		c.publishResponseInfo(slug, req.ID, stored, status, respHeaders, result.Body, ct, source)
 
 	case <-ctx.Done():
 		// Timeout — browser didn't respond in time. Send default.

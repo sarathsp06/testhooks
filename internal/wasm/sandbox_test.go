@@ -47,8 +47,12 @@ func TestSandbox_MemoryCapped(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "out of memory") {
 		t.Fatalf("100 MB allocation: err = %v, want out of memory", err)
 	}
-	if time.Since(start) > 3*time.Second {
-		t.Fatalf("took %s to hit the memory cap", time.Since(start))
+	// The cap must trip before the 5 s script timeout, which the "out of
+	// memory" check above already proves (a timeout reports differently).
+	// This is only a hang guard: it takes under 1 s locally and 3 to 4 s on
+	// a shared CI runner, so the bound is generous on purpose.
+	if took := time.Since(start); took > 10*time.Second {
+		t.Fatalf("took %s to hit the memory cap", took)
 	}
 	// Ordinary work well under the cap still runs.
 	out, err := r.eval(context.Background(), "ok.js", `var a = []; for (var i = 0; i < 10; i++) a.push("x".repeat(1000000)); String(a.length)`)

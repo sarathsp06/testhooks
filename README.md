@@ -5,8 +5,8 @@
 </p>
 
 <p align="center">
-  <strong>A self-hostable <a href="https://webhook.site">webhook.site</a> that can also forward to your localhost.</strong><br/>
-  Capture, inspect, transform, forward and mock webhooks. One binary with the UI built in.
+  <strong>Webhooks, made for humans and for machines.</strong><br/>
+  A small, self-hostable tool to test webhooks, like <a href="https://webhook.site">webhook.site</a>: catch one, change its payload, reply with any status, watch the sender react. One click, or one curl. When your handler runs on localhost, your browser tab is the tunnel. One binary with the UI built in. See <a href="AGENTS.md">AGENTS.md</a> for the principles behind it.
 </p>
 
 <p align="center">
@@ -45,7 +45,7 @@ To receive real webhooks, run testhooks somewhere the sender can reach, with Pos
 ## What it does
 
 - **Capture:** every endpoint gets a URL; requests appear in the browser as they arrive.
-- **Browser mode:** your open tab forwards each request to `localhost`, so you can test your handler without ngrok.
+- **Browser mode:** your open tab forwards each request to `localhost` and sends your app's reply back to the sender, so you can test your handler without ngrok. Nothing to install.
 - **Transform:** reshape a request with a few lines of JavaScript, or skip it.
 - **Forward and reply:** send requests on to another URL, and script what the sender gets back.
 - **Verify signatures:** Standard Webhooks (Svix, Sparrow and others), HMAC and Ed25519.

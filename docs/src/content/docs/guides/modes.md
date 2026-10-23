@@ -12,7 +12,7 @@ Every endpoint runs in one of two modes. You can switch at any time from the end
 | Forwarding runs | On the server, public URLs only | In your browser, any URL including `localhost` |
 | Custom responses | Scripted on the server | Scripted in your browser while a tab is open |
 | Works with no tab open | Yes | Captures are relayed only to open tabs |
-| Response to the sender | `200` | `202` |
+| Response to the sender | `200`, or the forward target's reply with sync forwarding | `202`, or your local app's reply with sync forwarding |
 
 ## Server mode
 
@@ -36,9 +36,12 @@ Nothing is written to disk. The server keeps a short in-memory buffer per endpoi
 
 Turn on **Persist requests** in Settings to keep a server-side copy as well. Processing still happens in the browser.
 
-### Custom responses in browser mode
+### Replies decided in the tab
 
-When a browser-mode endpoint has a response handler and a tab is open, the server holds the sender's request open and asks the tab to compute the response. If no tab answers within 10 seconds, the sender gets the default `202`.
+Two settings make the tab, not the server, decide what the sender gets. Either way the server holds the sender's request open, asks the tab, and relays its answer. If no tab answers within 10 seconds, the sender gets the default `202`.
+
+- **Reply to the sender with my app's response** (sync forwarding, under Forwarding in Settings): the tab forwards to your target, usually `localhost`, and sends your app's status, headers and body back. This is what makes browser mode a tunnel rather than a bin. See [Webhooks to localhost](../localhost/).
+- A **reply script**: the tab runs it and sends back what it returns. With sync forwarding on as well, the script sees your app's reply as `req.forward_response`.
 
 ## Why a server is always needed
 

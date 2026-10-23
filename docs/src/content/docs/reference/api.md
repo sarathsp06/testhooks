@@ -129,7 +129,7 @@ Returns `{"requests": [...], "total": 123, "limit": 50, "offset": 0}`, newest fi
 | Field | | |
 |---|---|---|
 | `forward_url` | string | [Forward](../../guides/forwarding/) target |
-| `forward_mode` | `async` \| `sync` | Defaults to `async` |
+| `forward_mode` | `async` \| `sync` | Defaults to `async`. With `sync` the sender gets the forward target's reply; in browser mode that is your local app's reply, relayed by the tab |
 | `wasm_script` | string | Server-side JavaScript [transform](../../guides/scripts/) |
 | `transform_language` | `javascript` | Language of the transform. Older `lua` and `jsonnet` scripts are kept but not run |
 | `custom_response.enabled` | bool | Turn the response handler on |
