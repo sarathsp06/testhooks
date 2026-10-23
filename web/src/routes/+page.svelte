@@ -45,7 +45,7 @@
 		{
 			id: 'browser',
 			title: 'In this browser tab',
-			description: 'Forward to localhost from your machine, like a tunnel. Works while the tab is open.'
+			description: 'Forward to localhost from this tab and let your app answer the sender, like a tunnel with nothing to install. Works while the tab is open.'
 		}
 	] as const;
 
@@ -280,7 +280,7 @@
 								<label for="forward-url" class="text-[13px] font-medium text-soft">
 									Forward to
 									<span class="font-normal text-faint">
-										{newMode === 'browser' ? '(sent from this tab, so localhost works)' : '(sent from the server, so it must be reachable from there)'}
+										{newMode === 'browser' ? '(sent from this tab, so localhost works; turn on the local reply in Settings)' : '(sent from the server, so it must be reachable from there)'}
 									</span>
 								</label>
 								<input

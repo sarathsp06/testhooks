@@ -19,6 +19,10 @@ type ResponseResult struct {
 	Headers     map[string]string `json:"headers,omitempty"`
 	Body        string            `json:"body,omitempty"`
 	ContentType string            `json:"content_type,omitempty"`
+	// Source says what decided the response: "handler" (a reply script),
+	// "forward_passthrough" (the forward target's reply, relayed as-is) or
+	// "default". Empty means "handler", for older clients.
+	Source string `json:"source,omitempty"`
 }
 
 // client represents a single WebSocket subscriber.

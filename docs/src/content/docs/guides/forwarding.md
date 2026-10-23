@@ -16,10 +16,12 @@ Set a **Target URL** under **Forwarding** in an endpoint's **Settings** tab and 
 
 **Sync** waits for the target to respond, then:
 
-- with no response handler, sends the target's status, content type and body back to the original sender, so Testhooks behaves like a transparent proxy;
+- with no response handler, sends the target's status, headers and body back to the original sender, so Testhooks behaves like a transparent proxy;
 - with a response handler, passes the target's response to it as `req.forward_response`. See [Transforms and custom responses](../scripts/#custom-responses).
 
 If a sync forward gets no response at all, the sender gets `502 Bad Gateway`.
+
+Sync works the same in both modes. In server mode the server waits for the target. In browser mode the server holds the sender's request open while your tab forwards and waits, which is how an app on `localhost` can answer the sender; the Settings tab shows this as **Reply to the sender with my app's response**. Hop-by-hop headers and `Content-Length` are dropped from the relayed reply, and so are security-sensitive headers such as `Set-Cookie`.
 
 ## What the server sends
 

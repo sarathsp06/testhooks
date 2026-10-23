@@ -8,7 +8,7 @@
 	import { getRequestsStore } from '$lib/stores/requests.svelte';
 	import { getWebhookURL, copyToClipboard } from '$lib/utils';
 	import { initWasm, runTransform, runResponseHandler, isLegacyLanguage } from '$lib/wasm';
-	import { forwardRequest, forwardRequestSync, forwardRequestWithResponse } from '$lib/forward';
+	import { forwardRequest, forwardRequestSync, forwardRequestWithResponse, relayHeaders } from '$lib/forward';
 	import { saveRequest as saveToIDB } from '$lib/idb';
 	import EndpointWaiting from '$lib/components/EndpointWaiting.svelte';
 	import InspectDetail from '$lib/components/InspectDetail.svelte';
@@ -44,6 +44,15 @@
 		const c = liveCfg();
 		return !!(c.custom_response?.enabled && c.custom_response?.script && !isLegacyLanguage(c.custom_response?.language));
 	};
+	// Sync forwarding in browser mode: this tab forwards and the target's
+	// reply (often from localhost) goes back to the sender.
+	const syncForwardActive = () => {
+		const c = liveCfg();
+		return !!c.forward_url && c.forward_mode === 'sync';
+	};
+	// Mirrors browserDecidesReply on the server: when either is on, the server
+	// holds the sender's request open and sends response_needed to this tab.
+	const tabDecidesReply = () => replyActive() || syncForwardActive();
 
 	// ?edit=transform|reply|settings shows that screen in place of the requests;
 	// ?try=<id> starts the editor on that request.
@@ -105,69 +114,37 @@
 							}
 						}
 
-						// Step 2: Forward (if configured). With a custom reply on, the server
-						// also sends response_needed for this request, and that flow does the
-						// forward; doing it here too would deliver it twice.
-						const crActive = replyActive();
-						const fwdUrl = dropped || crActive ? undefined : liveCfg().forward_url;
+						// Step 2: Forward (async only). When this tab decides the reply (a
+						// reply script, or sync forwarding that relays the target's reply),
+						// the server sends response_needed for this request and that flow
+						// does the forward; doing it here too would deliver it twice.
+						const fwdUrl = dropped || tabDecidesReply() ? undefined : liveCfg().forward_url;
 						if (fwdUrl) {
-							const fwdMode = liveCfg().forward_mode || 'async';
-							if (fwdMode === 'async') {
-								// Fire-and-forget but capture response for display.
-								// Store a pending placeholder so the UI shows "Forwarding..." immediately.
+							// Fire-and-forget but capture response for display.
+							// Store a pending placeholder so the UI shows "Forwarding..." immediately.
+							requestsStore.attachForwardResult(req.id, {
+								request_id: req.id,
+								url: fwdUrl,
+								status_code: -1,
+								ok: false,
+								latency_ms: 0,
+								error: '__pending__'
+							});
+							forwardRequestWithResponse(fwdReq, fwdUrl).then((fwdResult) => {
+								requestsStore.attachForwardResult(req.id, fwdResult);
+							}).catch((err) => {
+								// Always store a result so the UI shows the error instead of nothing.
+								const message = err instanceof Error ? err.message : 'Unknown forward error';
+								console.warn('Browser forward error:', message);
 								requestsStore.attachForwardResult(req.id, {
 									request_id: req.id,
 									url: fwdUrl,
-									status_code: -1,
+									status_code: 0,
 									ok: false,
 									latency_ms: 0,
-									error: '__pending__'
+									error: message
 								});
-								forwardRequestWithResponse(fwdReq, fwdUrl).then((fwdResult) => {
-									requestsStore.attachForwardResult(req.id, fwdResult);
-								}).catch((err) => {
-									// Always store a result so the UI shows the error instead of nothing.
-									const message = err instanceof Error ? err.message : 'Unknown forward error';
-									console.warn('Browser forward error:', message);
-									requestsStore.attachForwardResult(req.id, {
-										request_id: req.id,
-										url: fwdUrl,
-										status_code: 0,
-										ok: false,
-										latency_ms: 0,
-										error: message
-									});
-								});
-							} else {
-								// Sync — wait for response and capture it for display
-								try {
-									const syncResult = await forwardRequestSync(fwdReq, fwdUrl);
-									// Store the forward response as a captured response for display
-									if (syncResult.response) {
-										requestsStore.attachResponse(req.id, {
-											status: syncResult.response.status,
-											headers: syncResult.response.headers,
-											body: syncResult.response.body,
-											content_type: syncResult.response.content_type,
-											source: 'forward_passthrough'
-										});
-									}
-									// Also store as forward result for the Forward Target Response section
-									requestsStore.attachForwardResult(req.id, {
-										request_id: req.id,
-										url: fwdUrl,
-										status_code: syncResult.result.status ?? 0,
-										ok: syncResult.result.ok,
-										latency_ms: syncResult.result.latency,
-										error: syncResult.result.error,
-										response_body: syncResult.response?.body,
-										response_headers: syncResult.response?.headers,
-										content_type: syncResult.response?.content_type
-									});
-								} catch (err) {
-									console.warn('Browser sync forward error:', err);
-								}
-							}
+							});
 						}
 					}
 
@@ -177,14 +154,17 @@
 						saveToIDB(req).catch(() => {});
 					}
 				} else if (msg.type === 'response_needed') {
-					// Server is holding the HTTP response open and waiting for us
-					// to run the custom response handler and send back the result.
-					// Pipeline: Transform → Forward (sync) → Handler → respond
+					// Server is holding the HTTP response open and waiting for this tab
+					// to decide the reply: run the reply script, or, with sync forwarding
+					// and no script, relay the forward target's reply as-is. That is how
+					// an app on localhost answers the webhook sender.
+					// Pipeline: Transform → Forward (sync) → Handler or passthrough → respond
 					const data = msg.data as ResponseNeededData;
 					const cr = liveCfg().custom_response;
-					if (cr?.script && replyActive() && wsClient) {
+					const useHandler = replyActive() && !!cr?.script;
+					if (tabDecidesReply() && wsClient) {
 						try {
-							await initWasm();
+							if (activeTransform() || useHandler) await initWasm();
 
 							let handlerReq = data.request;
 							let fwdResponse: ForwardResponse | null = null;
@@ -207,10 +187,12 @@
 							// Step 2: Sync forward (if configured)
 							const fwdUrl = dropped ? undefined : liveCfg().forward_url;
 							const fwdMode = liveCfg().forward_mode || 'async';
+							let fwdError: string | undefined;
 							if (fwdUrl && fwdMode === 'sync') {
 								try {
 									const syncResult = await forwardRequestSync(handlerReq, fwdUrl);
 									fwdResponse = syncResult.response;
+									fwdError = syncResult.result.error;
 									// Capture forward result for display
 									requestsStore.attachForwardResult(data.request_id, {
 										request_id: data.request_id,
@@ -224,6 +206,7 @@
 										content_type: syncResult.response?.content_type
 									});
 								} catch (err) {
+									fwdError = err instanceof Error ? err.message : 'Unknown forward error';
 									console.warn('Sync forward error in response_needed:', err);
 								}
 							} else if (fwdUrl && fwdMode === 'async') {
@@ -239,24 +222,58 @@
 								});
 							}
 
-							// Step 3: Run handler with (optionally) forward response. Like the
-							// server, a skipped request gets the default reply, not the handler's.
-							const result = dropped ? null : await runResponseHandler(cr.script, handlerReq, 'javascript', fwdResponse);
-							const responseData = result
-								? {
+							// Step 3: Decide the reply. Like the server, a skipped request gets
+							// the default reply. With a script, the script decides (and sees the
+							// forward target's reply as req.forward_response). Without one, the
+							// forward target's reply is relayed as-is, and no reply at all (CORS,
+							// connection refused, timeout) becomes 502, as in server mode.
+							type TabReply = {
+								request_id: string;
+								status: number;
+								headers: Record<string, string>;
+								body: string;
+								content_type: string;
+								source: CapturedResponse['source'];
+							};
+							let responseData: TabReply = {
+								request_id: data.request_id,
+								status: 202,
+								headers: {},
+								body: JSON.stringify({ status: 'ok', id: data.request_id }),
+								content_type: 'application/json',
+								source: 'default'
+							};
+							if (!dropped && useHandler) {
+								const result = await runResponseHandler(cr!.script!, handlerReq, 'javascript', fwdResponse);
+								if (result) {
+									responseData = {
 										request_id: data.request_id,
 										status: result.response?.status || 200,
 										headers: result.response?.headers || {},
 										body: result.response?.body || '',
-										content_type: result.response?.content_type || ''
-									}
-								: {
-										request_id: data.request_id,
-										status: 202,
-										headers: {},
-										body: JSON.stringify({ status: 'ok', id: data.request_id }),
-										content_type: 'application/json'
+										content_type: result.response?.content_type || '',
+										source: 'handler'
 									};
+								}
+							} else if (!dropped && fwdUrl && fwdMode === 'sync') {
+								responseData = fwdResponse
+									? {
+											request_id: data.request_id,
+											status: fwdResponse.status,
+											headers: relayHeaders(fwdResponse.headers),
+											body: fwdResponse.body ?? '',
+											content_type: fwdResponse.content_type || '',
+											source: 'forward_passthrough'
+										}
+									: {
+											request_id: data.request_id,
+											status: 502,
+											headers: {},
+											body: JSON.stringify({ error: 'forward target did not respond', detail: fwdError ?? 'no response' }),
+											content_type: 'application/json',
+											source: 'forward_passthrough'
+										};
+							}
 							wsClient.send({
 								type: 'response_result',
 								data: responseData
@@ -268,7 +285,7 @@
 								headers: responseData.headers,
 								body: responseData.body,
 								content_type: responseData.content_type,
-								source: result ? 'handler' : 'default'
+								source: responseData.source
 							});
 						} catch (err) {
 							console.warn('Custom response handler failed:', err);
@@ -540,7 +557,7 @@
 					<li aria-hidden="true" class="text-[#9AA39E]">→</li>
 					{@render stage('Forward', cfg.forward_url ? shortURL(cfg.forward_url) : 'not set', !!cfg.forward_url, cfg.forward_url ? 'Edit' : 'Add', () => open('settings'), !!cfg.forward_url)}
 					<li aria-hidden="true" class="text-[#9AA39E]">→</li>
-					{@render stage('Reply', replyOn ? 'custom script' : `default ${ep.mode === 'browser' ? 202 : 200}`, replyOn, 'Change', () => open('reply'))}
+					{@render stage('Reply', replyOn ? 'custom script' : cfg.forward_url && cfg.forward_mode === 'sync' ? (ep.mode === 'browser' ? "your app's reply" : "the target's reply") : `default ${ep.mode === 'browser' ? 202 : 200}`, replyOn || (!!cfg.forward_url && cfg.forward_mode === 'sync'), 'Change', () => open('reply'))}
 					<li class="ml-auto">
 						<button type="button" onclick={() => (editing === 'settings' ? closeScreen() : open('settings'))} class="text-[13px] text-soft hover:text-accent underline cursor-pointer px-1 py-2">
 							{editing === 'settings' ? 'Back to requests' : 'Settings'}

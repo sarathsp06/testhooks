@@ -46,8 +46,8 @@ const arrow = '<path d="M1 6h37M33 1l5 5-5 5"></path>';
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
-		<title>Testhooks: self-hosted webhook inspector</title>
-		<meta name="description" content="Capture, inspect and forward webhooks on your own server. A self-hosted webhook.site replacement whose browser mode also replaces ngrok." />
+		<title>Testhooks: webhooks to localhost, nothing to install</title>
+		<meta name="description" content="A self-hosted webhook.site that replies from your localhost. See every webhook, forward it from your browser tab to your local app, and the sender gets your app's real reply. No tunnel to install." />
 		<link rel="icon" href={`${base}favicon.svg`} type="image/svg+xml" />
 		<link rel="preconnect" href="https://fonts.googleapis.com" />
 		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -76,6 +76,7 @@ const arrow = '<path d="M1 6h37M33 1l5 5-5 5"></path>';
 					<a href="#overview" class="nav-link section">Overview</a>
 					<a href="#features" class="nav-link section">Features</a>
 					<a href="#modes" class="nav-link section">Modes</a>
+					<a href="#compare" class="nav-link section">Compare</a>
 					<a href={demo} class="nav-link">Live demo</a>
 					<a href={docs} class="nav-link">Docs</a>
 					<a href={github} class="nav-gh">
@@ -96,13 +97,19 @@ const arrow = '<path d="M1 6h37M33 1l5 5-5 5"></path>';
 						Standard Webhooks compatible
 					</a>
 				</div>
-				<h1>Capture, inspect and forward webhooks. On your own server.</h1>
-				<p class="lede">A self-hosted webhook.site replacement: deploy it where webhook senders can reach it. Browser mode also replaces ngrok, forwarding each webhook from your tab to code on your machine, with nothing to install locally. Runs on PostgreSQL, or in memory for local testing.</p>
+				<h1>Webhooks to localhost. Nothing to install.</h1>
+				<p class="lede">A self-hosted webhook.site that also replaces ngrok for webhooks. Point a provider at your URL, see every delivery, forward it from your browser tab to localhost, and your app's reply goes back to the sender. One Go binary with the UI built in.</p>
 				<div class="hero-actions">
 					<a href={demo} class="btn btn-primary">Try the live demo</a>
 					<a href={docs} class="btn btn-secondary">Read the docs</a>
 				</div>
-				<p class="hero-demo-note">No install: create an endpoint on the demo and point any service at its URL.</p>
+				<ul class="proof" aria-label="At a glance">
+					<li><b class="mono">0</b><span>installs on your machine</span></li>
+					<li><b class="mono">1</b><span>binary, UI and docs built in</span></li>
+					<li><b class="mono">200</b><span>or 500: your app's real reply reaches the sender</span></li>
+					<li><b class="mono">∞</b><span>endpoints and requests on your own server</span></li>
+				</ul>
+				<p class="hero-demo-note">No account: create an endpoint on the demo and point any service at its URL.</p>
 
 				<div id="install" class="install">
 					<div class="install-head">
@@ -129,25 +136,25 @@ const arrow = '<path d="M1 6h37M33 1l5 5-5 5"></path>';
 			<!-- Overview -->
 			<section id="overview" class="wrap why">
 				<div class="section-head narrow">
-					<span class="eyebrow mono">webhook.site, self-hosted</span>
-					<h2>What if webhook.site could also send requests to your local server?</h2>
-					<p class="sub">You point a platform's webhooks at a test URL to see what it sends. But to test your own webhook handler, you copy each payload and replay it with curl. Testhooks captures webhooks like webhook.site, and in browser mode your tab also delivers each one to your local server, or to anything only your machine can reach. Deploy it once where the platform can reach it.</p>
+					<span class="eyebrow mono">the bin, the tunnel and the mock server</span>
+					<h2>One URL replaces three tools.</h2>
+					<p class="sub">Testing a webhook handler means a bin to see the payload, a tunnel to reach localhost, and a mock to fake failures. Testhooks is all three behind one endpoint URL, on a server you control.</p>
 				</div>
 				<div class="cards">
 					<div class="card">
-						<span class="mono tag">server mode · like webhook.site</span>
+						<span class="mono tag">the bin · like webhook.site</span>
 						<h3>See exactly what a sender sends</h3>
-						<p>Capture every request with headers and body, verify signatures, mock the response, and forward it on, even with no browser open.</p>
+						<p>Every request appears as it lands: headers, query, body, signature verdict. Copy as cURL, replay it, keep it as long as you like.</p>
 					</div>
 					<div class="card card-strong">
-						<span class="mono tag accent">browser mode · the difference</span>
-						<h3>Use it instead of ngrok</h3>
-						<p>Point the provider at your deployed Testhooks, open the endpoint in your browser and set forward to localhost. Each webhook shows up in your tab with its full payload, and your tab delivers it to your local app. Nothing to install on your machine.</p>
+						<span class="mono tag accent">the tunnel · unlike webhook.site</span>
+						<h3>Your localhost answers the sender</h3>
+						<p>Open the endpoint in a tab, point forwarding at <span class="mono sm ink">localhost</span>, turn on the local reply. The provider gets your handler's real <span class="mono sm ink">200</span> or <span class="mono sm ink">500</span>, as in production. No CLI, daemon or account.</p>
 					</div>
 					<div class="card">
-						<span class="mono tag">browser mode</span>
-						<h3>Reach what only your machine can see</h3>
-						<p>Forwarding runs in your tab, not on the server, so it reaches localhost, Docker containers and anything else your machine can reach but the internet can't.</p>
+						<span class="mono tag">the mock · unlike ngrok</span>
+						<h3>Script the failure you can't reproduce</h3>
+						<p>A few lines of JavaScript decide the status and body the sender gets, or reshape the payload before it reaches your app. Free, in the browser, sandboxed.</p>
 					</div>
 				</div>
 				<p class="why-note">The one-liners above run Testhooks on your machine, which is enough to try it with curl. Real providers can only deliver to a URL they can reach, so for those <a href={`${base}deployment/production/`}>deploy it on a server or PaaS with a public URL</a>.</p>
@@ -191,29 +198,29 @@ const arrow = '<path d="M1 6h37M33 1l5 5-5 5"></path>';
 
 					<div class="mode" data-mode="browser">
 						<div class="mode-intro">
-							<h3>Your browser is the tunnel.</h3>
-							<p>Webhooks hit the Testhooks server, which streams them to your open tab over WebSocket. Your tab runs the transform and calls fetch() to deliver them to localhost. No CLI, daemon or tunnel to install.</p>
+							<h3>Your browser is the tunnel. Both ways.</h3>
+							<p>The server holds the provider's request open and streams it to your tab over WebSocket. Your tab runs the transform, delivers with fetch() to localhost, and sends your app's reply back. The provider sees that reply.</p>
 						</div>
 						<div class="flow">
 							<div class="step"><span class="mono tag">01</span><b>Webhook sender</b><span>Any service that sends webhooks.</span></div>
 							<div class="hop"><span class="mono">HTTP POST</span><svg width="40" height="12" viewBox="0 0 40 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" set:html={arrow} /></div>
 							<div class="step"><span class="mono tag">02</span><b>Testhooks server</b><span>Receives at <span class="mono sm">/h/:slug</span> and relays it. Keeps only a short in-memory buffer.</span></div>
 							<div class="hop"><span class="mono">WebSocket</span><svg width="40" height="12" viewBox="0 0 40 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" set:html={arrow} /></div>
-							<div class="step step-dark"><span class="mono tag bright">03 · the tunnel</span><b>Your browser tab</b><span>Runs the transform, then delivers with fetch().</span></div>
-							<div class="hop"><span class="mono">fetch()</span><svg width="40" height="12" viewBox="0 0 40 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" set:html={arrow} /></div>
-							<div class="step step-accent"><span class="mono tag accent">04</span><b class="mono">localhost</b><span>Your app, Docker, anything your machine can reach.</span></div>
+							<div class="step step-dark"><span class="mono tag bright">03 · the tunnel</span><b>Your browser tab</b><span>Runs the transform, delivers with fetch(), waits for the reply.</span></div>
+							<div class="hop"><span class="mono">fetch() ⇄ reply</span><svg width="40" height="12" viewBox="0 0 40 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" set:html={arrow} /></div>
+							<div class="step step-accent"><span class="mono tag accent">04</span><b class="mono">localhost</b><span>Your app answers. Its status and body travel back to the sender.</span></div>
 						</div>
 						<div class="facts">
-							<div><h4>The server only relays</h4><p>It receives the webhook and streams it over WebSocket. Transforms and forwarding run in your tab, which is how it reaches localhost.</p></div>
-							<div><h4>Reconnects catch up</h4><p>The server keeps a short in-memory buffer, so a tab that drops and reconnects gets the requests it missed.</p></div>
-							<div><h4>Nothing stored unless you ask</h4><p>Turn on <b class="ink">Persist requests</b> to also keep a server-side copy.</p></div>
+							<div><h4>The server only relays</h4><p>Transforms and forwarding run in your tab, which is how it reaches localhost, Docker and anything else your machine can see.</p></div>
+							<div><h4>Your app's reply reaches the sender</h4><p>Turn on <b class="ink">Reply to the sender with my app's response</b>. A 200 marks the delivery done; a 500 makes the provider retry, as in production.</p></div>
+							<div><h4>Nothing stored unless you ask</h4><p>Payloads never touch the server's disk. Turn on <b class="ink">Persist requests</b> to keep a copy.</p></div>
 						</div>
 						<div class="example">
 							<h4>Example: your receiver only runs on localhost</h4>
 							<ol>
-								<li><span class="num mono">1</span><span>Deploy Testhooks where the provider can reach it, create an endpoint, and paste its <span class="mono sm ink">/h/:slug</span> URL into the provider's webhook settings.</span></li>
-								<li><span class="num mono">2</span><span>Open the endpoint in your browser, switch it to browser mode and set forward to <span class="mono sm ink">http://localhost:[port]/[path]</span>.</span></li>
-								<li><span class="num mono">3</span><span>Trigger the event. Your tab receives it and delivers it to your local server, and you see both sides.</span></li>
+								<li><span class="num mono">1</span><span>Create an endpoint on the live demo or your own Testhooks and paste its <span class="mono sm ink">/h/:slug</span> URL into the provider's webhook settings.</span></li>
+								<li><span class="num mono">2</span><span>In the tab, set forward to <span class="mono sm ink">http://localhost:[port]/[path]</span> and turn on the local reply.</span></li>
+								<li><span class="num mono">3</span><span>Trigger the event. It lands in your tab and on your local server, and the provider gets your handler's reply.</span></li>
 							</ol>
 						</div>
 					</div>
@@ -256,7 +263,7 @@ const arrow = '<path d="M1 6h37M33 1l5 5-5 5"></path>';
 						<p class="sub">One Go binary with the UI embedded. Storage is PostgreSQL, or memory for local testing.</p>
 					</div>
 					<div class="grid">
-						<div class="feature"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"></rect><path d="M8 20h8M12 16v4"></path></svg><h3>Reach localhost</h3><p>Browser mode forwards with fetch() from your tab, so it reaches localhost, Docker and anything else your machine can see. No CLI, daemon or tunnel.</p></div>
+						<div class="feature"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"></rect><path d="M8 20h8M12 16v4"></path></svg><h3>Replace the tunnel</h3><p>Forward from your tab to localhost, Docker or anything your machine reaches, and the sender gets your app's reply. No CLI, daemon or account.</p></div>
 						<div class="feature"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"></rect><path d="M8 11V7a4 4 0 0 1 8 0v4"></path></svg><h3>Private by default</h3><p>In browser mode, payloads are relayed over WebSocket and never written to the server's disk.</p></div>
 						<div class="feature"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"></path><circle cx="12" cy="12" r="3"></circle></svg><h3>Live inspection</h3><p>Every request appears the instant it arrives: headers, query, body with syntax highlighting. Copy as cURL, export as JSON or CSV.</p></div>
 						<div class="feature"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6l-6 6 6 6M16 6l6 6-6 6"></path></svg><h3>Script transforms</h3><p>Reshape payloads with a few lines of JavaScript, sandboxed in WASM, before they are forwarded.</p></div>
@@ -266,11 +273,35 @@ const arrow = '<path d="M1 6h37M33 1l5 5-5 5"></path>';
 				</div>
 			</section>
 
+			<!-- Comparison -->
+			<section id="compare" class="band">
+				<div class="wrap compare">
+					<div class="section-head narrow">
+						<span class="eyebrow mono">Side by side</span>
+						<h2>What you stop needing.</h2>
+					</div>
+					<table class="cmp">
+						<thead>
+							<tr><th scope="col"></th><th scope="col">Testhooks</th><th scope="col">webhook.site</th><th scope="col">ngrok</th></tr>
+						</thead>
+						<tbody>
+							<tr><th scope="row">Nothing to install, no account</th><td class="yes">Yes</td><td class="yes">Yes</td><td class="no">Agent + login</td></tr>
+							<tr><th scope="row">Reaches localhost</th><td class="yes">From the tab</td><td class="part">From the tab</td><td class="yes">Agent</td></tr>
+							<tr><th scope="row">Your app's reply reaches the sender</th><td class="yes">Yes</td><td class="no">No</td><td class="yes">Yes</td></tr>
+							<tr><th scope="row">Script the reply</th><td class="yes">Free, JavaScript</td><td class="part">Paid tier</td><td class="part">Policy rules</td></tr>
+							<tr><th scope="row">Signature check on every request</th><td class="yes">Standard Webhooks</td><td class="no">No</td><td class="part">Metered</td></tr>
+							<tr><th scope="row">Self-host with forwarding and scripts</th><td class="yes">One binary, Apache 2.0</td><td class="part">Without scripting</td><td class="no">No</td></tr>
+							<tr><th scope="row">Stable URL on the free tier</th><td class="yes">Yours, as long as you keep it</td><td class="no">7 days, 100 requests</td><td class="no">Random per session</td></tr>
+						</tbody>
+					</table>
+					<p class="cmp-note">From each product's public docs, October 2026. webhook.site's open-source edition and ngrok's free plan; their paid plans add more.</p>
+				</div>
+			</section>
 			<!-- Closing call to action -->
 			<section class="band band-surface">
 				<div class="wrap cta">
 					<div>
-						<h2>Start catching webhooks.</h2>
+						<h2>Point a webhook at it. Watch localhost answer.</h2>
 						<p>Try the live demo now, or run it locally to test with curl.</p>
 					</div>
 					<div class="cta-actions">
@@ -438,6 +469,22 @@ const arrow = '<path d="M1 6h37M33 1l5 5-5 5"></path>';
 			.lede { margin-top: 22px; font-size: 19px; line-height: 1.55; color: var(--text); max-width: 640px; }
 			.hero-actions { margin-top: 28px; display: flex; gap: 12px; flex-wrap: wrap; }
 			.hero-demo-note { margin-top: 12px; font-size: 14px; color: var(--faint); }
+			.proof { margin: 28px 0 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px 28px; max-width: 900px; }
+			.proof li { display: flex; align-items: baseline; gap: 10px; font-size: 14px; line-height: 1.4; color: var(--text); border-left: 2px solid var(--accent); padding-left: 12px; }
+			.proof b { font-size: 22px; font-weight: 500; color: var(--ink); letter-spacing: -0.02em; }
+			.compare { padding-top: 72px; padding-bottom: 72px; }
+			.cmp { width: 100%; margin-top: 32px; border-collapse: collapse; font-size: 15px; }
+			.cmp th, .cmp td { padding: 12px 14px; text-align: left; border-bottom: 1px solid var(--line); vertical-align: top; }
+			.cmp thead th { font-size: 12px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-2); font-weight: 500; }
+			.cmp thead th:nth-child(2) { color: var(--ink); }
+			.cmp tbody th { font-weight: 500; color: var(--ink); }
+			.cmp td.yes { color: var(--ink); font-weight: 500; }
+			.cmp td.yes::before { content: '✓ '; color: var(--accent); }
+			.cmp td.part { color: var(--text); }
+			.cmp td.no { color: var(--faint); }
+			.cmp tbody td:nth-child(2) { background: var(--surface); }
+			.cmp-note { margin-top: 14px; font-size: 13px; color: var(--faint); }
+			@media (max-width: 720px) { .cmp { display: block; overflow-x: auto; } .cmp th, .cmp td { white-space: nowrap; } .cmp tbody th { white-space: normal; min-width: 160px; } }
 
 			/* Install box */
 			.install { margin-top: 40px; max-width: 920px; scroll-margin-top: 24px; }

@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
+	"github.com/sarathsp06/testhooks/internal/config"
 	"github.com/sarathsp06/testhooks/internal/hub"
 )
 
@@ -440,5 +441,101 @@ func TestCapture_StripsHeaders(t *testing.T) {
 	}
 	if h.Get("X-Vercel-Oidc-Token") == "" || h.Get("Webhook-Id") == "" {
 		t.Errorf("custom: unmatched headers stripped: %v", h)
+	}
+}
+
+// Browser mode with sync forwarding and no reply script: the server holds the
+// sender's request open, asks the tab (response_needed), and relays what the
+// tab sends back, which is the forward target's reply, often from localhost.
+func TestCapture_BrowserMode_SyncForward_RelaysTabReply(t *testing.T) {
+	store := newMockStore()
+	store.seedEndpoint("ep-1", "browser1", "Test", "browser",
+		json.RawMessage(`{"forward_url":"http://localhost:3000/hook","forward_mode":"sync"}`))
+	capture, h := newTestCapture(store)
+	mux := captureMux(capture)
+
+	ch, cleanup := h.Subscribe("browser1", 10)
+	defer cleanup()
+
+	// Play the tab: answer response_needed with the local app's reply.
+	go func() {
+		for msg := range ch {
+			if msg.Type != "response_needed" {
+				continue
+			}
+			var data struct {
+				RequestID string `json:"request_id"`
+			}
+			if err := json.Unmarshal(msg.Data, &data); err != nil {
+				return
+			}
+			h.DeliverResponse("browser1", data.RequestID, hub.ResponseResult{
+				RequestID:   data.RequestID,
+				Status:      201,
+				Headers:     map[string]string{"X-From": "local-app"},
+				Body:        `{"received":true}`,
+				ContentType: "application/json",
+				Source:      "forward_passthrough",
+			})
+			return
+		}
+	}()
+
+	req := httptest.NewRequest("POST", "/h/browser1", strings.NewReader(`{"test":true}`))
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != 201 {
+		t.Fatalf("status = %d, want 201 (the local app's reply)", w.Code)
+	}
+	if got := w.Body.String(); got != `{"received":true}` {
+		t.Errorf("body = %q, want the local app's body", got)
+	}
+	if got := w.Header().Get("X-From"); got != "local-app" {
+		t.Errorf("X-From = %q, want local-app", got)
+	}
+	if got := w.Header().Get("Content-Type"); got != "application/json" {
+		t.Errorf("Content-Type = %q, want application/json", got)
+	}
+}
+
+// Async forwarding in browser mode does not hold the request: 202 as before.
+func TestCapture_BrowserMode_AsyncForward_Returns202(t *testing.T) {
+	store := newMockStore()
+	store.seedEndpoint("ep-1", "browser1", "Test", "browser",
+		json.RawMessage(`{"forward_url":"http://localhost:3000/hook","forward_mode":"async"}`))
+	capture, h := newTestCapture(store)
+	mux := captureMux(capture)
+
+	_, cleanup := h.Subscribe("browser1", 10)
+	defer cleanup()
+
+	req := httptest.NewRequest("POST", "/h/browser1", strings.NewReader("data"))
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("status = %d, want 202", w.Code)
+	}
+}
+
+func TestBrowserDecidesReply(t *testing.T) {
+	cases := []struct {
+		name string
+		cfg  config.EndpointConfig
+		want bool
+	}{
+		{"nothing set", config.EndpointConfig{}, false},
+		{"async forward", config.EndpointConfig{ForwardURL: "http://localhost:3000", ForwardMode: "async"}, false},
+		{"sync forward", config.EndpointConfig{ForwardURL: "http://localhost:3000", ForwardMode: "sync"}, true},
+		{"sync without url", config.EndpointConfig{ForwardMode: "sync"}, false},
+		{"reply script", config.EndpointConfig{CustomResponse: &config.CustomResponseConfig{Enabled: true, Script: "function handler(req){return null}"}}, true},
+		{"reply script disabled", config.EndpointConfig{CustomResponse: &config.CustomResponseConfig{Enabled: false, Script: "x"}}, false},
+		{"legacy lua script", config.EndpointConfig{CustomResponse: &config.CustomResponseConfig{Enabled: true, Script: "x", Language: "lua"}}, false},
+	}
+	for _, tc := range cases {
+		if got := browserDecidesReply(tc.cfg); got != tc.want {
+			t.Errorf("%s: browserDecidesReply = %v, want %v", tc.name, got, tc.want)
+		}
 	}
 }

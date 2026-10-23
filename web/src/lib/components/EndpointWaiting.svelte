@@ -239,8 +239,10 @@
 					<span class="text-[13px] text-body">
 						{#if hasReply}
 							A script decides the status and body.
+						{:else if hasForward && endpoint.config?.forward_mode === 'sync'}
+							{isServer ? "The forward target's reply" : "Your app's reply"} goes back to the sender as-is.
 						{:else}
-							Default <span class="font-mono">200 OK</span>. Script a different status or body.
+							Default <span class="font-mono">{isServer ? '200 OK' : '202 Accepted'}</span>. Script a different status or body{#if !isServer}, or have your local app answer{/if}.
 						{/if}
 					</span>
 				</span>

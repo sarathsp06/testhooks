@@ -21,6 +21,33 @@ const HOP_BY_HOP = new Set([
 	'proxy-authenticate'
 ]);
 
+/**
+ * Headers of a forward target's reply that must not be relayed to the
+ * webhook sender: the server re-frames the body itself, and the rest are
+ * connection-level. Security-sensitive headers are blocked server-side.
+ */
+const NOT_RELAYED = new Set([
+	'content-length',
+	'content-encoding',
+	'transfer-encoding',
+	'connection',
+	'keep-alive',
+	'date',
+	'server'
+]);
+
+/**
+ * Pick the headers of a forward target's reply to pass back to the webhook
+ * sender when the tab relays the reply as-is (sync forwarding, no script).
+ */
+export function relayHeaders(headers: Record<string, string> | undefined): Record<string, string> {
+	const out: Record<string, string> = {};
+	for (const [k, v] of Object.entries(headers ?? {})) {
+		if (!NOT_RELAYED.has(k.toLowerCase())) out[k] = v;
+	}
+	return out;
+}
+
 /** Build a clean headers object from the captured request. */
 function buildHeaders(req: CapturedRequest): Record<string, string> {
 	const headers: Record<string, string> = {};

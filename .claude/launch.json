@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "testhooks",
+      "runtimeExecutable": "env",
+      "runtimeArgs": ["DATABASE_URL=memory", "PORT=8090", "./testhooks"],
+      "port": 8090
+    },
+    {
+      "name": "docs",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["--prefix", "docs", "astro", "preview", "--root", "docs", "--port", "4321"],
+      "port": 4321
+    }
+  ]
+}
