@@ -37,6 +37,26 @@ const installs = [
 ];
 const first = installs[0];
 
+// Absolute URLs for canonical, Open Graph and structured data.
+const site = (import.meta.env.SITE ?? 'https://sarathsp06.github.io').replace(/\/$/, '');
+const pageUrl = `${site}${base}`;
+const ogImage = `${pageUrl}og.jpg`;
+const title = 'Self-Hosted webhook.site Alternative | Testhooks';
+const description =
+	'Self-hosted webhook.site alternative: capture, inspect, verify, forward and script replies to webhooks. Open source. Your browser tab can tunnel to localhost.';
+const schema = JSON.stringify({
+	'@context': 'https://schema.org',
+	'@type': 'SoftwareApplication',
+	name: 'Testhooks',
+	applicationCategory: 'DeveloperApplication',
+	operatingSystem: 'Linux, macOS, Windows, Docker',
+	url: pageUrl,
+	description,
+	license: 'https://www.apache.org/licenses/LICENSE-2.0',
+	offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+	sameAs: [github, demo],
+});
+
 const check = '<path d="M5 12l5 5L20 7"></path>';
 const arrow = '<path d="M1 6h37M33 1l5 5-5 5"></path>';
 ---
@@ -46,8 +66,24 @@ const arrow = '<path d="M1 6h37M33 1l5 5-5 5"></path>';
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
-		<title>Testhooks: webhooks to localhost, nothing to install</title>
-		<meta name="description" content="A self-hosted webhook.site that replies from your localhost. See every webhook, forward it from your browser tab to your local app, and the sender gets your app's real reply. No tunnel to install." />
+		<title>{title}</title>
+		<meta name="description" content={description} />
+		<link rel="canonical" href={pageUrl} />
+		<link rel="sitemap" href={`${base}sitemap-index.xml`} />
+		<meta property="og:type" content="website" />
+		<meta property="og:site_name" content="Testhooks" />
+		<meta property="og:url" content={pageUrl} />
+		<meta property="og:title" content="Testhooks: everything webhook.site does, on your own server" />
+		<meta property="og:description" content={description} />
+		<meta property="og:image" content={ogImage} />
+		<meta property="og:image:width" content="1200" />
+		<meta property="og:image:height" content="630" />
+		<meta property="og:locale" content="en" />
+		<meta name="twitter:card" content="summary_large_image" />
+		<meta name="twitter:title" content="Testhooks: everything webhook.site does, on your own server" />
+		<meta name="twitter:description" content={description} />
+		<meta name="twitter:image" content={ogImage} />
+		<script type="application/ld+json" set:html={schema} />
 		<link rel="icon" href={`${base}favicon.svg`} type="image/svg+xml" />
 		<link rel="preconnect" href="https://fonts.googleapis.com" />
 		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -97,17 +133,17 @@ const arrow = '<path d="M1 6h37M33 1l5 5-5 5"></path>';
 						Standard Webhooks compatible
 					</a>
 				</div>
-				<h1>Webhooks to localhost. Nothing to install.</h1>
-				<p class="lede">A self-hosted webhook.site that also replaces ngrok for webhooks. Point a provider at your URL, see every delivery, forward it from your browser tab to localhost, and your app's reply goes back to the sender. One Go binary with the UI built in.</p>
+				<h1>Everything webhook.site does. On your own server.</h1>
+				<p class="lede">Capture every webhook, inspect it live, verify signatures, transform it, forward it and script the reply. No account, no request limits, no expiring URLs. And when the handler you're testing runs on localhost, your browser tab is the tunnel, with nothing to install.</p>
 				<div class="hero-actions">
 					<a href={demo} class="btn btn-primary">Try the live demo</a>
 					<a href={docs} class="btn btn-secondary">Read the docs</a>
 				</div>
 				<ul class="proof" aria-label="At a glance">
-					<li><b class="mono">0</b><span>installs on your machine</span></li>
-					<li><b class="mono">1</b><span>binary, UI and docs built in</span></li>
-					<li><b class="mono">200</b><span>or 500: your app's real reply reaches the sender</span></li>
-					<li><b class="mono">∞</b><span>endpoints and requests on your own server</span></li>
+					<li><b class="mono">1</b><span>Go binary, UI built in, Apache 2.0</span></li>
+					<li><b class="mono">∞</b><span>endpoints and requests, no 7-day expiry</span></li>
+					<li><b class="mono">JS</b><span>transforms and scripted replies, free</span></li>
+					<li><b class="mono">0</b><span>installs to reach localhost: your tab is the tunnel</span></li>
 				</ul>
 				<p class="hero-demo-note">No account: create an endpoint on the demo and point any service at its URL.</p>
 
@@ -136,9 +172,9 @@ const arrow = '<path d="M1 6h37M33 1l5 5-5 5"></path>';
 			<!-- Overview -->
 			<section id="overview" class="wrap why">
 				<div class="section-head narrow">
-					<span class="eyebrow mono">the bin, the tunnel and the mock server</span>
+					<span class="eyebrow mono">the bin, the mock server and the tunnel</span>
 					<h2>One URL replaces three tools.</h2>
-					<p class="sub">Testing a webhook handler means a bin to see the payload, a tunnel to reach localhost, and a mock to fake failures. Testhooks is all three behind one endpoint URL, on a server you control.</p>
+					<p class="sub">A bin to see the payload, a mock to fake failures, and, when your handler runs on localhost, a tunnel to reach it. Testhooks is all three behind one endpoint URL, on a server you control.</p>
 				</div>
 				<div class="cards">
 					<div class="card">
@@ -146,15 +182,15 @@ const arrow = '<path d="M1 6h37M33 1l5 5-5 5"></path>';
 						<h3>See exactly what a sender sends</h3>
 						<p>Every request appears as it lands: headers, query, body, signature verdict. Copy as cURL, replay it, keep it as long as you like.</p>
 					</div>
+					<div class="card">
+						<span class="mono tag">the mock · free, unlike webhook.site</span>
+						<h3>Script the failure you can't reproduce</h3>
+						<p>A few lines of JavaScript decide the status and body the sender gets, or reshape the payload before it is forwarded. Sandboxed, with a live diff, no paid tier.</p>
+					</div>
 					<div class="card card-strong">
-						<span class="mono tag accent">the tunnel · unlike webhook.site</span>
+						<span class="mono tag accent">the tunnel · the extra</span>
 						<h3>Your localhost answers the sender</h3>
 						<p>Open the endpoint in a tab, point forwarding at <span class="mono sm ink">localhost</span>, turn on the local reply. The provider gets your handler's real <span class="mono sm ink">200</span> or <span class="mono sm ink">500</span>, as in production. No CLI, daemon or account.</p>
-					</div>
-					<div class="card">
-						<span class="mono tag">the mock · unlike ngrok</span>
-						<h3>Script the failure you can't reproduce</h3>
-						<p>A few lines of JavaScript decide the status and body the sender gets, or reshape the payload before it reaches your app. Free, in the browser, sandboxed.</p>
 					</div>
 				</div>
 				<p class="why-note">The one-liners above run Testhooks on your machine, which is enough to try it with curl. Real providers can only deliver to a URL they can reach, so for those <a href={`${base}deployment/production/`}>deploy it on a server or PaaS with a public URL</a>.</p>
@@ -301,7 +337,7 @@ const arrow = '<path d="M1 6h37M33 1l5 5-5 5"></path>';
 			<section class="band band-surface">
 				<div class="wrap cta">
 					<div>
-						<h2>Point a webhook at it. Watch localhost answer.</h2>
+						<h2>Point any webhook at it. See everything, reply with anything.</h2>
 						<p>Try the live demo now, or run it locally to test with curl.</p>
 					</div>
 					<div class="cta-actions">

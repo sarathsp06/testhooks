@@ -18,6 +18,7 @@
 	import { Copy, Check, Download, Trash2 } from 'lucide-svelte';
 	import { ago, bodyText, eventLabel, shortURL } from '$lib/requestutil';
 	import { formatBytes } from '$lib/utils';
+	// Endpoint pages are one person's captured traffic: keep them out of search engines.
 
 
 	const slug = $derived(page.params.slug);
@@ -436,6 +437,10 @@
 		endpointStore.clear();
 	});
 </script>
+
+<svelte:head>
+	<meta name="robots" content="noindex" />
+</svelte:head>
 
 {#snippet logo()}
 	<a href="/" class="flex items-center gap-2.5 no-underline text-ink">

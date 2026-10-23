@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  <strong>A self-hostable <a href="https://webhook.site">webhook.site</a> that replies from your localhost. No tunnel to install.</strong><br/>
+  <strong>A self-hostable <a href="https://webhook.site">webhook.site</a>. When your handler runs on localhost, your browser tab is the tunnel.</strong><br/>
   Capture, inspect, transform, forward and mock webhooks. One binary with the UI built in.
 </p>
 

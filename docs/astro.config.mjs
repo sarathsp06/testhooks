@@ -11,7 +11,7 @@ export default defineConfig({
 		starlight({
 			title: 'testhooks',
 			description:
-				'Self-hostable webhook inspector: capture, inspect, transform, forward and mock webhooks in real time.',
+				'Self-hosted webhook.site alternative: capture, inspect, verify, transform, forward and script replies to webhooks. Open source. Your browser tab can be the tunnel to localhost.',
 			logo: { src: './src/assets/logo.svg', alt: 'Testhooks' },
 			favicon: '/favicon.svg',
 			head: [

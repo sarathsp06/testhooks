@@ -1,0 +1,4 @@
+User-agent: *
+Disallow: /h/
+Disallow: /api/
+Disallow: /ws
