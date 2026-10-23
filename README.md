@@ -5,8 +5,8 @@
 </p>
 
 <p align="center">
-  <strong>A self-hostable <a href="https://webhook.site">webhook.site</a>. When your handler runs on localhost, your browser tab is the tunnel.</strong><br/>
-  Capture, inspect, transform, forward and mock webhooks. One binary with the UI built in.
+  <strong>Webhooks, made for humans and for machines.</strong><br/>
+  A self-hostable <a href="https://webhook.site">webhook.site</a>: capture, inspect, verify, transform, forward and mock webhooks, one click or one curl. When your handler runs on localhost, your browser tab is the tunnel. One binary with the UI built in. See <a href="AGENTS.md">AGENTS.md</a> for the principles behind it.
 </p>
 
 <p align="center">
