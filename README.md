@@ -66,4 +66,6 @@ See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
-[Apache License 2.0](LICENSE)
+The code is under the [Apache License 2.0](LICENSE): use it, change it, self-host it, for anything.
+
+The name "Testhooks" and the logo are trademarks and are not covered by the code license. Forks need their own name, and offering a hosted service under the Testhooks name needs permission. See [TRADEMARKS.md](TRADEMARKS.md).

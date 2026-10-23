@@ -50,6 +50,20 @@ action is the one its label promised.
     byte unless a transform says otherwise. Hop-by-hop and security-sensitive
     headers are stripped; everything else passes through untouched.
 
+## Licensing and premium features
+
+- Everything in this repository is Apache 2.0 and stays that way. Do not add
+  code here that is meant to be paid for or restricted.
+- The name and logo are trademarks ([TRADEMARKS.md](TRADEMARKS.md)); the code
+  license does not cover them.
+- Premium features (teams and sharing, SSO, private endpoints on a hosted
+  service, long retention, a managed hosted offering) live in a separate
+  module that imports this one. This repository exposes the seams they need
+  (interfaces for storage, auth and the capture pipeline) but ships no premium
+  behaviour and no licence checks. A change here that only exists to serve the
+  premium module is fine when it is a clean interface; it is not fine when it
+  is a stub, a flag or a feature that is deliberately hobbled.
+
 ## Before you open a pull request
 
 - Can a first-time user predict what each new label does? If not, rename it.
