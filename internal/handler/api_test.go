@@ -31,6 +31,8 @@ func newMux(api *API) *http.ServeMux {
 	mux.HandleFunc("DELETE /api/endpoints/{id}/requests", api.DeleteAllRequests)
 	mux.HandleFunc("GET /api/requests/{reqId}", api.GetRequest)
 	mux.HandleFunc("DELETE /api/requests/{reqId}", api.DeleteRequest)
+	mux.HandleFunc("GET /api/limits", api.GetLimits)
+	mux.HandleFunc("POST /api/upgrade-interest", api.RecordUpgradeInterest)
 	return mux
 }
 

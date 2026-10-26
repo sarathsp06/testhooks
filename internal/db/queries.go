@@ -365,6 +365,20 @@ func (p *Pool) CountRequests(ctx context.Context, endpointID string) (int, error
 	return count, err
 }
 
+// RecordUpgradeInterest stores one row per client and returns the number of
+// clients who have asked for a paid plan.
+func (p *Pool) RecordUpgradeInterest(ctx context.Context, clientID, endpointID string) (int, error) {
+	if _, err := p.Exec(ctx,
+		`INSERT INTO upgrade_interest (client_id, endpoint_id) VALUES ($1, $2) ON CONFLICT (client_id) DO NOTHING`,
+		clientID, endpointID,
+	); err != nil {
+		return 0, err
+	}
+	var count int
+	err := p.QueryRow(ctx, `SELECT COUNT(*) FROM upgrade_interest`).Scan(&count)
+	return count, err
+}
+
 // Ensure pgx import is used.
 var _ pgx.Rows = nil
 

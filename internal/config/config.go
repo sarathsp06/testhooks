@@ -57,6 +57,12 @@ type Config struct {
 	// Max requests per endpoint — oldest are pruned beyond this count.
 	MaxRequestsPerEndpoint int `env:"MAX_REQUESTS_PER_ENDPOINT" envDefault:"500"`
 
+	// A line shown under the storage limits in the UI saying what a paid
+	// plan would lift, for example "A paid plan would keep 10,000 requests
+	// for 30 days." It comes with an "I'd pay for that" button whose clicks
+	// the server counts. Empty (the default) shows the limits only.
+	UpgradeNote string `env:"UPGRADE_NOTE"`
+
 	// Prune interval in seconds.
 	PruneIntervalSeconds int `env:"PRUNE_INTERVAL_SECONDS" envDefault:"60"`
 

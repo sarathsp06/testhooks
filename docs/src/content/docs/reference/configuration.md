@@ -38,6 +38,7 @@ Testhooks is configured entirely with environment variables. A `.env` file in th
 | `MAX_ENDPOINT_STORAGE_BYTES` | `10485760` | Oldest requests beyond this many stored bytes per endpoint are pruned |
 | `MAX_STORED_RESPONSE_SIZE` | `65536` | Bytes of a reply body stored with each request: the forward target's reply and the response sent back. Longer bodies are cut and marked truncated; the live view still shows them whole. Not counted in `MAX_ENDPOINT_STORAGE_BYTES`. `0` stores status and headers only; at most 10 MB |
 | `PRUNE_INTERVAL_SECONDS` | `60` | How often pruning runs |
+| `UPGRADE_NOTE` | | A sentence shown under the storage limits in the UI saying what a paid plan would lift, such as `A paid plan would keep 10,000 requests for 30 days.` It comes with an "I'd pay for that" button; the server counts one click per browser (see [Limits](../api/#limits)). Empty shows the limits only, so self-hosted installs see no mention of a paid plan |
 
 ## Browser mode and WebSocket
 

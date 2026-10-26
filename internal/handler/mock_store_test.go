@@ -21,6 +21,7 @@ type mockStore struct {
 	slugIndex map[string]string       // slug → ID
 	requests  map[string]*db.CapturedRequest
 	reqOrder  []string // request IDs in insertion order
+	interest  map[string]string
 
 	// Error injection
 	createEndpointErr    error
@@ -263,6 +264,16 @@ func (m *mockStore) PruneByStorageBudget(_ context.Context, _ int64) (int64, err
 
 func (m *mockStore) PruneExcessRequests(_ context.Context, _ int) (int64, error) {
 	return 0, nil
+}
+
+func (m *mockStore) RecordUpgradeInterest(_ context.Context, clientID, endpointID string) (int, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.interest == nil {
+		m.interest = map[string]string{}
+	}
+	m.interest[clientID] = endpointID
+	return len(m.interest), nil
 }
 
 // seedEndpoint is a helper to pre-populate an endpoint in the mock store.

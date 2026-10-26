@@ -124,6 +124,36 @@ Returns `{"requests": [...], "total": 123, "limit": 50, "offset": 0}`, newest fi
 - `DELETE /api/requests/{reqId}` deletes one request.
 - `DELETE /api/endpoints/{id}/requests` deletes all of an endpoint's requests.
 
+## Limits
+
+### Read the storage limits
+
+`GET /api/limits`
+
+```json
+{
+  "max_requests_per_endpoint": 500,
+  "max_endpoint_storage_bytes": 10485760,
+  "max_body_size": 524288,
+  "upgrade_note": "A paid plan would keep 10,000 requests for 30 days."
+}
+```
+
+The three numbers are the server's [`MAX_REQUESTS_PER_ENDPOINT`, `MAX_ENDPOINT_STORAGE_BYTES` and `MAX_BODY_SIZE`](../configuration/#storage). The UI shows them next to the stored request count. `upgrade_note` appears only when [`UPGRADE_NOTE`](../configuration/#storage) is set.
+
+### Say you would pay for more
+
+`POST /api/upgrade-interest`
+
+```bash
+curl -X POST http://localhost:8080/api/upgrade-interest \
+  -H 'Content-Type: application/json' \
+  -H 'X-Client-ID: my-browser' \
+  -d '{"endpoint_id":"251982e0-021a-4b2e-a8fd-50e505e0bd37"}'
+```
+
+This is the "I'd pay for that" button. `endpoint_id` is optional and records where the click happened. One `X-Client-ID` counts once however often it is sent; a call without one counts once per call. Returns `{"count": 3}`, the number of people who have asked so far. With PostgreSQL the rows are in the `upgrade_interest` table; with in-memory storage they live in the snapshot file.
+
 ## Endpoint config
 
 | Field | | |

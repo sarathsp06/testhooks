@@ -157,6 +157,12 @@ func main() {
 	log.Info().Strs("strip_headers", stripHeaders).Msg("stripping headers from captured requests (set STRIP_HEADERS to change)")
 	api := handler.NewAPI(store, h, log)
 	api.SetEncryption(cryptoSvc)
+	api.SetLimits(handler.Limits{
+		MaxRequestsPerEndpoint:  cfg.MaxRequestsPerEndpoint,
+		MaxEndpointStorageBytes: cfg.MaxEndpointStorageBytes,
+		MaxBodySize:             cfg.MaxBodySize,
+		UpgradeNote:             cfg.UpgradeNote,
+	})
 	ws := handler.NewWS(store, h, log, allowedOrigins)
 
 	// Build the HTTP router using Go 1.22+ stdlib patterns.
@@ -219,6 +225,8 @@ func main() {
 	mux.Handle("DELETE /api/endpoints/{id}/requests", wrapAPI(api.DeleteAllRequests))
 	mux.Handle("GET /api/requests/{reqId}", wrapAPI(api.GetRequest))
 	mux.Handle("DELETE /api/requests/{reqId}", wrapAPI(api.DeleteRequest))
+	mux.Handle("GET /api/limits", wrapAPI(api.GetLimits))
+	mux.Handle("POST /api/upgrade-interest", wrapAPI(api.RecordUpgradeInterest))
 
 	// SPA serving: dev mode proxies to Vite, prod serves embedded static files.
 	if cfg.Dev {
