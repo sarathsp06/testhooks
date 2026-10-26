@@ -82,24 +82,11 @@ func (b secretBox) store(sig map[string]any, secret string) error {
 	return nil
 }
 
-// redact returns ep with the signature secret replaced by secret_set, for API
-// responses.
+// redact returns ep with the signature secret replaced by secret_set. Every
+// JSON encoding of a db.Endpoint already does this (db.Endpoint.MarshalJSON);
+// this keeps the config explicit for callers that look at it.
 func (b secretBox) redact(ep db.Endpoint) db.Endpoint {
-	top, sig, ok := splitSignature(ep.Config)
-	if !ok {
-		return ep
-	}
-	if s, _ := sig["secret"].(string); s != "" {
-		sig["secret_set"] = true
-	}
-	if s, _ := sig["secret_enc"].(string); s != "" {
-		sig["secret_set"] = true
-	}
-	delete(sig, "secret")
-	delete(sig, "secret_enc")
-	if cfg, err := joinSignature(top, sig); err == nil {
-		ep.Config = cfg
-	}
+	ep.Config = db.RedactSecrets(ep.Config)
 	return ep
 }
 
