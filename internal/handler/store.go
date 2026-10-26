@@ -31,4 +31,8 @@ type Store interface {
 	// Pruning (used by cleanup, listed here for completeness)
 	PruneByStorageBudget(ctx context.Context, maxBytes int64) (int64, error)
 	PruneExcessRequests(ctx context.Context, maxCount int) (int64, error)
+
+	// RecordUpgradeInterest notes that clientID asked for a paid plan (once
+	// per client) and returns how many clients have asked so far.
+	RecordUpgradeInterest(ctx context.Context, clientID, endpointID string) (int, error)
 }

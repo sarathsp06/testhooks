@@ -20,6 +20,7 @@ type API struct {
 	}
 	log     zerolog.Logger
 	secrets secretBox
+	limits  Limits
 }
 
 // NewAPI creates a new API handler.

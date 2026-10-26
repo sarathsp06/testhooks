@@ -2,7 +2,7 @@
  * Typed fetch wrapper for the /api/* REST endpoints.
  * Matches handler/api.go routes exactly.
  */
-import type { Endpoint, CapturedRequest, PaginatedRequests } from './types';
+import type { Endpoint, CapturedRequest, PaginatedRequests, Limits } from './types';
 import { auth } from './auth.svelte';
 
 const BASE = '/api';
@@ -150,6 +150,20 @@ export function updateEndpoint(
 
 export function deleteEndpoint(id: string) {
 	return request<void>(`/endpoints/${id}`, { method: 'DELETE' });
+}
+
+// --- Limits ---
+
+export function getLimits() {
+	return request<Limits>('/limits');
+}
+
+/** The "I'd pay for that" click. Counted once per browser; returns how many people have asked. */
+export function recordUpgradeInterest(endpointId: string) {
+	return request<{ count: number }>('/upgrade-interest', {
+		method: 'POST',
+		body: JSON.stringify({ endpoint_id: endpointId })
+	});
 }
 
 // --- Requests ---

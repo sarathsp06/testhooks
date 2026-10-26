@@ -15,6 +15,8 @@ Testhooks runs on Vercel's Go runtime. The repository includes a `vercel.json` t
 4. Set `AUTH_TOKEN` unless this is a deliberately public demo. Without it, anyone who finds the deployment can read every captured webhook and change or delete endpoints; see [Authentication](../production/#authentication). Also set `ALLOWED_ORIGINS` to your deployment's URL, such as `https://testhooks-yourname.vercel.app`.
 5. Deploy. Migrations run automatically on the first request that starts an instance.
 
+For a public demo, `UPGRADE_NOTE` adds a line under the storage limits saying what a paid plan would lift, with a button that counts who asks; see [Configuration](../../reference/configuration/#storage).
+
 [Fluid compute](https://vercel.com/docs/fluid-compute) must be on, because the live view uses WebSockets. It's the default for projects created on or after 23 April 2025.
 
 ## Choose the database connection

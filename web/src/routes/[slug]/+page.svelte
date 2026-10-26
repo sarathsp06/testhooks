@@ -2,7 +2,7 @@
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
 	import { onMount, onDestroy } from 'svelte';
-	import { getEndpointBySlug, deleteEndpoint } from '$lib/api';
+	import { getEndpointBySlug, deleteEndpoint, getLimits, recordUpgradeInterest } from '$lib/api';
 	import { createWSClient, type WSStatus } from '$lib/ws';
 	import { getEndpointStore } from '$lib/stores/endpoint.svelte';
 	import { getRequestsStore } from '$lib/stores/requests.svelte';
@@ -14,7 +14,7 @@
 	import InspectDetail from '$lib/components/InspectDetail.svelte';
 	import ScriptEditorPage from '$lib/components/ScriptEditorPage.svelte';
 	import ForwardConfig from '$lib/components/ForwardConfig.svelte';
-	import type { CapturedRequest, CapturedResponse, Endpoint, ResponseNeededData, ResponseInfoData, ForwardResponse, ForwardResultData } from '$lib/types';
+	import type { CapturedRequest, CapturedResponse, Endpoint, Limits, ResponseNeededData, ResponseInfoData, ForwardResponse, ForwardResultData } from '$lib/types';
 	import { Copy, Check, Download, Trash2 } from 'lucide-svelte';
 	import { ago, bodyText, eventLabel, shortURL } from '$lib/requestutil';
 	import { formatBytes } from '$lib/utils';
@@ -427,8 +427,42 @@
 		if (!requestsStore.selectedId && requestsStore.items.length) requestsStore.select(requestsStore.items[0].id);
 	});
 
+	// Storage limits shown next to the stored count, and the note about a
+	// paid plan when the server has one. The "I'd pay for that" click is
+	// counted once per browser; the flag only hides the button after a reload.
+	const ASKED_KEY = 'testhooks_upgrade_asked';
+	let limits = $state<Limits | null>(null);
+	let askedCount = $state<number | null>(null);
+	let asked = $state(false);
+	let askError = $state<string | null>(null);
+	async function askForPaidPlan() {
+		askError = null;
+		try {
+			const res = await recordUpgradeInterest(endpoint?.id ?? '');
+			askedCount = res.count;
+			asked = true;
+			try {
+				localStorage.setItem(ASKED_KEY, '1');
+			} catch {
+				// Private window or blocked storage: the server still counted it.
+			}
+		} catch (e) {
+			askError = e instanceof Error ? e.message : String(e);
+		}
+	}
+
 	onMount(() => {
 		if (slug) init(slug);
+		try {
+			asked = localStorage.getItem(ASKED_KEY) === '1';
+		} catch {
+			// Private window or blocked storage: show the button again.
+		}
+		getLimits()
+			.then((l) => (limits = l))
+			.catch(() => {
+				// An older server without /api/limits: show nothing.
+			});
 	});
 
 	onDestroy(() => {
@@ -592,6 +626,20 @@
 							<button type="button" onclick={exportAllJSON} title="Download requests as JSON" aria-label="Download requests as JSON" class="w-8 h-8 rounded-md flex items-center justify-center text-faint hover:text-ink hover:bg-chip cursor-pointer"><Download class="w-4 h-4" /></button>
 							<button type="button" onclick={() => confirm('Delete all captured requests?') && handleClearAll()} title="Delete all requests" aria-label="Delete all requests" class="w-8 h-8 rounded-md flex items-center justify-center text-faint hover:text-danger hover:bg-chip cursor-pointer"><Trash2 class="w-4 h-4" /></button>
 						</div>
+						{#if limits && (ep.mode === 'server' || cfg.persist_requests)}
+							<div class="px-4 py-2 border-b border-line text-xs text-body flex flex-wrap items-center gap-x-2 gap-y-1">
+								<span>Keeps the newest {limits.max_requests_per_endpoint.toLocaleString()} requests, up to {formatBytes(limits.max_endpoint_storage_bytes)}; older ones are deleted.</span>
+								{#if limits.upgrade_note}
+									<span>{limits.upgrade_note}</span>
+									{#if asked}
+										<span class="text-accent">{askedCount === null ? 'Noted, thanks.' : askedCount === 1 ? "Noted, thanks. You're the first to ask." : `Noted, thanks. ${askedCount.toLocaleString()} people have asked.`}</span>
+									{:else}
+										<button type="button" onclick={askForPaidPlan} class="text-accent underline cursor-pointer px-0 py-0 bg-transparent border-0 text-xs">I'd pay for that</button>
+									{/if}
+									{#if askError}<span role="alert" class="text-danger">Couldn't record that: {askError}</span>{/if}
+								{/if}
+							</div>
+						{/if}
 						{#if requestsStore.error}
 							<p role="alert" class="m-0 px-4 py-2 text-[13px] text-danger border-b border-line">{requestsStore.error}</p>
 						{/if}

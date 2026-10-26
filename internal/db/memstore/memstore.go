@@ -38,6 +38,7 @@ type Store struct {
 	slugs     map[string]string                // slug -> endpoint ID
 	requests  map[string][]*db.CapturedRequest // endpoint ID -> requests, oldest first
 	byID      map[string]*db.CapturedRequest   // request ID -> request
+	interest  map[string]string                // client ID -> endpoint ID where they asked for a paid plan
 
 	path  string
 	dirty atomic.Bool
@@ -54,6 +55,7 @@ func New(snapshotPath string, log zerolog.Logger) (*Store, error) {
 		slugs:     map[string]string{},
 		requests:  map[string][]*db.CapturedRequest{},
 		byID:      map[string]*db.CapturedRequest{},
+		interest:  map[string]string{},
 		path:      snapshotPath,
 		log:       log.With().Str("component", "memstore").Logger(),
 	}
@@ -268,6 +270,17 @@ func (s *Store) CountRequests(_ context.Context, endpointID string) (int, error)
 	return len(s.requests[endpointID]), nil
 }
 
+// RecordUpgradeInterest notes clientID once and returns how many clients have asked.
+func (s *Store) RecordUpgradeInterest(_ context.Context, clientID, endpointID string) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, seen := s.interest[clientID]; !seen {
+		s.interest[clientID] = endpointID
+		s.dirty.Store(true)
+	}
+	return len(s.interest), nil
+}
+
 // --- Pruning (same rules as the Postgres queries) ---
 
 // PruneByStorageBudget keeps each endpoint's newest requests whose cumulative
@@ -327,6 +340,7 @@ func (s *Store) dropRequests(endpointID string, n int) int {
 type snapshot struct {
 	Endpoints []db.Endpoint
 	Requests  []db.CapturedRequest // per endpoint, oldest first
+	Interest  map[string]string    // client ID -> endpoint ID
 }
 
 func (s *Store) snapshotLoop() {
@@ -358,6 +372,10 @@ func (s *Store) Save() error {
 		for _, r := range s.requests[ep.ID] {
 			snap.Requests = append(snap.Requests, *r)
 		}
+	}
+	snap.Interest = make(map[string]string, len(s.interest))
+	for k, v := range s.interest {
+		snap.Interest[k] = v
 	}
 	s.mu.RUnlock()
 
@@ -429,6 +447,9 @@ func (s *Store) load() error {
 		}
 		s.requests[r.EndpointID] = append(s.requests[r.EndpointID], &r)
 		s.byID[r.ID] = &r
+	}
+	for k, v := range snap.Interest {
+		s.interest[k] = v
 	}
 	s.log.Info().Int("endpoints", len(snap.Endpoints)).Int("requests", len(s.byID)).Msg("snapshot loaded")
 	return nil
