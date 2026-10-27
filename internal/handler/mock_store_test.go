@@ -36,6 +36,22 @@ type mockStore struct {
 	deleteRequestErr     error
 	deleteAllRequestsErr error
 	countRequestsErr     error
+
+	// slugTakenTimes makes the next n CreateEndpoint or RenameEndpoint
+	// calls fail with db.ErrSlugTaken; triedSlugs records every slug offered.
+	slugTakenTimes int
+	triedSlugs     []string
+}
+
+// slugTaken reports whether slug can't be used. Callers hold m.mu.
+func (m *mockStore) slugTaken(slug string) bool {
+	m.triedSlugs = append(m.triedSlugs, slug)
+	if m.slugTakenTimes > 0 {
+		m.slugTakenTimes--
+		return true
+	}
+	_, taken := m.slugIndex[slug]
+	return taken
 }
 
 func newMockStore() *mockStore {
@@ -51,6 +67,9 @@ func (m *mockStore) CreateEndpoint(_ context.Context, slug, name, mode, clientID
 	defer m.mu.Unlock()
 	if m.createEndpointErr != nil {
 		return nil, m.createEndpointErr
+	}
+	if m.slugTaken(slug) {
+		return nil, db.ErrSlugTaken
 	}
 	id := fmt.Sprintf("ep-%d", len(m.endpoints)+1)
 	if config == nil {
@@ -134,6 +153,22 @@ func (m *mockStore) UpdateEndpoint(_ context.Context, id, name, mode string, con
 	ep.Name = name
 	ep.Mode = mode
 	ep.Config = config
+	return ep, nil
+}
+
+func (m *mockStore) RenameEndpoint(_ context.Context, id, slug string) (*db.Endpoint, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	ep, ok := m.endpoints[id]
+	if !ok {
+		return nil, db.ErrNotFound
+	}
+	if m.slugTaken(slug) {
+		return nil, db.ErrSlugTaken
+	}
+	delete(m.slugIndex, ep.Slug)
+	ep.Slug = slug
+	m.slugIndex[slug] = id
 	return ep, nil
 }
 

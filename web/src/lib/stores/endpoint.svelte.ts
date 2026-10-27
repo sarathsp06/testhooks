@@ -37,7 +37,7 @@ export function getEndpointStore() {
 			}
 		},
 
-		async update(patch: { name?: string; mode?: 'server' | 'browser'; config?: Record<string, unknown> }) {
+		async update(patch: { name?: string; slug_name?: string; mode?: 'server' | 'browser'; config?: Record<string, unknown> }) {
 			if (!current) return;
 			try {
 				current = await updateEndpoint(current.id, patch);

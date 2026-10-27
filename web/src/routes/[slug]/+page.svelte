@@ -381,7 +381,7 @@
 		return saveConfig({ custom_response: { enabled, script, language: 'javascript' } });
 	}
 
-	async function handleSettingsUpdate(patch: { name?: string; mode?: 'server' | 'browser'; config?: Record<string, unknown> }) {
+	async function handleSettingsUpdate(patch: { name?: string; slug_name?: string; mode?: 'server' | 'browser'; config?: Record<string, unknown> }) {
 		if (!endpoint) return;
 		// Intercept delete action from ForwardConfig
 		if (patch.config?._delete) {
@@ -399,6 +399,15 @@
 			const msg = endpointStore.error;
 			endpointStore.clearError();
 			throw new Error(msg);
+		}
+		// A new URL: reconnect under the new slug and show it in the address bar.
+		const renamed = endpointStore.current?.slug;
+		if (patch.slug_name !== undefined && renamed && renamed !== slug) {
+			wsClient?.disconnect();
+			wsClient = null;
+			requestsStore.reset();
+			await goto(`/${renamed}?edit=settings`, { replaceState: true });
+			await init(renamed);
 		}
 	}
 

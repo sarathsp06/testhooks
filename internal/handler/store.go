@@ -10,12 +10,15 @@ import (
 // Store is the database interface required by the handler package.
 // Defined here so handlers can be tested with mock implementations.
 type Store interface {
-	// Endpoint operations
+	// Endpoint operations. CreateEndpoint and RenameEndpoint return
+	// db.ErrSlugTaken when another endpoint has the slug.
 	CreateEndpoint(ctx context.Context, slug, name, mode, clientID string, config json.RawMessage) (*db.Endpoint, error)
 	GetEndpointBySlug(ctx context.Context, slug string) (*db.Endpoint, error)
 	GetEndpointByID(ctx context.Context, id string) (*db.Endpoint, error)
 	ListEndpoints(ctx context.Context, clientID string, limit, offset int) ([]db.Endpoint, error)
 	UpdateEndpoint(ctx context.Context, id, name, mode string, config json.RawMessage) (*db.Endpoint, error)
+	// RenameEndpoint changes an endpoint's slug.
+	RenameEndpoint(ctx context.Context, id, slug string) (*db.Endpoint, error)
 	DeleteEndpoint(ctx context.Context, id string) error
 
 	// Request operations

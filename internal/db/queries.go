@@ -32,6 +32,19 @@ func mapNotFound(err error) error {
 	return err
 }
 
+// ErrSlugTaken is returned when creating or renaming an endpoint to a slug
+// another endpoint already has. Callers pick a new slug and try again.
+var ErrSlugTaken = errors.New("slug already taken")
+
+// mapSlugTaken converts a unique violation on endpoints.slug into ErrSlugTaken.
+func mapSlugTaken(err error) error {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code == "23505" && strings.Contains(pgErr.ConstraintName, "slug") { // unique_violation
+		return ErrSlugTaken
+	}
+	return err
+}
+
 // Endpoint represents a webhook capture endpoint.
 type Endpoint struct {
 	ID        string          `json:"id"`
@@ -156,7 +169,7 @@ func (p *Pool) CreateEndpoint(ctx context.Context, slug, name, mode, clientID st
 		slug, name, mode, nilIfEmpty(clientID), config,
 	).Scan(&e.ID, &e.Slug, &e.Name, &e.Mode, &e.ClientID, &e.CreatedAt, &e.Config)
 	if err != nil {
-		return nil, err
+		return nil, mapSlugTaken(err)
 	}
 	return e, nil
 }
@@ -239,6 +252,21 @@ func (p *Pool) UpdateEndpoint(ctx context.Context, id, name, mode string, config
 	).Scan(&e.ID, &e.Slug, &e.Name, &e.Mode, &e.ClientID, &e.CreatedAt, &e.Config)
 	if err != nil {
 		return nil, err
+	}
+	return e, nil
+}
+
+// RenameEndpoint gives an endpoint a new slug.
+func (p *Pool) RenameEndpoint(ctx context.Context, id, slug string) (*Endpoint, error) {
+	e := &Endpoint{}
+	err := p.QueryRow(ctx,
+		`UPDATE endpoints SET slug = $2
+		 WHERE id = $1
+		 RETURNING id, slug, name, mode, COALESCE(client_id, ''), created_at, config`,
+		id, slug,
+	).Scan(&e.ID, &e.Slug, &e.Name, &e.Mode, &e.ClientID, &e.CreatedAt, &e.Config)
+	if err != nil {
+		return nil, mapSlugTaken(mapNotFound(err))
 	}
 	return e, nil
 }

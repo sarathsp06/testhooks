@@ -36,9 +36,10 @@ func (c *client) withURL(ep *Endpoint) {
 // --- create_endpoint
 
 type CreateEndpointInput struct {
-	Name   string         `json:"name,omitempty" jsonschema:"a label for the endpoint, e.g. stripe test"`
-	Mode   string         `json:"mode,omitempty" jsonschema:"server (default): Testhooks stores and processes requests; browser: an open Testhooks tab does"`
-	Config map[string]any `json:"config,omitempty" jsonschema:"endpoint settings such as forward_url; see the REST API reference. Leave out for an endpoint that only captures"`
+	Name     string         `json:"name,omitempty" jsonschema:"a label for the endpoint, e.g. stripe test"`
+	SlugName string         `json:"slug_name,omitempty" jsonschema:"a word to start the URL with, e.g. stripe gives /h/stripe-acid-fable-gully; lowercase letters, numbers and dashes, up to 20"`
+	Mode     string         `json:"mode,omitempty" jsonschema:"server (default): Testhooks stores and processes requests; browser: an open Testhooks tab does"`
+	Config   map[string]any `json:"config,omitempty" jsonschema:"endpoint settings such as forward_url; see the REST API reference. Leave out for an endpoint that only captures"`
 }
 
 func (c *client) createEndpoint(ctx context.Context, _ *mcp.CallToolRequest, in CreateEndpointInput) (*mcp.CallToolResult, Endpoint, error) {

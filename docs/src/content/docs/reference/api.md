@@ -16,12 +16,13 @@ Errors look like `{"error": "endpoint not found"}`. A missing record is `404`; a
 ```bash
 curl -X POST http://localhost:8080/api/endpoints \
   -H 'Content-Type: application/json' \
-  -d '{"name":"stripe test","mode":"server"}'
+  -d '{"name":"stripe test","slug_name":"stripe","mode":"server"}'
 ```
 
 | Field | | |
 |---|---|---|
-| `name` | optional | Up to 255 characters |
+| `name` | optional | A label, up to 255 characters. Doesn't change the URL |
+| `slug_name` | optional | Start of the URL: up to 20 lowercase letters, numbers and single dashes, no dash at the start or end. Uppercase is lowercased |
 | `mode` | optional | `server` (default) or `browser` |
 | `config` | optional | See [endpoint config](#endpoint-config) |
 
@@ -30,7 +31,7 @@ Returns `201` with the endpoint:
 ```json
 {
   "id": "251982e0-021a-4b2e-a8fd-50e505e0bd37",
-  "slug": "1a8832ef",
+  "slug": "stripe-acid-fable-gully",
   "name": "stripe test",
   "mode": "server",
   "created_at": "2026-10-16T23:03:47.672606Z",
@@ -38,7 +39,9 @@ Returns `201` with the endpoint:
 }
 ```
 
-The webhook URL is `/h/<slug>`.
+The webhook URL is `/h/<slug>`. The slug is `slug_name` followed by three random short words, or just the three words without a `slug_name`, so two endpoints never clash and a slug never collides with a page of the app. The words come from the [EFF short word list](https://www.eff.org/dice). They make the URL easy to read, not secret: anyone who has it can send to it. Endpoints created before readable slugs keep their 8-character slugs.
+
+A `slug_name` that isn't allowed gets `400` with `{"error": "Use up to 20 lowercase letters, numbers and single dashes, with no dash at the start or end."}`. In the rare case that every slug tried is already taken, the response is `409`; send the request again.
 
 An optional `X-Client-ID` header tags the endpoint so `GET /api/endpoints` with the same header lists only that client's endpoints. It's a convenience for the UI, not access control.
 
@@ -62,7 +65,19 @@ curl -X PATCH http://localhost:8080/api/endpoints/<id> \
   -d '{"mode":"browser"}'
 ```
 
-Send any of `name`, `mode` and `config`. Fields you leave out are unchanged, but `config` is replaced as a whole: include every setting you want to keep.
+Send any of `name`, `slug_name`, `mode` and `config`. Fields you leave out are unchanged, but `config` is replaced as a whole: include every setting you want to keep.
+
+#### Change the URL
+
+Sending `slug_name` gives the endpoint a new slug: that name followed by three new random words, or only the words when `slug_name` is `""`. The words change even when the name is the same.
+
+```bash
+curl -X PATCH http://localhost:8080/api/endpoints/<id> \
+  -H 'Content-Type: application/json' \
+  -d '{"slug_name":"orders"}'
+```
+
+The old URL stops working at once: senders still using it get `404` until you update them. Captured requests, settings and the endpoint `id` stay the same. The response has the new `slug`; the same `400` and `409` as creating apply.
 
 ### Delete an endpoint
 

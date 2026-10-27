@@ -2,7 +2,11 @@ package db
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
 	"testing"
+
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 func TestIsTextBody(t *testing.T) {
@@ -202,5 +206,16 @@ func TestCapturedRequest_MarshalJSON_Roundtrip(t *testing.T) {
 	}
 	if m["body_encoding"] != "text" {
 		t.Errorf("body_encoding mismatch: %v", m["body_encoding"])
+	}
+}
+
+func TestMapSlugTaken(t *testing.T) {
+	dup := &pgconn.PgError{Code: "23505", ConstraintName: "endpoints_slug_key"}
+	if err := mapSlugTaken(fmt.Errorf("insert: %w", dup)); !errors.Is(err, ErrSlugTaken) {
+		t.Errorf("slug unique violation = %v, want ErrSlugTaken", err)
+	}
+	other := &pgconn.PgError{Code: "23505", ConstraintName: "upgrade_interest_pkey"}
+	if err := mapSlugTaken(other); errors.Is(err, ErrSlugTaken) {
+		t.Error("another unique violation mapped to ErrSlugTaken")
 	}
 }

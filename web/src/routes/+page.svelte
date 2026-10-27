@@ -2,7 +2,7 @@
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
 	import { createEndpoint, listEndpoints, deleteEndpoint } from '$lib/api';
-	import { getWebhookURL, formatTime, copyToClipboard } from '$lib/utils';
+	import { getWebhookURL, formatTime, copyToClipboard, slugNameError, SLUG_NAME_MAX } from '$lib/utils';
 	import { DEFAULT_SCRIPTS, DEFAULT_RESPONSE_SCRIPTS, initWasm, isWasmReady, validateResponseHandler } from '$lib/wasm';
 	import CodeEditor from '$lib/components/CodeEditor.svelte';
 	import { Trash2, Copy, ChevronRight, Plus, X, Check, AlertTriangle, Loader2 } from 'lucide-svelte';
@@ -20,6 +20,7 @@
 
 	// Creation form state
 	let newName = $state('');
+	let newSlugName = $state('');
 	let newMode = $state<'server' | 'browser'>('server');
 	let showAdvanced = $state(false);
 
@@ -51,10 +52,15 @@
 	] as const;
 
 	const steps = [
-		{ title: 'Create an endpoint', text: 'You get a unique URL like', code: '/h/a1b2c3d4' },
+		{ title: 'Create an endpoint', text: 'You get a unique URL like', code: '/h/acid-fable-gully' },
 		{ title: 'Send it a request', text: "Paste the URL into a service's webhook settings, or send a sample with one click." },
 		{ title: 'Inspect, then go further', text: 'See headers and body, then add a transform, a forward target or a custom reply.' }
 	];
+
+	const newSlugNameError = $derived(slugNameError(newSlugName));
+	const newSlugPreview = $derived(
+		`/h/${newSlugName.trim() && !newSlugNameError ? newSlugName.trim().toLowerCase() + '-' : ''}three-random-words`
+	);
 
 	const advancedSummary = $derived(
 		[
@@ -98,6 +104,7 @@
 
 	function resetForm() {
 		newName = '';
+		newSlugName = '';
 		newMode = 'server';
 		showAdvanced = false;
 		newForwardUrl = '';
@@ -110,7 +117,7 @@
 
 	async function handleCreate(e?: SubmitEvent) {
 		e?.preventDefault();
-		if (creating) return;
+		if (creating || newSlugNameError) return;
 		creating = true;
 		createError = null;
 		try {
@@ -135,6 +142,7 @@
 
 			const ep = await createEndpoint({
 				name: newName || undefined,
+				slug_name: newSlugName.trim() || undefined,
 				mode: newMode,
 				config: hasConfig ? config : undefined
 			});
@@ -262,6 +270,32 @@
 							Create endpoint
 						{/if}
 					</button>
+				</div>
+
+				<div class="flex flex-col gap-1.5">
+					<label for="slug-name" class="text-[13px] font-medium text-soft">
+						Start the URL with <span class="font-normal text-faint">(optional)</span>
+					</label>
+					<input
+						id="slug-name"
+						type="text"
+						bind:value={newSlugName}
+						placeholder="stripe"
+						maxlength={SLUG_NAME_MAX + 10}
+						autocapitalize="off"
+						autocomplete="off"
+						spellcheck="false"
+						aria-invalid={!!newSlugNameError}
+						aria-describedby="slug-name-hint"
+						class="font-mono text-sm text-ink px-3 py-2.5 border rounded-[10px] bg-page max-w-[320px] placeholder:text-faint/70 focus:outline-none focus:border-accent transition-colors {newSlugNameError ? 'border-danger/60' : 'border-line-strong'}"
+					/>
+					{#if newSlugNameError}
+						<p id="slug-name-hint" class="m-0 text-xs text-danger">{newSlugNameError}</p>
+					{:else}
+						<p id="slug-name-hint" class="m-0 text-[13px] text-faint">
+							Your URL will be <span class="font-mono text-soft break-all">{newSlugPreview}</span>
+						</p>
+					{/if}
 				</div>
 
 				<fieldset class="m-0 p-0 border-0 flex flex-col gap-2.5 min-w-0">

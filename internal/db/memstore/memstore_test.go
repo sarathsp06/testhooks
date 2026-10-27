@@ -38,8 +38,8 @@ func TestStore(t *testing.T) {
 	if string(ep.Config) != "{}" {
 		t.Errorf("nil config stored as %q, want {}", ep.Config)
 	}
-	if _, err := s.CreateEndpoint(ctx, "abc", "dup", "server", "", nil); err == nil {
-		t.Error("duplicate slug accepted")
+	if _, err := s.CreateEndpoint(ctx, "abc", "dup", "server", "", nil); !errors.Is(err, db.ErrSlugTaken) {
+		t.Errorf("duplicate slug: err = %v, want ErrSlugTaken", err)
 	}
 	other, _ := s.CreateEndpoint(ctx, "xyz", "second", "browser", "", nil)
 
@@ -170,5 +170,32 @@ func TestRequestOutcomes(t *testing.T) {
 	reqs, _ := s2.ListRequests(ctx, ep.ID, 50, 0)
 	if len(reqs) != 1 || string(reqs[0].ForwardResult) != `{"status_code":202}` || string(reqs[0].ResponseInfo) != `{"status":200}` {
 		t.Fatalf("restored = %+v", reqs)
+	}
+}
+
+func TestRenameEndpoint(t *testing.T) {
+	ctx := context.Background()
+	s, _ := memstore.New("", zerolog.Nop())
+	ep, _ := s.CreateEndpoint(ctx, "old", "", "server", "", nil)
+	s.CreateEndpoint(ctx, "other", "", "server", "", nil)
+
+	if _, err := s.RenameEndpoint(ctx, ep.ID, "other"); !errors.Is(err, db.ErrSlugTaken) {
+		t.Errorf("rename to a taken slug: err = %v, want ErrSlugTaken", err)
+	}
+	if _, err := s.RenameEndpoint(ctx, "missing", "new"); !errors.Is(err, db.ErrNotFound) {
+		t.Errorf("rename a missing endpoint: err = %v, want ErrNotFound", err)
+	}
+	got, err := s.RenameEndpoint(ctx, ep.ID, "new")
+	if err != nil || got.Slug != "new" {
+		t.Fatalf("RenameEndpoint = %+v, %v", got, err)
+	}
+	if _, err := s.GetEndpointBySlug(ctx, "old"); !errors.Is(err, db.ErrNotFound) {
+		t.Errorf("old slug still resolves: err = %v", err)
+	}
+	if found, err := s.GetEndpointBySlug(ctx, "new"); err != nil || found.ID != ep.ID {
+		t.Errorf("new slug = %+v, %v", found, err)
+	}
+	if _, err := s.CreateEndpoint(ctx, "old", "", "server", "", nil); err != nil {
+		t.Errorf("old slug not freed: %v", err)
 	}
 }

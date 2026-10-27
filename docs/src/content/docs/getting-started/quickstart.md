@@ -50,18 +50,20 @@ curl http://localhost:8080/healthz
 
 ## 3. Create an endpoint
 
-Open `http://localhost:8080` and click **Create New Endpoint**. You get a URL like:
+Open `http://localhost:8080` and click **Create endpoint**. You get a URL of three random words, like:
 
 ```
-http://localhost:8080/h/a1b2c3d4
+http://localhost:8080/h/acid-fable-gully
 ```
+
+To make it easier to tell apart, fill in **Start the URL with**, for example `stripe`, and the URL becomes `/h/stripe-acid-fable-gully`. You can change the URL later under **Settings**, **Webhook URL**; senders using the old URL will get 404 until you update them.
 
 Or create one with the API:
 
 ```bash
 curl -X POST http://localhost:8080/api/endpoints \
   -H 'Content-Type: application/json' \
-  -d '{"name":"my first endpoint","mode":"server"}'
+  -d '{"name":"my first endpoint","slug_name":"stripe","mode":"server"}'
 ```
 
 The response includes the `slug` used in the webhook URL.
@@ -69,12 +71,12 @@ The response includes the `slug` used in the webhook URL.
 ## 4. Send it a webhook
 
 ```bash
-curl -X POST http://localhost:8080/h/a1b2c3d4 \
+curl -X POST http://localhost:8080/h/acid-fable-gully \
   -H 'Content-Type: application/json' \
   -d '{"event":"order.created","order_id":"ord_123"}'
 ```
 
-The request appears in the UI immediately, with its headers, query and body. Anything after the slug is captured too, so `/h/a1b2c3d4/stripe/events` works.
+The request appears in the UI immediately, with its headers, query and body. Anything after the slug is captured too, so `/h/acid-fable-gully/stripe/events` works.
 
 ## 5. Point a real provider at it
 

@@ -3,7 +3,6 @@ package handler
 import (
 	"context"
 	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -762,13 +761,6 @@ func (c *Capture) publishForwardResult(slug string, reqID string, stored bool, r
 func defaultResponseBody(reqID string) string {
 	data, _ := json.Marshal(map[string]string{"status": "ok", "id": reqID})
 	return string(data)
-}
-
-// GenerateSlug creates a random 8-character hex slug.
-func GenerateSlug() string {
-	b := make([]byte, 4)
-	rand.Read(b)
-	return hex.EncodeToString(b)
 }
 
 // generateRequestID creates a random UUID v4-style identifier for browser-mode
