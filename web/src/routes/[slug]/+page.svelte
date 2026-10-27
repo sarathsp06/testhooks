@@ -37,6 +37,8 @@
 	// Read the saved config at use time, so scripts saved in the editor apply
 	// to the browser pipeline straight away.
 	const liveCfg = () => endpointStore.current?.config ?? endpoint?.config ?? {};
+	// Same for the mode, so switching modes in Settings applies without a reload.
+	const liveMode = () => endpointStore.current?.mode ?? endpoint?.mode;
 	const activeTransform = () => {
 		const c = liveCfg();
 		return c.wasm_script && !c.transform_disabled && !isLegacyLanguage(c.transform_language) ? c.wasm_script : '';
@@ -75,9 +77,9 @@
 			endpoint = ep;
 			const cr = ep.config?.custom_response;
 
-			if (ep.mode === 'server' || ep.config?.persist_requests) {
-				await requestsStore.load(ep.id);
-			}
+			// Always show what the server has stored: requests captured in server
+			// mode stay after a switch to browser mode, and should stay visible.
+			await requestsStore.load(ep.id);
 
 			if (ep.config?.wasm_script || ep.mode === 'browser' || (cr?.enabled && cr?.script)) {
 				initWasm().catch((err) => {
@@ -87,6 +89,9 @@
 
 			wsClient = createWSClient(s);
 			wsClient.onStatus((status) => {
+				// A reconnect may have missed requests: pick them up from the server.
+				if (status === 'connected' && wsStatus !== 'connected' && everConnected) catchUp();
+				if (status === 'connected') everConnected = true;
 				wsStatus = status;
 			});
 			wsClient.onMessage(async (msg) => {
@@ -94,7 +99,7 @@
 					let req = msg.data as CapturedRequest;
 
 					// Browser-mode pipeline: Transform → Forward → Store
-					if (ep.mode === 'browser') {
+					if (liveMode() === 'browser') {
 						// Step 1: Transform (returning null skips forwarding). The captured
 						// request is stored as it arrived; the transformed copy is what's forwarded.
 						let dropped = false;
@@ -151,7 +156,7 @@
 
 					requestsStore.prepend(req);
 
-					if (ep.mode === 'browser') {
+					if (liveMode() === 'browser') {
 						saveToIDB(req).catch(() => {});
 					}
 				} else if (msg.type === 'response_needed') {
@@ -451,8 +456,28 @@
 		}
 	}
 
+	// The WebSocket only carries requests that reached the server instance this
+	// tab is connected to. With several instances (Vercel, a load balancer) the
+	// rest are only in the database, so check it while the tab is visible.
+	const CATCH_UP_MS = 5000;
+	let everConnected = false;
+	let catchUpTimer: ReturnType<typeof setInterval> | null = null;
+
+	function catchUp() {
+		const ep = endpointStore.current;
+		if (!ep || document.visibilityState !== 'visible') return;
+		if (liveMode() !== 'server' && !liveCfg().persist_requests) return;
+		void requestsStore.catchUp(ep.id);
+	}
+
+	function onVisibilityChange() {
+		if (document.visibilityState === 'visible') catchUp();
+	}
+
 	onMount(() => {
 		if (slug) init(slug);
+		catchUpTimer = setInterval(catchUp, CATCH_UP_MS);
+		document.addEventListener('visibilitychange', onVisibilityChange);
 		try {
 			asked = localStorage.getItem(ASKED_KEY) === '1';
 		} catch {
@@ -466,6 +491,8 @@
 	});
 
 	onDestroy(() => {
+		if (catchUpTimer) clearInterval(catchUpTimer);
+		if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', onVisibilityChange);
 		wsClient?.disconnect();
 		requestsStore.reset();
 		endpointStore.clear();
@@ -619,7 +646,7 @@
 				<div class="p-6 max-w-2xl w-full flex flex-col gap-4">
 					<h1 class="m-0 text-[22px] font-semibold tracking-[-0.015em]">Settings</h1>
 					{#if deleteError}<p class="m-0 text-sm text-danger">{deleteError}</p>{/if}
-					<ForwardConfig endpoint={ep} onUpdate={handleSettingsUpdate} />
+					<ForwardConfig endpoint={ep} forwardPrivate={!!limits?.forward_private_addresses} onUpdate={handleSettingsUpdate} />
 				</div>
 			{:else}
 				{@const q = search.trim().toLowerCase()}

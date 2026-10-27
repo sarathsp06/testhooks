@@ -6,13 +6,15 @@ import (
 	"net/http"
 )
 
-// Limits are the storage limits the UI shows next to the request count, and
-// the optional note about a paid plan. They mirror the MAX_* configuration.
+// Limits are the storage limits the UI shows next to the request count, the
+// optional note about a paid plan, and whether server-side forwarding may
+// reach private addresses. They mirror the configuration.
 type Limits struct {
 	MaxRequestsPerEndpoint  int    `json:"max_requests_per_endpoint"`
 	MaxEndpointStorageBytes int64  `json:"max_endpoint_storage_bytes"`
 	MaxBodySize             int64  `json:"max_body_size"`
 	UpgradeNote             string `json:"upgrade_note,omitempty"`
+	ForwardPrivateAddresses bool   `json:"forward_private_addresses"`
 }
 
 // SetLimits sets what GET /api/limits returns.

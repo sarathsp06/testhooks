@@ -91,8 +91,35 @@ export function getRequestsStore() {
 			}
 		},
 
+		/**
+		 * Add requests the server stored that this tab has not seen: ones that
+		 * reached another server instance, or arrived while the WebSocket was
+		 * down. Checks the newest few, and reloads the page of requests when all
+		 * of those are new, since more may be missing.
+		 */
+		async catchUp(endpointId: string, check = 10) {
+			if (loading) return;
+			try {
+				const res = await listRequests(endpointId, check, 0);
+				const known = new Set(items.map((r) => r.id));
+				const missing = res.requests.filter((r) => !known.has(r.id));
+				if (missing.length === 0) return;
+				if (missing.length === res.requests.length && res.total > res.requests.length) {
+					await this.load(endpointId);
+					return;
+				}
+				if (items.length === 0 && !selectedId) selectedId = missing[0].id;
+				items = [...missing, ...items];
+				total = res.total;
+			} catch {
+				// Offline or signed out: the next check tries again.
+			}
+		},
+
 		/** Prepend a new request from the WebSocket stream */
 		prepend(req: CapturedRequest) {
+			// A catch-up may have added it first.
+			if (items.some((r) => r.id === req.id)) return;
 			// Open the very first request so a new user sees it right away.
 			if (items.length === 0 && !selectedId) selectedId = req.id;
 			items = [req, ...items];

@@ -68,12 +68,13 @@ export interface CapturedRequest {
 	response_info?: ResponseInfoData;
 }
 
-/** Storage limits (GET /api/limits) and the optional note about a paid plan. */
+/** Storage limits (GET /api/limits), the optional note about a paid plan, and whether server-side forwarding may reach private addresses. */
 export interface Limits {
 	max_requests_per_endpoint: number;
 	max_endpoint_storage_bytes: number;
 	max_body_size: number;
 	upgrade_note?: string;
+	forward_private_addresses?: boolean;
 }
 
 export interface PaginatedRequests {
