@@ -75,9 +75,9 @@
 			endpoint = ep;
 			const cr = ep.config?.custom_response;
 
-			if (ep.mode === 'server' || ep.config?.persist_requests) {
-				await requestsStore.load(ep.id);
-			}
+			// Always show what the server has stored: requests captured in server
+			// mode stay after a switch to browser mode, and should stay visible.
+			await requestsStore.load(ep.id);
 
 			if (ep.config?.wasm_script || ep.mode === 'browser' || (cr?.enabled && cr?.script)) {
 				initWasm().catch((err) => {
@@ -619,7 +619,7 @@
 				<div class="p-6 max-w-2xl w-full flex flex-col gap-4">
 					<h1 class="m-0 text-[22px] font-semibold tracking-[-0.015em]">Settings</h1>
 					{#if deleteError}<p class="m-0 text-sm text-danger">{deleteError}</p>{/if}
-					<ForwardConfig endpoint={ep} onUpdate={handleSettingsUpdate} />
+					<ForwardConfig endpoint={ep} forwardPrivate={!!limits?.forward_private_addresses} onUpdate={handleSettingsUpdate} />
 				</div>
 			{:else}
 				{@const q = search.trim().toLowerCase()}

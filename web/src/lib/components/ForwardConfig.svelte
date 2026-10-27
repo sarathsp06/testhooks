@@ -5,9 +5,12 @@
 
 	let {
 		endpoint,
+		forwardPrivate = false,
 		onUpdate
 	}: {
 		endpoint: Endpoint;
+		/** The server may forward to private and loopback addresses (ALLOW_PRIVATE_FORWARD_TARGETS). */
+		forwardPrivate?: boolean;
 		onUpdate: (patch: { name?: string; mode?: 'server' | 'browser'; config?: Record<string, unknown> }) => void | Promise<void>;
 	} = $props();
 
@@ -63,7 +66,7 @@
 		}
 		try {
 			const parsed = new URL(url);
-			if (isServerMode && (parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1')) {
+			if (isServerMode && !forwardPrivate && (parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1')) {
 				urlError = 'localhost targets only work in browser mode — the server cannot reach your machine.';
 				return false;
 			}
@@ -192,7 +195,7 @@
 		</div>
 		<p class="text-[10px] text-[var(--text-muted)] mb-3">
 			{#if isServerMode}
-				Requests are forwarded <strong>server-side</strong> via Go HTTP. Runs on every inbound request, even when the browser is closed. Only public URLs work (no localhost).
+				Requests are forwarded <strong>server-side</strong> via Go HTTP. Runs on every inbound request, even when the browser is closed. {#if forwardPrivate}This server can also reach private addresses and its own <code class="text-[10px]">localhost</code>.{:else}Only public addresses work: localhost and private addresses (10.x, 192.168.x) are refused. Use browser mode to reach them.{/if}
 			{:else}
 				Requests are forwarded <strong>from this tab</strong> with <code class="text-[10px]">fetch()</code>, so <code class="text-[10px]">localhost</code>, Docker and anything else your machine can reach all work. Only while this tab is open. Your app must allow the cross-origin request (CORS); see <a class="underline" href="https://sarathsp06.github.io/testhooks/guides/localhost/" target="_blank" rel="noopener">Webhooks to localhost</a>.
 			{/if}

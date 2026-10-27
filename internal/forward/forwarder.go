@@ -3,6 +3,7 @@ package forward
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -38,6 +39,10 @@ type Result struct {
 	ResponseBody    []byte        `json:"-"`                      // populated only by ForwardOne (sync mode)
 	ResponseHeaders http.Header   `json:"-"`                      // populated only by ForwardOne (sync mode)
 	ContentType     string        `json:"content_type,omitempty"` // response Content-Type, sync mode only
+
+	// blocked is set when the target resolved to a refused address; retrying
+	// cannot change that.
+	blocked bool
 }
 
 // Forwarder sends captured webhook requests to configured target URLs.
@@ -61,6 +66,10 @@ type Config struct {
 	MaxDelay time.Duration
 	// DisableSSRFProtection disables the SSRF-safe dialer. For testing only.
 	DisableSSRFProtection bool
+	// AllowPrivateAddresses lets forwarding reach private, loopback and
+	// carrier-grade NAT addresses, for a server that runs on the same network
+	// as its targets. Link-local and cloud metadata addresses stay blocked.
+	AllowPrivateAddresses bool
 }
 
 // DefaultConfig returns sensible defaults.
@@ -75,14 +84,15 @@ func DefaultConfig() Config {
 
 // New creates a new Forwarder with SSRF protection.
 // The HTTP client uses a custom dialer that blocks connections to private,
-// loopback, link-local, and cloud metadata IP ranges after DNS resolution.
+// loopback, link-local, and cloud metadata IP ranges after DNS resolution,
+// unless cfg.AllowPrivateAddresses opens the private and loopback ones.
 func New(cfg Config, log zerolog.Logger) *Forwarder {
 	dialer := &net.Dialer{
 		Timeout:   10 * time.Second,
 		KeepAlive: 30 * time.Second,
 	}
 	if !cfg.DisableSSRFProtection {
-		dialer.Control = ssrfSafeControl
+		dialer.Control = ssrfSafeControl(cfg.AllowPrivateAddresses)
 	}
 
 	transport := &http.Transport{
@@ -169,7 +179,7 @@ func (f *Forwarder) forwardWithRetryCapture(ctx context.Context, req Request, ta
 		result := f.doForwardCapture(ctx, req, target)
 		result.Attempt = attempt + 1
 
-		if result.OK || !isRetryable(result.StatusCode, result.Error) {
+		if result.OK || result.blocked || !isRetryable(result.StatusCode, result.Error) {
 			return result
 		}
 
@@ -217,7 +227,7 @@ func (f *Forwarder) doForwardCapture(ctx context.Context, req Request, target st
 	resp, err := f.client.Do(httpReq)
 	result.Latency = time.Since(start)
 	if err != nil {
-		result.Error = err.Error()
+		result.Error, result.blocked = errorMessage(err)
 		f.log.Warn().Str("url", target).Err(err).Msg("sync forward failed")
 		return result
 	}
@@ -273,7 +283,7 @@ func (f *Forwarder) forwardWithRetry(ctx context.Context, req Request, target st
 		result := f.doForward(ctx, req, target)
 		result.Attempt = attempt + 1
 
-		if result.OK || !isRetryable(result.StatusCode, result.Error) {
+		if result.OK || result.blocked || !isRetryable(result.StatusCode, result.Error) {
 			return result
 		}
 
@@ -324,7 +334,7 @@ func (f *Forwarder) doForward(ctx context.Context, req Request, target string) R
 	resp, err := f.client.Do(httpReq)
 	result.Latency = time.Since(start)
 	if err != nil {
-		result.Error = err.Error()
+		result.Error, result.blocked = errorMessage(err)
 		f.log.Warn().Str("url", target).Err(err).Msg("forward failed")
 		return result
 	}
@@ -411,34 +421,65 @@ func validateTargetURL(target string) error {
 	return nil
 }
 
-// ssrfSafeControl is a net.Dialer Control function that blocks connections to
-// private, loopback, link-local, and cloud metadata IP ranges. It inspects the
-// resolved IP address AFTER DNS resolution but BEFORE the connection is established.
-func ssrfSafeControl(network, address string, c syscall.RawConn) error {
-	host, _, err := net.SplitHostPort(address)
-	if err != nil {
-		return fmt.Errorf("ssrf check: invalid address %q: %w", address, err)
-	}
-
-	ip := net.ParseIP(host)
-	if ip == nil {
-		return fmt.Errorf("ssrf check: could not parse IP %q", host)
-	}
-
-	if isBlockedIP(ip) {
-		return fmt.Errorf("ssrf blocked: connection to private/reserved IP %s is not allowed", ip)
-	}
-
-	return nil
+// BlockedAddressError reports a target that resolved to an address the
+// server refuses to connect to.
+type BlockedAddressError struct {
+	IP net.IP
+	// Private is true when ALLOW_PRIVATE_FORWARD_TARGETS would let it through.
+	Private bool
 }
 
-// isBlockedIP returns true if the IP is in a range that should not be reachable
-// from server-side forwarding (SSRF prevention).
-func isBlockedIP(ip net.IP) bool {
-	// Loopback (127.0.0.0/8, ::1)
-	if ip.IsLoopback() {
-		return true
+func (e *BlockedAddressError) Error() string {
+	if e.Private {
+		return fmt.Sprintf("The target URL points to the private address %s, which this server does not forward to. "+
+			"Switch the endpoint to browser mode to forward from your own machine, "+
+			"or set ALLOW_PRIVATE_FORWARD_TARGETS=true if you run this server on the same network.", e.IP)
 	}
+	return fmt.Sprintf("The target URL points to %s, a link-local or cloud metadata address, which the server never forwards to. "+
+		"Switch the endpoint to browser mode to forward from your own machine.", e.IP)
+}
+
+// errorMessage turns a forwarding error into the text shown on the request.
+// A blocked address gets its own message without Go's "Post ...: dial tcp"
+// prefix, and reports true so the forward is not retried.
+func errorMessage(err error) (string, bool) {
+	var blocked *BlockedAddressError
+	if errors.As(err, &blocked) {
+		return blocked.Error(), true
+	}
+	return err.Error(), false
+}
+
+// ssrfSafeControl returns a net.Dialer Control function that blocks
+// connections to private, loopback, link-local, and cloud metadata IP ranges.
+// It inspects the resolved IP address AFTER DNS resolution but BEFORE the
+// connection is established. allowPrivate lets private and loopback through.
+func ssrfSafeControl(allowPrivate bool) func(network, address string, c syscall.RawConn) error {
+	return func(network, address string, c syscall.RawConn) error {
+		host, _, err := net.SplitHostPort(address)
+		if err != nil {
+			return fmt.Errorf("ssrf check: invalid address %q: %w", address, err)
+		}
+
+		ip := net.ParseIP(host)
+		if ip == nil {
+			return fmt.Errorf("ssrf check: could not parse IP %q", host)
+		}
+
+		if isAlwaysBlockedIP(ip) {
+			return &BlockedAddressError{IP: ip}
+		}
+		if !allowPrivate && isPrivateIP(ip) {
+			return &BlockedAddressError{IP: ip, Private: true}
+		}
+
+		return nil
+	}
+}
+
+// isAlwaysBlockedIP returns true for addresses no forward should reach, even
+// with private addresses allowed: link-local, unspecified and cloud metadata.
+func isAlwaysBlockedIP(ip net.IP) bool {
 	// Link-local unicast (169.254.0.0/16, fe80::/10)
 	if ip.IsLinkLocalUnicast() {
 		return true
@@ -451,39 +492,50 @@ func isBlockedIP(ip net.IP) bool {
 	if ip.IsUnspecified() {
 		return true
 	}
-
-	// Private ranges (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, fc00::/7)
-	if ip.IsPrivate() {
-		return true
-	}
-
 	// Cloud metadata service IPs
-	for _, cidr := range blockedCIDRs {
+	for _, cidr := range metadataCIDRs {
 		if cidr.Contains(ip) {
 			return true
 		}
 	}
-
 	return false
 }
 
-// blockedCIDRs contains additional CIDR ranges to block beyond the standard
-// private/loopback/link-local checks. This covers cloud metadata services and
-// other reserved ranges.
-var blockedCIDRs []*net.IPNet
+// isPrivateIP returns true for loopback, private and carrier-grade NAT
+// addresses: blocked unless ALLOW_PRIVATE_FORWARD_TARGETS is set.
+func isPrivateIP(ip net.IP) bool {
+	// Loopback (127.0.0.0/8, ::1)
+	if ip.IsLoopback() {
+		return true
+	}
+	// Private ranges (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, fc00::/7)
+	if ip.IsPrivate() {
+		return true
+	}
+	return cgnatCIDR.Contains(ip)
+}
+
+// metadataCIDRs are cloud metadata services. Some sit inside private ranges,
+// so they stay blocked even when private addresses are allowed.
+var metadataCIDRs []*net.IPNet
+
+// cgnatCIDR is the carrier-grade NAT range (100.64.0.0/10).
+var cgnatCIDR = mustParseCIDR("100.64.0.0/10")
 
 func init() {
-	cidrs := []string{
+	for _, cidr := range []string{
 		"169.254.169.254/32", // AWS/GCP/Azure metadata
 		"100.100.100.200/32", // Alibaba Cloud metadata
 		"fd00:ec2::254/128",  // AWS IMDSv2 IPv6
-		"100.64.0.0/10",      // CGNAT (Carrier-Grade NAT) range
+	} {
+		metadataCIDRs = append(metadataCIDRs, mustParseCIDR(cidr))
 	}
-	for _, cidr := range cidrs {
-		_, ipNet, err := net.ParseCIDR(cidr)
-		if err != nil {
-			panic("invalid blocked CIDR: " + cidr)
-		}
-		blockedCIDRs = append(blockedCIDRs, ipNet)
+}
+
+func mustParseCIDR(cidr string) *net.IPNet {
+	_, ipNet, err := net.ParseCIDR(cidr)
+	if err != nil {
+		panic("invalid blocked CIDR: " + cidr)
 	}
+	return ipNet
 }

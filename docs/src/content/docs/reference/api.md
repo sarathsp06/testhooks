@@ -135,11 +135,12 @@ Returns `{"requests": [...], "total": 123, "limit": 50, "offset": 0}`, newest fi
   "max_requests_per_endpoint": 500,
   "max_endpoint_storage_bytes": 10485760,
   "max_body_size": 524288,
-  "upgrade_note": "A paid plan would keep 10,000 requests for 30 days."
+  "upgrade_note": "A paid plan would keep 10,000 requests for 30 days.",
+  "forward_private_addresses": false
 }
 ```
 
-The three numbers are the server's [`MAX_REQUESTS_PER_ENDPOINT`, `MAX_ENDPOINT_STORAGE_BYTES` and `MAX_BODY_SIZE`](../configuration/#storage). The UI shows them next to the stored request count. `upgrade_note` appears only when [`UPGRADE_NOTE`](../configuration/#storage) is set.
+The three numbers are the server's [`MAX_REQUESTS_PER_ENDPOINT`, `MAX_ENDPOINT_STORAGE_BYTES` and `MAX_BODY_SIZE`](../configuration/#storage). The UI shows them next to the stored request count. `upgrade_note` appears only when [`UPGRADE_NOTE`](../configuration/#storage) is set. `forward_private_addresses` is `true` when [`ALLOW_PRIVATE_FORWARD_TARGETS`](../configuration/#security) lets server-side forwarding reach private and loopback addresses.
 
 ### Say you would pay for more
 
