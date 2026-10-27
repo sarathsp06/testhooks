@@ -112,6 +112,12 @@ type Config struct {
 	// value or "none" strips nothing. Unset means "default".
 	StripHeaders string `env:"STRIP_HEADERS"`
 
+	// Lets server-side forwarding reach private, loopback and carrier-grade NAT
+	// addresses (10.x, 192.168.x, localhost, ...). Off by default so a public
+	// server cannot be used to reach the network it runs in. Link-local and
+	// cloud metadata addresses stay blocked either way.
+	AllowPrivateForwardTargets bool `env:"ALLOW_PRIVATE_FORWARD_TARGETS" envDefault:"false"`
+
 	// Comma-separated key encryption keys (KEKs) for secrets stored at rest,
 	// such as signature secrets, each "<key-id>=<64-char-hex-key>". Generate
 	// one with: openssl rand -hex 32. To rotate, add a new key and make it

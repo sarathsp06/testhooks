@@ -135,7 +135,12 @@ func main() {
 	defer h.Stop()
 
 	// Server-side forwarder for webhook fan-out.
-	fwd := forward.New(forward.DefaultConfig(), log)
+	fwdCfg := forward.DefaultConfig()
+	fwdCfg.AllowPrivateAddresses = cfg.AllowPrivateForwardTargets
+	if fwdCfg.AllowPrivateAddresses {
+		log.Warn().Msg("server-side forwarding can reach private and loopback addresses (ALLOW_PRIVATE_FORWARD_TARGETS=true)")
+	}
+	fwd := forward.New(fwdCfg, log)
 
 	// Server-side WASM runner for JS transforms.
 	wasmRunner, err := wasm.New(ctx, wasm.DefaultConfig(), log)
@@ -162,6 +167,7 @@ func main() {
 		MaxEndpointStorageBytes: cfg.MaxEndpointStorageBytes,
 		MaxBodySize:             cfg.MaxBodySize,
 		UpgradeNote:             cfg.UpgradeNote,
+		ForwardPrivateAddresses: cfg.AllowPrivateForwardTargets,
 	})
 	ws := handler.NewWS(store, h, log, allowedOrigins)
 

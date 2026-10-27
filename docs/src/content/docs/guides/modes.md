@@ -36,6 +36,10 @@ Nothing is written to disk. The server keeps a short in-memory buffer per endpoi
 
 Turn on **Persist requests** in Settings to keep a server-side copy as well. Processing still happens in the browser.
 
+New requests appear in an open tab as they arrive, without a reload, in both modes. Stored requests (server mode, or browser mode with **Persist requests**) are also checked every 5 seconds while the tab is visible, so a request the live connection missed, for example while it was reconnecting, still shows up.
+
+Switching modes keeps the requests already stored. Requests captured in server mode stay listed after you switch to browser mode, next to the new ones from your tab.
+
 ### Replies decided in the tab
 
 Two settings make the tab, not the server, decide what the sender gets. Either way the server holds the sender's request open, asks the tab, and relays its answer. If no tab answers within 10 seconds, the sender gets the default `202`.
