@@ -10,6 +10,7 @@ import (
 	"github.com/sarathsp06/testhooks/internal/config"
 	"github.com/sarathsp06/testhooks/internal/crypto"
 	"github.com/sarathsp06/testhooks/internal/db"
+	"github.com/sarathsp06/testhooks/internal/slug"
 )
 
 // API handles REST endpoints for managing endpoints and viewing requests.
@@ -65,9 +66,10 @@ func (a *API) writeEndpoint(w http.ResponseWriter, status int, ep *db.Endpoint) 
 // CreateEndpoint handles POST /api/endpoints.
 func (a *API) CreateEndpoint(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		Name   string          `json:"name"`
-		Mode   string          `json:"mode"`
-		Config json.RawMessage `json:"config,omitempty"`
+		Name     string          `json:"name"`
+		SlugName string          `json:"slug_name"`
+		Mode     string          `json:"mode"`
+		Config   json.RawMessage `json:"config,omitempty"`
 	}
 	// MED-002: Limit API request body size to prevent OOM from oversized payloads.
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1 MB
@@ -88,6 +90,11 @@ func (a *API) CreateEndpoint(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "name must be at most 255 characters"})
 		return
 	}
+	slugName, err := slug.CleanName(body.SlugName)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
 
 	// Normalise nil/empty config to NULL.
 	var cfg json.RawMessage
@@ -102,14 +109,46 @@ func (a *API) CreateEndpoint(w http.ResponseWriter, r *http.Request) {
 	// Extract client identity for UX convenience (not access control).
 	clientID := r.Header.Get("X-Client-ID")
 
-	slug := GenerateSlug()
-	ep, err := a.db.CreateEndpoint(r.Context(), slug, body.Name, body.Mode, clientID, cfg)
+	ep, err := withNewSlug(slugName, func(s string) (*db.Endpoint, error) {
+		return a.db.CreateEndpoint(r.Context(), s, body.Name, body.Mode, clientID, cfg)
+	})
 	if err != nil {
-		a.log.Error().Err(err).Msg("failed to create endpoint")
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+		a.writeSlugError(w, err, "failed to create endpoint")
 		return
 	}
 	a.writeEndpoint(w, http.StatusCreated, ep)
+}
+
+// slugAttempts is how many fresh slugs withNewSlug tries. With 2.2 billion
+// word combinations per name, needing a second try is already rare.
+const slugAttempts = 5
+
+// withNewSlug calls save with a new slug for name (already cleaned), and again
+// with another one while save reports db.ErrSlugTaken.
+func withNewSlug(name string, save func(slug string) (*db.Endpoint, error)) (*db.Endpoint, error) {
+	var err error
+	for range slugAttempts {
+		var s string
+		if s, err = slug.New(name); err != nil {
+			return nil, err
+		}
+		var ep *db.Endpoint
+		if ep, err = save(s); !errors.Is(err, db.ErrSlugTaken) {
+			return ep, err
+		}
+	}
+	return nil, err
+}
+
+// writeSlugError responds to a failed create or rename: 409 when every slug
+// tried was taken, 500 otherwise.
+func (a *API) writeSlugError(w http.ResponseWriter, err error, msg string) {
+	if errors.Is(err, db.ErrSlugTaken) {
+		writeJSON(w, http.StatusConflict, map[string]string{"error": "Couldn't find a free URL for that name. Try again or pick another name."})
+		return
+	}
+	a.log.Error().Err(err).Msg(msg)
+	writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
 }
 
 // ListEndpoints handles GET /api/endpoints.
@@ -181,9 +220,10 @@ func (a *API) UpdateEndpoint(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var body struct {
-		Name   *string          `json:"name"`
-		Mode   *string          `json:"mode"`
-		Config *json.RawMessage `json:"config"`
+		Name     *string          `json:"name"`
+		SlugName *string          `json:"slug_name"`
+		Mode     *string          `json:"mode"`
+		Config   *json.RawMessage `json:"config"`
 	}
 	// MED-002: Limit API request body size to prevent OOM from oversized payloads.
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1 MB
@@ -217,6 +257,26 @@ func (a *API) UpdateEndpoint(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		config = sealed
+	}
+
+	// Renaming gives the endpoint a new slug: the name, if any, and three
+	// new words. The old URL stops working at once.
+	if body.SlugName != nil {
+		slugName, err := slug.CleanName(*body.SlugName)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+			return
+		}
+		oldSlug := existing.Slug
+		if _, err := withNewSlug(slugName, func(s string) (*db.Endpoint, error) {
+			return a.db.RenameEndpoint(r.Context(), id, s)
+		}); err != nil {
+			a.writeSlugError(w, err, "failed to rename endpoint")
+			return
+		}
+		if a.hub != nil {
+			a.hub.RemoveBuffer(oldSlug)
+		}
 	}
 
 	ep, err := a.db.UpdateEndpoint(r.Context(), id, name, mode, config)

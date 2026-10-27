@@ -6,7 +6,7 @@ description: The live event stream the UI subscribes to.
 Connect to `/ws/{slug}` to receive an endpoint's events as they happen. The UI uses this for its live view; you can use it to build your own tooling.
 
 ```js
-const ws = new WebSocket('wss://hooks.example.com/ws/1a8832ef');
+const ws = new WebSocket('wss://hooks.example.com/ws/acid-fable-gully');
 ws.onmessage = (e) => {
   const { type, data } = JSON.parse(e.data);
   if (type === 'request') console.log(data.method, data.path, data.body);

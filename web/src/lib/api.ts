@@ -103,6 +103,8 @@ export async function checkAuth(): Promise<void> {
 export function createEndpoint(
 	opts: {
 		name?: string;
+		/** Start of the URL, e.g. "stripe" for /h/stripe-acid-fable-gully. */
+		slug_name?: string;
 		mode?: 'server' | 'browser';
 		config?: Record<string, unknown>;
 	} = {}
@@ -111,6 +113,7 @@ export function createEndpoint(
 		method: 'POST',
 		body: JSON.stringify({
 			name: opts.name ?? '',
+			slug_name: opts.slug_name ?? '',
 			mode: opts.mode ?? 'server',
 			config: opts.config
 		})
@@ -138,6 +141,8 @@ export function updateEndpoint(
 	id: string,
 	patch: {
 		name?: string;
+		/** Give the endpoint a new URL: this name (or none) and three new words. */
+		slug_name?: string;
 		mode?: 'server' | 'browser';
 		config?: Record<string, unknown>;
 	}

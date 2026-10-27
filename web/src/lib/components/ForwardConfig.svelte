@@ -2,16 +2,21 @@
 	import type { Endpoint } from '$lib/types';
 	import { Server, Monitor, Globe, Reply, Info, AlertCircle, Check, Save, ShieldCheck } from 'lucide-svelte';
 	import Tooltip from './Tooltip.svelte';
+	import { getWebhookURL, slugNameError, SLUG_NAME_MAX } from '$lib/utils';
 
 	let {
 		endpoint,
 		onUpdate
 	}: {
 		endpoint: Endpoint;
-		onUpdate: (patch: { name?: string; mode?: 'server' | 'browser'; config?: Record<string, unknown> }) => void | Promise<void>;
+		onUpdate: (patch: { name?: string; slug_name?: string; mode?: 'server' | 'browser'; config?: Record<string, unknown> }) => void | Promise<void>;
 	} = $props();
 
 	let editName = $state('');
+	let newSlugName = $state('');
+	let renaming = $state(false);
+	let renameError = $state('');
+	const newSlugNameError = $derived(slugNameError(newSlugName));
 	let urlError = $state('');
 	let saved = $state(false);
 	let saveError = $state('');
@@ -78,6 +83,21 @@
 	function handleNameBlur() {
 		if (editName !== endpoint.name) {
 			Promise.resolve(onUpdate({ name: editName })).catch((e) => (saveError = e.message));
+		}
+	}
+
+	async function changeURL() {
+		if (newSlugNameError || renaming) return;
+		if (!confirm('Senders using the old URL will get 404 until you update them. Change the URL?')) return;
+		renaming = true;
+		renameError = '';
+		try {
+			await onUpdate({ slug_name: newSlugName.trim().toLowerCase() });
+			newSlugName = '';
+		} catch (e) {
+			renameError = e instanceof Error ? e.message : 'Failed to change the URL';
+		} finally {
+			renaming = false;
 		}
 	}
 
@@ -172,6 +192,45 @@
 				<p><strong class="text-[var(--text)]">Server mode</strong> — Requests are stored on the server. Transforms and forwarding run on the server (always-on, headless). The browser is a viewer.</p>
 			{:else}
 				<p><strong class="text-[var(--text)]">Browser mode</strong> — Requests are relayed via WebSocket and never stored on the server. Transforms and forwarding run in your browser. Supports localhost targets. Data is lost if the tab is closed.</p>
+			{/if}
+		</div>
+
+		<!-- Webhook URL -->
+		<div class="mt-4">
+			<label for="slug-name" class="text-xs text-[var(--text-muted)] mb-1 flex items-center">
+				Webhook URL
+				<Tooltip text="Changing it gives this endpoint a new URL: the start you type (or none) and three new random words. Captured requests and settings stay." />
+			</label>
+			<p class="text-xs font-mono text-[var(--text)] mb-2 break-all">{getWebhookURL(endpoint.slug)}</p>
+			<div class="flex items-center gap-2 flex-wrap">
+				<input
+					id="slug-name"
+					bind:value={newSlugName}
+					placeholder="Start the new URL with (optional)"
+					maxlength={SLUG_NAME_MAX + 10}
+					autocapitalize="off"
+					autocomplete="off"
+					spellcheck="false"
+					aria-invalid={!!newSlugNameError}
+					class="flex-1 min-w-[200px] bg-[var(--bg)] border rounded px-3 py-1.5 text-sm font-mono text-[var(--text)] placeholder:font-sans placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent)] {newSlugNameError ? 'border-[var(--red)]/60' : 'border-[var(--border)]'}"
+				/>
+				<button
+					onclick={changeURL}
+					disabled={!!newSlugNameError || renaming}
+					class="text-xs px-3 py-1.5 rounded border border-[var(--border)] text-[var(--text)] hover:border-[var(--accent)] transition-colors disabled:opacity-50 flex-shrink-0"
+				>
+					{renaming ? 'Changing…' : 'Change URL'}
+				</button>
+			</div>
+			{#if newSlugNameError}
+				<p class="mt-1 text-[10px] text-[var(--red)]">{newSlugNameError}</p>
+			{:else}
+				<p class="mt-1 text-[10px] text-[var(--text-muted)]">
+					New URL: <span class="font-mono">/h/{newSlugName.trim() ? newSlugName.trim().toLowerCase() + '-' : ''}three-random-words</span>. Senders using the old URL will get 404 until you update them.
+				</p>
+			{/if}
+			{#if renameError}
+				<p class="mt-1 text-[10px] text-[var(--red)] flex items-center gap-1"><AlertCircle class="w-3 h-3" />{renameError}</p>
 			{/if}
 		</div>
 	</section>

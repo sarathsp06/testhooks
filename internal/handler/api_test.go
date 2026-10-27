@@ -488,18 +488,6 @@ func TestWriteJSON(t *testing.T) {
 	}
 }
 
-func TestGenerateSlug(t *testing.T) {
-	slug1 := GenerateSlug()
-	slug2 := GenerateSlug()
-
-	if len(slug1) != 8 {
-		t.Errorf("slug length = %d, want 8", len(slug1))
-	}
-	if slug1 == slug2 {
-		t.Error("two slugs should not be equal")
-	}
-}
-
 // Regression: the mock's ListRequests dereferenced deleted requests and panicked.
 func TestMockStore_ListAfterDelete(t *testing.T) {
 	store := newMockStore()

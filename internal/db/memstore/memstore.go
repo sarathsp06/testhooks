@@ -92,7 +92,7 @@ func (s *Store) CreateEndpoint(_ context.Context, slug, name, mode, clientID str
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if _, taken := s.slugs[slug]; taken {
-		return nil, fmt.Errorf("slug %q already exists", slug)
+		return nil, db.ErrSlugTaken
 	}
 	if config == nil {
 		config = json.RawMessage(`{}`)
@@ -152,6 +152,24 @@ func (s *Store) UpdateEndpoint(_ context.Context, id, name, mode string, config 
 		config = json.RawMessage(`{}`)
 	}
 	ep.Name, ep.Mode, ep.Config = name, mode, config
+	s.dirty.Store(true)
+	return copyEndpoint(ep), nil
+}
+
+// RenameEndpoint gives an endpoint a new slug.
+func (s *Store) RenameEndpoint(_ context.Context, id, slug string) (*db.Endpoint, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	ep, ok := s.endpoints[id]
+	if !ok {
+		return nil, db.ErrNotFound
+	}
+	if _, taken := s.slugs[slug]; taken {
+		return nil, db.ErrSlugTaken
+	}
+	delete(s.slugs, ep.Slug)
+	ep.Slug = slug
+	s.slugs[slug] = id
 	s.dirty.Store(true)
 	return copyEndpoint(ep), nil
 }

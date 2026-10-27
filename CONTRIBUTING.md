@@ -49,6 +49,9 @@ internal/
     ws.go                        WebSocket upgrade + read/write pumps
   hub/
     hub.go                       In-memory pub/sub with ring buffer
+  slug/
+    slug.go                      Endpoint slugs: [name-]word-word-word
+    eff_short_wordlist_1.txt     EFF short word list #1 (CC BY 3.0, see NOTICE)
   cleanup/
     pruner.go                    Background goroutine for TTL/count pruning
 

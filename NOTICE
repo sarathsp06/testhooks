@@ -1,0 +1,14 @@
+Testhooks
+Copyright 2024 Sarath Sadasivan Pillai. Licensed under the Apache License 2.0 (see LICENSE).
+
+This product includes third-party material:
+
+EFF Short Wordlist #1
+  internal/slug/eff_short_wordlist_1.txt
+  Copyright Electronic Frontier Foundation
+  https://www.eff.org/dice
+  https://www.eff.org/files/2016/09/08/eff_short_wordlist_1.txt
+  Licensed under the Creative Commons Attribution 3.0 United States license
+  (CC BY 3.0 US), https://creativecommons.org/licenses/by/3.0/us/
+  Used unmodified as the word source for endpoint URLs; the word "yo-yo" is
+  skipped when loading because the list also contains "yoyo".

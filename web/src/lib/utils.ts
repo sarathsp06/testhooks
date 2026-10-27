@@ -76,3 +76,17 @@ export async function copyToClipboard(text: string): Promise<boolean> {
 		return false;
 	}
 }
+
+/** The longest name allowed at the start of an endpoint URL. */
+export const SLUG_NAME_MAX = 20;
+
+/**
+ * Check a name for the start of an endpoint URL the way the server does.
+ * Returns the server's message when it would be rejected, or null when it's fine
+ * (an empty name is fine: the URL is just three words).
+ */
+export function slugNameError(name: string): string | null {
+	const n = name.trim().toLowerCase();
+	if (n === '' || (n.length <= SLUG_NAME_MAX && /^[a-z0-9]+(-[a-z0-9]+)*$/.test(n))) return null;
+	return 'Use up to 20 lowercase letters, numbers and single dashes, with no dash at the start or end.';
+}
