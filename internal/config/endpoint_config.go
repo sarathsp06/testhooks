@@ -59,6 +59,11 @@ type SignatureConfig struct {
 	// Enforce rejects requests that fail verification with 401, as a real
 	// receiver should. Senders like Sparrow treat 401 as permanent (no retry).
 	Enforce bool `json:"enforce,omitempty"`
+	// Resign signs forwarded requests again with the HMAC secret, after the
+	// transform, so a target that checks the sender's signature accepts the
+	// changed body. Only requests whose incoming signature verified are
+	// re-signed; the rest are forwarded with their original headers. Needs Secret.
+	Resign bool `json:"resign,omitempty"`
 }
 
 // CustomResponseConfig allows users to define a programmable response handler.

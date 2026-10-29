@@ -118,7 +118,8 @@ Returns `{"requests": [...], "total": 123, "limit": 50, "offset": 0}`, newest fi
     "latency_ms": 84,
     "response_body": "{\"received\":true}",
     "response_headers": { "Content-Type": "application/json" },
-    "content_type": "application/json"
+    "content_type": "application/json",
+    "resigned": true
   },
   "response_info": {
     "request_id": "299e2e41-2c91-4baf-bc2d-9e38034667fe",
@@ -132,7 +133,40 @@ Returns `{"requests": [...], "total": 123, "limit": 50, "offset": 0}`, newest fi
 
 - `body` is plain text when it looks like text (`body_encoding: "text"`), otherwise base64 (`body_encoding: "base64"`).
 - `signature` appears only when [signature verification](../../guides/signatures/) is configured.
-- `forward_result` is the forward target's reply and `response_info` the response sent back to the caller, in the same shape as the [`forward_result` and `response_info` WebSocket messages](../websocket/). They're stored for server-mode requests (and browser-mode ones with `persist_requests`). An async forward fills in `forward_result` when it finishes, so it can be missing just after capture. Bodies longer than [`MAX_STORED_RESPONSE_SIZE`](../configuration/) are cut, with `response_body_truncated` or `body_truncated` set.
+- `forward_result` is the forward target's reply and `response_info` the response sent back to the caller, in the same shape as the [`forward_result` and `response_info` WebSocket messages](../websocket/). They're stored for server-mode requests (and browser-mode ones with `persist_requests`). An async forward fills in `forward_result` when it finishes, so it can be missing just after capture. Bodies longer than [`MAX_STORED_RESPONSE_SIZE`](../configuration/) are cut, with `response_body_truncated` or `body_truncated` set. With `signature.resign` on, `forward_result.resigned` is `true` when the forward carried a fresh signature, and `resign_error` says why it didn't.
+
+### Re-sign a forwarded body
+
+`POST /api/endpoints/{id}/resign`
+
+Returns fresh [Standard Webhooks headers](../../guides/signatures/#re-sign-after-a-transform) for a body you are about to forward, signed with the endpoint's stored secret. Browser mode uses it, since the tab forwards but never sees the secret. The endpoint must have `signature.resign` on.
+
+```bash
+curl -X POST http://localhost:8080/api/endpoints/<id>/resign \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "request": {
+      "id": "299e2e41-2c91-4baf-bc2d-9e38034667fe",
+      "headers": {"webhook-id": ["msg_123"], "webhook-timestamp": ["1790000000"], "webhook-signature": ["v1,..."]},
+      "body": "{\"hello\":\"world\"}",
+      "body_encoding": "text"
+    },
+    "body": "{\"hello\":\"world\",\"transformed\":true}"
+  }'
+```
+
+| Field | |
+|---|---|
+| `request` | The request as captured: `headers`, `body` and `body_encoding` as the API returns them. `id` names the `webhook-id` (`msg_<id>`) when the headers have none |
+| `body` | The body to sign, as it will be sent |
+
+`request` must carry a `v1` signature made with the endpoint's secret, with a timestamp within 5 minutes of now, so this can't sign a body nobody signed. Returns:
+
+```json
+{ "headers": { "webhook-id": "msg_123", "webhook-timestamp": "1790000123", "webhook-signature": "v1,..." } }
+```
+
+Replace the request's three `webhook-*` headers with these. `422` with an `error` when `request` doesn't verify; `400` when re-signing is off.
 
 ### Delete requests
 
@@ -186,6 +220,7 @@ This is the "I'd pay for that" button. `endpoint_id` is optional and records whe
 | `signature.secret_set` | bool | Returned instead of the secret when one is stored. Ignored on input |
 | `signature.public_key` | string | Hex Ed25519 public key |
 | `signature.enforce` | bool | Reject invalid signatures with `401` |
+| `signature.resign` | bool | [Sign forwarded requests again](../../guides/signatures/#re-sign-after-a-transform) with the secret, after the transform. Only requests the secret signed are re-signed. Needs `signature.secret`; saving it without one is `400` |
 
 ## Capture
 

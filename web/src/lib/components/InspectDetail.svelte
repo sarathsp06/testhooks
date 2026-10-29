@@ -263,7 +263,7 @@
 			{@render step('3 · forward', 'Sending…', hostOf(cfg.forward_url))}
 		{:else if forwardResult}
 			{#if forwardResult.ok}
-				{@render step('3 · forward', statusLine(forwardResult.status_code), `${hostOf(forwardResult.url)} · ${forwardResult.latency_ms} ms`)}
+				{@render step('3 · forward', statusLine(forwardResult.status_code), `${hostOf(forwardResult.url)} · ${forwardResult.latency_ms} ms${forwardResult.resigned ? ' · re-signed' : forwardResult.resign_error ? ' · not re-signed' : ''}`)}
 			{:else}
 				{@render step('3 · forward', forwardResult.status_code > 0 ? statusLine(forwardResult.status_code) : 'Failed', forwardResult.error || hostOf(forwardResult.url), 'bad')}
 			{/if}
@@ -330,6 +330,13 @@
 					<span class={forwardedReq.method === 'GET' ? 'text-[var(--method-get)]' : 'text-accent'}>{forwardedReq.method}</span>
 					{cfg.forward_url.replace(/\/$/, '')}{forwardedReq.path}
 				</div>
+				{#if forwardResult?.resigned}
+					<p class="m-0 px-5 pt-2 text-[13px] text-body">Re-signed: sent with a fresh <code class="font-mono">webhook-timestamp</code> and <code class="font-mono">webhook-signature</code> over this body, in place of the ones below.</p>
+				{:else if forwardResult?.resign_error}
+					<p class="m-0 px-5 pt-2 text-[13px] text-danger">{forwardResult.resign_error[0].toUpperCase() + forwardResult.resign_error.slice(1)}. Sent with the headers below.</p>
+				{:else if cfg.signature?.resign}
+					<p class="m-0 px-5 pt-2 text-[13px] text-body">When forwarded, a request signed with the webhook secret gets a fresh <code class="font-mono">webhook-timestamp</code> and <code class="font-mono">webhook-signature</code> over this body.</p>
+				{/if}
 				{@render kv(Object.entries(forwardedReq.headers ?? {}).map(([k, v]) => [k, (v ?? []).join(', ')]), 'No headers.')}
 				<div class="border-t border-line">
 					{@render bodyView(pretty(forwardedReq.body ?? ''), parseJSON(forwardedReq.body ?? '') !== undefined)}

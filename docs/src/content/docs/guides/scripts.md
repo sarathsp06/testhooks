@@ -61,6 +61,7 @@ function transform(req) {
 - Changes to `req.json` are written back to the body. If you don't touch `req.json`, the body is forwarded byte for byte.
 - You can also set `req.body` yourself, or return a new object. Fields you leave out keep their original values.
 - Setting `req.json` on a request that wasn't JSON sets the content type to `application/json`, unless you set one.
+- Changing the body breaks a signed sender's signature. To keep your app's signature check passing, turn on [re-signing](../signatures/#re-sign-after-a-transform): the forwarded request is signed again with the same secret after the transform.
 
 ### Skipping a request
 
