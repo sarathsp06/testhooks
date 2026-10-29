@@ -27,7 +27,7 @@ Every message is `{"type": "...", "data": {...}}`.
 
 | `type` | Sent when | `data` |
 |---|---|---|
-| `request` | A request is captured | The captured request, in the same shape as the [REST API](../api/#get-a-request) |
+| `request` | A request is captured | The captured request, in the same shape as the [REST API](../api/#get-a-request), without the headers the hosting platform added ([`HIDE_HEADERS`](../configuration/)) |
 | `response_info` | The response to the sender is decided | `request_id`, `status`, `headers`, `body`, `content_type`, `source` |
 | `forward_result` | A server-side forward finishes | `request_id`, `url`, `status_code`, `ok`, `latency_ms`, `error`, `response_body`, `response_headers`, `content_type` |
 | `response_needed` | A browser-mode endpoint with a response handler, or with sync forwarding, needs the tab to decide the response | `request_id`, `request` |

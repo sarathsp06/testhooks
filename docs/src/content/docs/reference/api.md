@@ -132,7 +132,8 @@ Returns `{"requests": [...], "total": 123, "limit": 50, "offset": 0}`, newest fi
 
 - `body` is plain text when it looks like text (`body_encoding: "text"`), otherwise base64 (`body_encoding: "base64"`).
 - `signature` appears only when [signature verification](../../guides/signatures/) is configured.
-- `forward_result` is the forward target's reply and `response_info` the response sent back to the caller, in the same shape as the [`forward_result` and `response_info` WebSocket messages](../websocket/). They're stored for server-mode requests (and browser-mode ones with `persist_requests`). An async forward fills in `forward_result` when it finishes, so it can be missing just after capture. Bodies longer than [`MAX_STORED_RESPONSE_SIZE`](../configuration/) are cut, with `response_body_truncated` or `body_truncated` set.
+- `headers` leaves out headers the hosting platform added ([`HIDE_HEADERS`](../configuration/)); `hidden_headers` counts them. Add `?include_hidden=true` to `GET /api/requests/{reqId}` or `GET /api/endpoints/{id}/requests` to get them too.
+- `forward_result` is the forward target's reply and `response_info` the response sent back to the caller, in the same shape as the [`forward_result` and `response_info` WebSocket messages](../websocket/). They're stored for server-mode requests (and browser-mode ones with `persist_requests`). An async forward fills in `forward_result` when it finishes, so it can be missing just after capture. While it runs, `forward_result` holds only `url` and `in_progress: true`; if that is still there a minute after `created_at`, the server stopped before the forward finished. Bodies longer than [`MAX_STORED_RESPONSE_SIZE`](../configuration/) are cut, with `response_body_truncated` or `body_truncated` set.
 
 ### Delete requests
 

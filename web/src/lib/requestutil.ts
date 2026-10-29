@@ -112,6 +112,15 @@ export function hostOf(url: string): string {
 	}
 }
 
+/**
+ * Whether a server-side forward for a request captured at createdAt can still
+ * be running. A forward gives up after 30 seconds; past a minute with no
+ * result, or with only the "started" marker, it never finished.
+ */
+export function forwardMayBeRunning(createdAt: string): boolean {
+	return Date.now() - new Date(createdAt).getTime() < 60_000;
+}
+
 /** URL without the scheme, as shown in the pipeline. */
 export function shortURL(url: string): string {
 	return url.replace(/^https?:\/\//, '').replace(/\/$/, '');

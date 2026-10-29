@@ -16,7 +16,7 @@
 	import ForwardConfig from '$lib/components/ForwardConfig.svelte';
 	import type { CapturedRequest, CapturedResponse, Endpoint, Limits, ResponseNeededData, ResponseInfoData, ForwardResponse, ForwardResultData } from '$lib/types';
 	import { Copy, Check, Download, Trash2 } from 'lucide-svelte';
-	import { ago, bodyText, eventLabel, shortURL } from '$lib/requestutil';
+	import { ago, bodyText, eventLabel, forwardMayBeRunning, shortURL } from '$lib/requestutil';
 	import { formatBytes } from '$lib/utils';
 	// Endpoint pages are one person's captured traffic: keep them out of search engines.
 
@@ -708,7 +708,10 @@
 											<span>{eventLabel(r)}</span>
 											<span aria-hidden="true">·</span>
 											<span>{formatBytes(r.size)}</span>
-											{#if fr && fr.error !== '__pending__'}
+											{#if fr?.in_progress}
+												<span aria-hidden="true">·</span>
+												{#if forwardMayBeRunning(r.created_at)}<span>forwarding…</span>{:else}<span class="text-danger">forward never finished</span>{/if}
+											{:else if fr && fr.error !== '__pending__'}
 												<span aria-hidden="true">·</span>
 												{#if fr.ok}<span class="text-accent">forwarded {fr.status_code}</span>{:else}<span class="text-danger">forward failed{fr.status_code > 0 ? ` ${fr.status_code}` : ''}</span>{/if}
 											{/if}

@@ -79,6 +79,10 @@ type CapturedRequest struct {
 	// Signature is the Standard Webhooks verification result. Not stored:
 	// computed from the endpoint's config when the request is served.
 	Signature *signature.Result `json:"signature,omitempty"`
+
+	// HiddenHeaders counts headers left out of Headers because the hosting
+	// platform added them (HIDE_HEADERS). Not stored: set when served.
+	HiddenHeaders int `json:"hidden_headers,omitempty"`
 }
 
 // isTextBody heuristically determines whether the body is displayable text.

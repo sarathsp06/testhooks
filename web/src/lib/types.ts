@@ -66,6 +66,8 @@ export interface CapturedRequest {
 	forward_result?: ForwardResultData;
 	/** The response sent back to the caller, recorded by the server (server mode). */
 	response_info?: ResponseInfoData;
+	/** How many headers the hosting platform added are left out of `headers` (HIDE_HEADERS). */
+	hidden_headers?: number;
 }
 
 /** Storage limits (GET /api/limits), the optional note about a paid plan, and whether server-side forwarding may reach private addresses. */
@@ -103,6 +105,8 @@ export interface ForwardResultData {
 	content_type?: string;
 	/** Set on a stored result whose response_body was cut to MAX_STORED_RESPONSE_SIZE. */
 	response_body_truncated?: boolean;
+	/** The forward has started and not finished. Still set long after the request: it never finished. */
+	in_progress?: boolean;
 }
 
 /** Data payload for a response_info message (server tells browser what response was sent). */

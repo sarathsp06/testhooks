@@ -1,8 +1,11 @@
 package handler
 
 import (
+	"encoding/json"
 	"net/http"
 	"strings"
+
+	"github.com/sarathsp06/testhooks/internal/db"
 )
 
 // headerMatcher matches header names exactly or, for patterns ending in "*",
@@ -47,4 +50,30 @@ func (m headerMatcher) strip(h http.Header) {
 			delete(h, name)
 		}
 	}
+}
+
+// empty reports whether m matches nothing.
+func (m headerMatcher) empty() bool {
+	return len(m.exact) == 0 && len(m.prefixes) == 0
+}
+
+// shown returns req as the UI and API show it: a copy without the matching
+// headers, and HiddenHeaders counting them. req itself is not changed.
+func (m headerMatcher) shown(req *db.CapturedRequest) *db.CapturedRequest {
+	if m.empty() || len(req.Headers) == 0 {
+		return req
+	}
+	var h http.Header
+	if err := json.Unmarshal(req.Headers, &h); err != nil {
+		return req
+	}
+	n := len(h)
+	m.strip(h)
+	if len(h) == n {
+		return req
+	}
+	out := *req
+	out.Headers, _ = json.Marshal(h)
+	out.HiddenHeaders = n - len(h)
+	return &out
 }

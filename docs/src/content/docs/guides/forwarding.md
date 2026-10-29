@@ -14,6 +14,12 @@ Set a **Target URL** under **Forwarding** in an endpoint's **Settings** tab and 
 
 **Async** (the default) is fire and forget. The sender gets its response immediately and the forward happens in the background.
 
+If the server stops while a background forward is running, the request shows **Never finished**: the forward started, but the target's answer never came back. The target may or may not have received it.
+
+### On function hosts
+
+Vercel, AWS Lambda, Azure Functions, Google Cloud Functions and Cloud Run may pause the server as soon as it has replied, which would cut a background forward short. Testhooks detects these hosts and finishes async forwards before replying instead. The sender still gets the default response, not the target's; it just arrives once the forward is done. Set [`SERVERLESS`](../../reference/configuration/#server) to `true` for a host it doesn't detect, or `false` to turn this off.
+
 **Sync** waits for the target to respond, then:
 
 - with no response handler, sends the target's status, headers and body back to the original sender, so Testhooks behaves like a transparent proxy;

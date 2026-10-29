@@ -336,3 +336,52 @@ func TestLoad_MaxStoredResponseSize(t *testing.T) {
 		}
 	}
 }
+
+func TestLoad_FunctionHost(t *testing.T) {
+	for _, h := range functionHosts {
+		t.Setenv(h.env, "")
+	}
+	os.Unsetenv("HIDE_HEADERS")
+	os.Unsetenv("SERVERLESS")
+
+	// Off a function host: nothing hidden, async forwards run in the background.
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.IsServerless() || cfg.FunctionHost() != "" || len(cfg.ParsedHideHeaders()) != 0 {
+		t.Errorf("no host: serverless=%v host=%q hide=%v", cfg.IsServerless(), cfg.FunctionHost(), cfg.ParsedHideHeaders())
+	}
+	t.Setenv("SERVERLESS", "true")
+	if cfg, _ = Load(); !cfg.IsServerless() {
+		t.Error("SERVERLESS=true not serverless")
+	}
+	t.Setenv("SERVERLESS", "maybe")
+	if _, err := Load(); err == nil {
+		t.Error("SERVERLESS=maybe accepted")
+	}
+	os.Unsetenv("SERVERLESS")
+
+	// AWS Lambda is detected and hides its own headers.
+	t.Setenv("AWS_LAMBDA_FUNCTION_NAME", "hooks")
+	cfg, _ = Load()
+	if !cfg.IsServerless() || cfg.FunctionHost() != "AWS Lambda" {
+		t.Errorf("lambda: serverless=%v host=%q", cfg.IsServerless(), cfg.FunctionHost())
+	}
+	if got := strings.Join(cfg.ParsedHideHeaders(), ","); !strings.Contains(got, "X-Amzn-*") {
+		t.Errorf("lambda hide = %q", got)
+	}
+
+	// SERVERLESS=false wins over detection; HIDE_HEADERS replaces or extends the defaults.
+	t.Setenv("SERVERLESS", "false")
+	t.Setenv("HIDE_HEADERS", "none")
+	cfg, _ = Load()
+	if cfg.IsServerless() || len(cfg.ParsedHideHeaders()) != 0 {
+		t.Errorf("overrides: serverless=%v hide=%v", cfg.IsServerless(), cfg.ParsedHideHeaders())
+	}
+	t.Setenv("HIDE_HEADERS", "default,X-Internal-*")
+	cfg, _ = Load()
+	if got := cfg.ParsedHideHeaders(); got[len(got)-1] != "X-Internal-*" || got[0] != "X-Amzn-*" {
+		t.Errorf("default,X-Internal-* = %v", got)
+	}
+}

@@ -14,6 +14,7 @@ Testhooks is configured entirely with environment variables. A `.env` file in th
 | `LISTEN` | `:8080` | Address to listen on |
 | `PORT` | | If set, listens on `:<PORT>` instead of `LISTEN` (PaaS convention) |
 | `API_TIMEOUT_SECONDS` | `30` | Timeout for REST API requests |
+| `SERVERLESS` | `auto` | Whether the server runs on a function host, which may pause it once a response is sent. There, async [forwards](../../guides/forwarding/#on-function-hosts) finish before the sender gets its reply. `auto` detects Vercel, AWS Lambda (and Netlify Functions), Azure Functions, Google Cloud Functions and Cloud Run from the variables they set; `true` or `false` overrides it. The startup log names the host it found |
 
 ## Security
 
@@ -24,6 +25,7 @@ Testhooks is configured entirely with environment variables. A `.env` file in th
 | `ALLOWED_HEADERS` | `Content-Type,Authorization,X-Requested-With` | Comma-separated CORS request headers |
 | `TRUSTED_PROXIES` | | Comma-separated CIDRs allowed to set `X-Forwarded-For` and `X-Real-IP`. On Vercel (`VERCEL=1`) it defaults to loopback, `127.0.0.1/32,::1/128` |
 | `STRIP_HEADERS` | `default` | Comma-separated headers removed from captured requests before they are stored, shown or forwarded. A trailing `*` matches a prefix (`X-Internal-*`). `default` expands to Vercel's credentials: `X-Vercel-Oidc-Token`, `X-Vercel-Proxy-Signature`, `X-Vercel-Proxy-Signature-Ts` and `X-Vercel-Sc-*`, plus `Forwarded` on Vercel. Combine them, as in `default,X-Internal-*`. Empty or `none` strips nothing |
+| `HIDE_HEADERS` | `default` | Comma-separated headers that are stored but not shown in the UI or API, and not passed to transforms or forwarded: headers the hosting platform adds, not the sender. Same patterns as `STRIP_HEADERS`. `default` expands to the detected [function host](#server)'s headers, such as `X-Vercel-*`, `X-Forwarded-*`, `X-Real-Ip` and `Forwarded` on Vercel, and to nothing elsewhere. Behind your own proxy, add its headers: `default,X-Forwarded-*`. Empty or `none` hides nothing. The API returns hidden headers with `?include_hidden=true` |
 | `ALLOW_PRIVATE_FORWARD_TARGETS` | `false` | Server mode only. `true` lets server-side forwarding reach private addresses (`10.x`, `192.168.x`, …), carrier-grade NAT and the server's own `localhost`, for a server you run inside your own network. Link-local and cloud metadata addresses stay blocked. Leave it off on a server the public can use. See [Blocked destinations](../../guides/forwarding/#blocked-destinations) |
 | `ENCRYPTION_KEYS` | | Comma-separated key encryption keys for signature secrets stored at rest, each `<key-id>=<64 hex characters>`. Generate one with `openssl rand -hex 32`. Required to save a secret with PostgreSQL or `SNAPSHOT_PATH`; in-memory storage without a snapshot uses a per-process key. See [How secrets are stored](../../guides/signatures/#how-secrets-are-stored) |
 | `ENCRYPTION_PRIMARY_KEY_ID` | | The key in `ENCRYPTION_KEYS` that encrypts new secrets. Required when there is more than one key |

@@ -22,6 +22,8 @@ type API struct {
 	log     zerolog.Logger
 	secrets secretBox
 	limits  Limits
+	// hideHeaders are left out of served requests unless ?include_hidden=true.
+	hideHeaders headerMatcher
 }
 
 // NewAPI creates a new API handler.
@@ -38,6 +40,20 @@ func NewAPI(store Store, hub interface{ RemoveBuffer(slug string) }, log zerolog
 // Without one, saving a secret is rejected.
 func (a *API) SetEncryption(svc *crypto.Service) {
 	a.secrets = secretBox{svc: svc}
+}
+
+// SetHideHeaders sets the headers left out of served requests unless the
+// caller asks for them with ?include_hidden=true. See config.Config.HideHeaders.
+func (a *API) SetHideHeaders(patterns []string) {
+	a.hideHeaders = newHeaderMatcher(patterns)
+}
+
+// shown returns req as served: without hidden headers unless r asks for them.
+func (a *API) shown(r *http.Request, req *db.CapturedRequest) *db.CapturedRequest {
+	if r.URL.Query().Get("include_hidden") == "true" {
+		return req
+	}
+	return a.hideHeaders.shown(req)
 }
 
 // sealConfig encrypts the signature secret in cfg, keeping the one in old when
@@ -351,6 +367,7 @@ func (a *API) ListRequests(w http.ResponseWriter, r *http.Request) {
 	epConfig := config.ParseEndpointConfig(ep.Config)
 	for i := range reqs {
 		a.secrets.annotate(epConfig, &reqs[i])
+		reqs[i] = *a.shown(r, &reqs[i])
 	}
 
 	// Also return total count.
@@ -375,7 +392,7 @@ func (a *API) GetRequest(w http.ResponseWriter, r *http.Request) {
 	if ep, err := a.db.GetEndpointByID(r.Context(), req.EndpointID); err == nil {
 		a.secrets.annotate(config.ParseEndpointConfig(ep.Config), req)
 	}
-	writeJSON(w, http.StatusOK, req)
+	writeJSON(w, http.StatusOK, a.shown(r, req))
 }
 
 // DeleteRequest handles DELETE /api/requests/{reqId}.
