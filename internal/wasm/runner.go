@@ -66,8 +66,9 @@ type ResponseHandlerOutput struct {
 }
 
 // Runner manages QuickJS WASM runtimes and executes JS transforms.
-// Each execution creates a fresh runtime to prevent state leakage between
-// user scripts (MED-005).
+// Every execution starts from a freshly set-up runtime so nothing leaks
+// between user scripts (MED-005): runtimes are reused, but their memory is
+// reset to a snapshot taken right after setup (see sandbox).
 type Runner struct {
 	option        qjs.Option
 	log           zerolog.Logger
@@ -77,6 +78,8 @@ type Runner struct {
 	// slots bounds concurrent runtimes so a burst of requests can't allocate
 	// PoolSize×MemoryLimit without limit and OOM the process.
 	slots chan struct{}
+	// idle holds set-up runtimes waiting for their next script.
+	idle chan *sandbox
 	// sandboxDir is the empty directory scripts see as their filesystem.
 	sandboxDir string
 }
@@ -142,6 +145,7 @@ func New(_ context.Context, cfg Config, log zerolog.Logger) (*Runner, error) {
 
 	r := &Runner{
 		slots:         make(chan struct{}, poolSize),
+		idle:          make(chan *sandbox, poolSize),
 		option:        option,
 		log:           l,
 		timeout:       cfg.Timeout,
@@ -154,15 +158,26 @@ func New(_ context.Context, cfg Config, log zerolog.Logger) (*Runner, error) {
 		Int("memory_limit_mb", cfg.MemoryLimit/(1024*1024)).
 		Dur("timeout", cfg.Timeout).
 		Int("max_concurrent", poolSize).
-		Msg("WASM runner initialized (fresh runtime per execution)")
+		Msg("WASM runner initialized (runtime reset after each execution)")
 
 	return r, nil
 }
 
-// Close shuts down the runner. No pool to drain since runtimes are created
-// fresh per execution.
+// Close shuts down the runner and frees its idle runtimes.
 func (r *Runner) Close(_ context.Context) error {
-	if r.ready.Swap(false) && r.sandboxDir != "" {
+	// Not ready first, so a script finishing now closes its runtime instead
+	// of returning it to idle.
+	wasReady := r.ready.Swap(false)
+drain:
+	for {
+		select {
+		case sb := <-r.idle:
+			sb.close()
+		default:
+			break drain
+		}
+	}
+	if wasReady && r.sandboxDir != "" {
 		_ = os.Chmod(r.sandboxDir, 0o700)
 		_ = os.RemoveAll(r.sandboxDir)
 	}
@@ -293,27 +308,25 @@ func (r *Runner) acquire(ctx context.Context) (func(), error) {
 	}
 }
 
-// eval runs a program in a fresh runtime (MED-005: no state leakage) and
-// returns its value as a string. The run is cut off at r.timeout: qjs ignores
-// Option.MaxExecutionTime (its interrupt handler is compiled out), so the
-// deadline goes through the runtime's context, which wazero enforces.
+// eval runs a program in a freshly set-up runtime (MED-005: no state
+// leakage) and returns its value as a string. The run is cut off at
+// r.timeout: qjs ignores Option.MaxExecutionTime (its interrupt handler is
+// compiled out), so the deadline goes through the runtime's context, which
+// wazero enforces.
 func (r *Runner) eval(ctx context.Context, file, program string) (result string, err error) {
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-
-	opt := r.option
-	opt.Context = ctx
-	opt.CloseOnContextDone = true
-	rt, err := qjs.New(opt)
+	sb, err := r.sandbox()
 	if err != nil {
 		return "", fmt.Errorf("create runtime: %w", err)
 	}
-	// After a timeout the module is closed and qjs panics on any further call,
-	// including Close; there's nothing left to free then.
-	defer func() {
-		defer func() { _ = recover() }()
-		rt.Close()
-	}()
+	// reusable stays false unless the script returned normally; a runtime
+	// that panicked, timed out or grew its memory is thrown away.
+	reusable := false
+	defer func() { r.recycle(sb, reusable) }()
+
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	sb.ctx.set(ctx)
+	defer sb.ctx.set(context.Background())
 
 	// Start the clock once the runtime exists, so creating it (slow the
 	// first time, while the module compiles) doesn't count against the script.
@@ -325,6 +338,7 @@ func (r *Runner) eval(ctx context.Context, file, program string) (result string,
 	// mid-run, so a timeout surfaces here.
 	defer func() {
 		if p := recover(); p != nil {
+			reusable = false
 			result = ""
 			if timedOut.Load() {
 				err = fmt.Errorf("script took longer than %s and was stopped", r.timeout)
@@ -334,21 +348,32 @@ func (r *Runner) eval(ctx context.Context, file, program string) (result string,
 		}
 	}()
 
-	val, err := rt.Eval(file, qjs.Code(program))
+	seed, err := sb.rt.Eval("seed.js", qjs.Code(seedProgram()))
+	if err != nil {
+		return "", fmt.Errorf("seed runtime: %w", err)
+	}
+	seed.Free()
+
+	val, err := sb.rt.Eval(file, qjs.Code(program))
 	if err != nil {
 		if timedOut.Load() {
 			return "", fmt.Errorf("script took longer than %s and was stopped", r.timeout)
 		}
+		// A script error leaves the runtime intact; a cancelled context
+		// has closed it.
+		reusable = ctx.Err() == nil
 		return "", err
 	}
 	defer val.Free()
+	reusable = true
 	return val.String(), nil
 }
 
-// buildProgram wraps a user script with the shared prelude and calls the given
-// prelude entry point on the input; the program's value is the JSON result.
+// buildProgram follows a user script with a call to the given prelude entry
+// point on the input; the program's value is the JSON result. The prelude is
+// already loaded in the runtime, so line numbers in errors match the script.
 func buildProgram(script, entry string, inputJSON []byte) string {
-	return prelude + "\n" + script + "\n;\n" + entry + "(JSON.parse(" + quote(string(inputJSON)) + "));\n"
+	return script + "\n;\n" + entry + "(JSON.parse(" + quote(string(inputJSON)) + "));\n"
 }
 
 // quote returns a JS string literal wrapping s, safe for embedding in JS source.
