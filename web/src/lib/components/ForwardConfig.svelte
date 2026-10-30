@@ -36,6 +36,7 @@
 	let clearSecret = $state(false);
 	let sigPublicKey = $state('');
 	let sigEnforce = $state(false);
+	let sigResign = $state(false);
 
 	// Sync local state from endpoint prop when it changes
 	$effect(() => {
@@ -51,6 +52,7 @@
 		clearSecret = false;
 		sigPublicKey = endpoint.config?.signature?.public_key ?? '';
 		sigEnforce = !!endpoint.config?.signature?.enforce;
+		sigResign = !!endpoint.config?.signature?.resign;
 	});
 
 	const isServerMode = $derived(endpoint.mode === 'server');
@@ -128,7 +130,8 @@
 									// Omitted keeps the stored secret; "" removes it.
 									secret: sigSecret.trim() || (clearSecret ? '' : undefined),
 									public_key: sigPublicKey.trim() || undefined,
-									enforce: sigEnforce || undefined
+									enforce: sigEnforce || undefined,
+									resign: (hasSecret && sigResign) || undefined
 								}
 							: undefined
 				}
@@ -445,6 +448,25 @@
 					</button>
 					<span class="text-xs text-[var(--text)] group-hover:text-[var(--accent)] transition-colors">Reject invalid signatures with 401</span>
 					<Tooltip text="Respond like a real receiver would. Rejected requests are still captured here. Senders such as Sparrow treat 401 as permanent and won't retry." />
+				</label>
+			{/if}
+			{#if hasSecret}
+				<label class="flex items-start gap-3 cursor-pointer group">
+					<button
+						role="switch"
+						aria-checked={sigResign}
+						aria-label="Sign what I forward with this secret"
+						onclick={() => { sigResign = !sigResign; markDirty(); }}
+						class="relative flex-shrink-0 mt-0.5 w-9 h-5 rounded-full transition-colors {sigResign ? 'bg-[var(--accent)]' : 'bg-[var(--border)]'}"
+					>
+						<span class="absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform {sigResign ? 'translate-x-4' : ''}"></span>
+					</button>
+					<span class="flex flex-col gap-0.5">
+						<span class="text-xs text-[var(--text)] group-hover:text-[var(--accent)] transition-colors">Sign what I forward with this secret</span>
+						<span class="text-[10px] text-[var(--text-muted)]">
+							Once a transform changes the body, the sender's signature no longer matches it. With this on, what is forwarded gets a fresh <code class="text-[10px]">webhook-signature</code> and <code class="text-[10px]">webhook-timestamp</code> (same <code class="text-[10px]">webhook-id</code>), so your app can keep checking signatures with this secret. Only requests signed with this secret are re-signed, so knowing your webhook URL is not enough to get something signed.
+						</span>
+					</span>
 				</label>
 			{/if}
 		</div>

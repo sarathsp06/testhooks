@@ -227,6 +227,7 @@ func main() {
 	mux.Handle("GET /api/endpoints/{id}", wrapAPI(api.GetEndpoint))
 	mux.Handle("PATCH /api/endpoints/{id}", wrapAPI(api.UpdateEndpoint))
 	mux.Handle("DELETE /api/endpoints/{id}", wrapAPI(api.DeleteEndpoint))
+	mux.Handle("POST /api/endpoints/{id}/resign", wrapAPI(api.ResignRequest))
 	mux.Handle("GET /api/endpoints/{id}/requests", wrapAPI(api.ListRequests))
 	mux.Handle("DELETE /api/endpoints/{id}/requests", wrapAPI(api.DeleteAllRequests))
 	mux.Handle("GET /api/requests/{reqId}", wrapAPI(api.GetRequest))

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"os"
+	"strings"
 	"testing"
 	"time"
 )
@@ -85,4 +86,92 @@ func TestCheck(t *testing.T) {
 	if r := Check(secret, "", http.Header{}, body, now); r.Status != StatusMissing {
 		t.Errorf("no headers: got %+v, want missing", r)
 	}
+}
+
+// SignHMAC reproduces the signatures Sparrow's production signer made, so
+// whatever verifies a Sparrow delivery verifies a re-signed one.
+func TestSignHMACMatchesSparrow(t *testing.T) {
+	raw, err := os.ReadFile("testdata/sparrow_vectors.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var vf vectorFile
+	if err := json.Unmarshal(raw, &vf); err != nil {
+		t.Fatal(err)
+	}
+	checked := 0
+	for _, c := range vf.Cases {
+		if c.Scheme != "hmac" || !c.Valid {
+			continue
+		}
+		h := http.Header{}
+		for k, v := range c.Headers {
+			h.Set(k, v)
+		}
+		body, _ := base64.StdEncoding.DecodeString(c.PayloadB64)
+		got, err := SignHMAC(c.Key, h.Get("webhook-id"), h.Get("webhook-timestamp"), body)
+		if err != nil {
+			t.Fatalf("%s: %v", c.Name, err)
+		}
+		found := false
+		for _, s := range strings.Fields(h.Get("webhook-signature")) {
+			found = found || s == got
+		}
+		if !found {
+			t.Errorf("%s: SignHMAC = %q, not in %q", c.Name, got, h.Get("webhook-signature"))
+		}
+		checked++
+	}
+	if checked == 0 {
+		t.Fatal("no valid hmac vectors")
+	}
+}
+
+func TestResign(t *testing.T) {
+	const secret = "whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw"
+	now := time.Unix(1790000000, 0)
+
+	t.Run("keeps webhook-id and replaces any-case signature headers", func(t *testing.T) {
+		h := http.Header{
+			"webhook-id":        {"msg_1"},
+			"Webhook-Timestamp": {"1"},
+			"webhook-signature": {"v1,stale v1a,stale"},
+			"Content-Type":      {"application/json"},
+		}
+		body := []byte(`{"changed":true}`)
+		if err := Resign(h, secret, "fallback", body, now); err != nil {
+			t.Fatal(err)
+		}
+		if len(h) != 4 {
+			t.Errorf("headers = %v, want the three webhook-* headers once each plus Content-Type", h)
+		}
+		if got := h.Get("webhook-id"); got != "msg_1" {
+			t.Errorf("webhook-id = %q, want msg_1", got)
+		}
+		if err := VerifyHMAC(secret, h, body, now, DefaultTolerance); err != nil {
+			t.Errorf("re-signed request does not verify: %v", err)
+		}
+		if strings.Contains(h.Get("webhook-signature"), "v1a,") {
+			t.Errorf("stale v1a signature kept: %q", h.Get("webhook-signature"))
+		}
+	})
+
+	t.Run("uses the fallback id when there is none", func(t *testing.T) {
+		h := http.Header{}
+		if err := Resign(h, "raw-secret", "msg_req42", []byte("x"), now); err != nil {
+			t.Fatal(err)
+		}
+		if got := h.Get("webhook-id"); got != "msg_req42" {
+			t.Errorf("webhook-id = %q, want msg_req42", got)
+		}
+		if err := VerifyHMAC("raw-secret", h, []byte("x"), now, DefaultTolerance); err != nil {
+			t.Error(err)
+		}
+	})
+
+	t.Run("bad secret", func(t *testing.T) {
+		if err := Resign(http.Header{}, "whsec_!!", "id", nil, now); err == nil {
+			t.Error("want error for a non-base64 whsec_ secret")
+		}
+	})
 }

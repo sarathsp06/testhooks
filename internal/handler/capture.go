@@ -117,12 +117,12 @@ func (c *Capture) Shutdown(ctx context.Context) error {
 
 // forwardAsync runs a fire-and-forget forward in the background, bounded by
 // asyncSlots. When saturated the forward is skipped rather than queued.
-func (c *Capture) forwardAsync(slug, reqID string, stored bool, fwdReq forward.Request, target string) {
+func (c *Capture) forwardAsync(slug, reqID string, stored bool, fwdReq forward.Request, target string, signed resignResult) {
 	select {
 	case c.asyncSlots <- struct{}{}:
 	default:
 		c.log.Warn().Str("slug", slug).Str("request_id", reqID).Msg("async forward skipped: too many in flight")
-		c.publishForwardResult(slug, reqID, stored, forward.Result{URL: target, Error: "skipped: too many forwards in flight"})
+		c.publishForwardResult(slug, reqID, stored, forward.Result{URL: target, Error: "skipped: too many forwards in flight"}, signed)
 		return
 	}
 	c.asyncWG.Add(1)
@@ -146,13 +146,13 @@ func (c *Capture) forwardAsync(slug, reqID string, stored bool, fwdReq forward.R
 				Int("status", result.StatusCode).Msg("async forward failed")
 		}
 		// Publish and record the forward result (arrives after the webhook response).
-		c.publishForwardResult(slug, reqID, stored, result)
+		c.publishForwardResult(slug, reqID, stored, result, signed)
 	}()
 }
 
 // ServeHTTP captures any HTTP request sent to a webhook endpoint.
 //
-// Pipeline order: Capture → Store → Transform → Forward → Custom Response → HTTP Response
+// Pipeline order: Capture → Store → Transform → Re-sign → Forward → Custom Response → HTTP Response
 func (c *Capture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Extract slug from path: /h/{slug} or /h/{slug}/...
 	slug := r.PathValue("slug")
@@ -408,6 +408,16 @@ func (c *Capture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			forwardMode = "async"
 		}
 
+		// Re-sign after the transform, on a copy: the reply script still sees
+		// the headers the transform produced.
+		var signed resignResult
+		if epConfig.Signature != nil && epConfig.Signature.Resign {
+			h := http.Header(fwdReq.Headers).Clone()
+			if signed = c.secrets.resign(epConfig, req.Signature, h, "msg_"+req.ID, fwdReq.Body, time.Now()); signed.Resigned {
+				fwdReq.Headers = h
+			}
+		}
+
 		if forwardMode == "sync" {
 			// Sync: forward and capture the response.
 			fwdCtx, fwdCancel := context.WithTimeout(r.Context(), 30*time.Second)
@@ -423,7 +433,7 @@ func (c *Capture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 
 			// Publish forward result to browser for display.
-			c.publishForwardResult(slug, req.ID, stored, result)
+			c.publishForwardResult(slug, req.ID, stored, result, signed)
 
 			// Build ForwardResponse for the handler (even on failure, so the handler can inspect it).
 			respHeaders := make(map[string]string)
@@ -442,7 +452,7 @@ func (c *Capture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			// Async: fire-and-forget, don't block the webhook response.
 			// Clone headers: the goroutine outlives this request.
 			fwdReq.Headers = http.Header(fwdReq.Headers).Clone()
-			c.forwardAsync(slug, req.ID, stored, fwdReq, epConfig.ForwardURL)
+			c.forwardAsync(slug, req.ID, stored, fwdReq, epConfig.ForwardURL, signed)
 		}
 	}
 
@@ -721,12 +731,16 @@ type forwardResultPayload struct {
 	ContentType     string            `json:"content_type,omitempty"`
 	// ResponseBodyTruncated is set on the stored copy when ResponseBody was cut short.
 	ResponseBodyTruncated bool `json:"response_body_truncated,omitempty"`
+	// Resigned is set when the forwarded request carried a fresh signature
+	// (signature.resign); ResignError says why it didn't when re-signing is on.
+	Resigned    bool   `json:"resigned,omitempty"`
+	ResignError string `json:"resign_error,omitempty"`
 }
 
 // publishForwardResult sends a forward_result message over the WS hub so the
 // browser can display the forward target's response, and records it on the
 // request when stored is true.
-func (c *Capture) publishForwardResult(slug string, reqID string, stored bool, result forward.Result) {
+func (c *Capture) publishForwardResult(slug string, reqID string, stored bool, result forward.Result, signed resignResult) {
 	respHeaders := make(map[string]string)
 	for k, v := range result.ResponseHeaders {
 		if len(v) > 0 {
@@ -744,6 +758,8 @@ func (c *Capture) publishForwardResult(slug string, reqID string, stored bool, r
 		ResponseBody:    string(result.ResponseBody),
 		ResponseHeaders: respHeaders,
 		ContentType:     result.ContentType,
+		Resigned:        signed.Resigned,
+		ResignError:     signed.Error,
 	}
 	data, err := json.Marshal(payload)
 	if err != nil {

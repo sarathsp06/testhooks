@@ -32,6 +32,12 @@ export interface SignatureConfig {
 	secret_set?: boolean;
 	public_key?: string;
 	enforce?: boolean;
+	/**
+	 * Sign forwarded requests again with the secret, after the transform, so
+	 * the target accepts the changed body. Only requests the secret signed are
+	 * re-signed. Needs a secret.
+	 */
+	resign?: boolean;
 }
 
 /** Server-side Standard Webhooks verification result for a captured request. */
@@ -103,6 +109,10 @@ export interface ForwardResultData {
 	content_type?: string;
 	/** Set on a stored result whose response_body was cut to MAX_STORED_RESPONSE_SIZE. */
 	response_body_truncated?: boolean;
+	/** The forwarded request carried a fresh signature (signature.resign). */
+	resigned?: boolean;
+	/** Why it wasn't re-signed, when re-signing is on. */
+	resign_error?: string;
 }
 
 /** Data payload for a response_info message (server tells browser what response was sent). */
