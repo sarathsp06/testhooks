@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { initWasm, runTransform } from '$lib/wasm';
 	import { copyToClipboard, formatBytes } from '$lib/utils';
-	import { ago, bodyKind, bodyText, curlFor, eventLabel, highlightJSON, hostOf, parseJSON, queryString, replay, statusLine, when } from '$lib/requestutil';
+	import { ago, bodyKind, bodyText, curlFor, eventLabel, forwardMayBeRunning, highlightJSON, hostOf, parseJSON, queryString, replay, statusLine, when } from '$lib/requestutil';
 	import { diffLines, fieldChanges, pretty } from '$lib/scriptdiff';
 	import { toJSONSchema, toTypeScript, typeName } from '$lib/typegen';
 	import { getRequestsStore } from '$lib/stores/requests.svelte';
@@ -110,6 +110,15 @@
 
 	const forwardedReq = $derived(outcome.kind === 'ok' ? outcome.forwarded : request);
 	const fwdPending = $derived(forwardResult?.error === '__pending__');
+	// Server mode: a forward that started (or whose start isn't recorded yet)
+	// and may still be running, or one that started and never finished.
+	const fwdRunning = $derived(
+		endpoint.mode === 'server' && (!forwardResult || forwardResult.in_progress) && forwardMayBeRunning(request.created_at)
+	);
+	const fwdStalled = $derived(!!forwardResult?.in_progress && !fwdRunning);
+	const stalledHint = 'The forward started but never finished: the server stopped before the target answered. The target may or may not have received it.';
+	const noResultHint =
+		'No forward result was recorded for this request. Requests captured before results were saved have none, and so does an async forward that never finished.';
 
 	async function copyCurl() {
 		if (await copyToClipboard(curlFor(request, endpoint.slug))) {
@@ -138,8 +147,8 @@
 	]);
 </script>
 
-{#snippet step(n: string, title: string, sub: string, tone: 'plain' | 'good' | 'bad' = 'plain')}
-	<li class="bg-surface border border-line rounded-[12px] p-3.5 flex flex-col gap-1">
+{#snippet step(n: string, title: string, sub: string, tone: 'plain' | 'good' | 'bad' = 'plain', hint?: string)}
+	<li title={hint} class="bg-surface border border-line rounded-[12px] p-3.5 flex flex-col gap-1">
 		<span class="font-mono text-xs text-faint">{n}</span>
 		<span class="text-sm font-semibold {tone === 'bad' ? 'text-danger' : ''}">{title}</span>
 		<span class="text-[13px] text-body">{sub}</span>
@@ -259,8 +268,10 @@
 			{@render step('3 · forward', 'None', 'no forward URL set')}
 		{:else if outcome.kind === 'skipped'}
 			{@render step('3 · forward', 'Skipped', hostOf(cfg.forward_url))}
-		{:else if fwdPending}
+		{:else if fwdPending || fwdRunning}
 			{@render step('3 · forward', 'Sending…', hostOf(cfg.forward_url))}
+		{:else if fwdStalled}
+			{@render step('3 · forward', 'Never finished', `${hostOf(cfg.forward_url)} · the server stopped mid-forward`, 'bad', stalledHint)}
 		{:else if forwardResult}
 			{#if forwardResult.ok}
 				{@render step('3 · forward', statusLine(forwardResult.status_code), `${hostOf(forwardResult.url)} · ${forwardResult.latency_ms} ms${forwardResult.resigned ? ' · re-signed' : forwardResult.resign_error ? ' · not re-signed' : ''}`)}
@@ -268,7 +279,11 @@
 				{@render step('3 · forward', forwardResult.status_code > 0 ? statusLine(forwardResult.status_code) : 'Failed', forwardResult.error || hostOf(forwardResult.url), 'bad')}
 			{/if}
 		{:else}
-			{@render step('3 · forward', 'Sent', `${hostOf(cfg.forward_url)} · ${endpoint.mode === 'server' ? 'no result recorded' : 'result not shown'}`)}
+			{#if endpoint.mode === 'server'}
+				{@render step('3 · forward', 'No result', `${hostOf(cfg.forward_url)} · captured before results were saved, or the forward never finished`, 'plain', noResultHint)}
+			{:else}
+				{@render step('3 · forward', 'Sent', `${hostOf(cfg.forward_url)} · result not shown`)}
+			{/if}
 		{/if}
 
 		{#if response}
@@ -318,6 +333,11 @@
 			{/if}
 		{:else if tab === 'headers'}
 			{@render kv(Object.entries(request.headers ?? {}).map(([k, v]) => [k, v.join(', ')]), 'No headers.')}
+			{#if request.hidden_headers}
+				<p class="m-0 px-5 pb-[18px] text-[13px] text-body">
+					{request.hidden_headers} more header{request.hidden_headers === 1 ? ' was' : 's were'} added by the hosting platform, not the sender, so {request.hidden_headers === 1 ? "it isn't" : "they aren't"} shown or forwarded. Set <code class="font-mono">HIDE_HEADERS</code> to change which.
+				</p>
+			{/if}
 		{:else if tab === 'query'}
 			{@render kv(Object.entries(request.query ?? {}).map(([k, v]) => [k, v.join(', ')]), 'No query parameters.')}
 		{:else if tab === 'forwarded'}
@@ -343,9 +363,9 @@
 				</div>
 			{/if}
 		{:else}
-			{#if !forwardResult || fwdPending}
+			{#if !forwardResult || fwdPending || forwardResult.in_progress}
 				<p class="m-0 px-5 py-[18px] text-[13px] text-body">
-					{#if !cfg.forward_url}This endpoint doesn't forward.{:else if fwdPending}Waiting for the forward target…{:else if endpoint.mode === 'server'}No forward result was recorded for this request. Requests captured before results were saved have none, and so does an async forward that never finished.{:else}In browser mode, the forward target's reply is shown for requests that arrive while this page is open.{/if}
+					{#if !cfg.forward_url}This endpoint doesn't forward.{:else if fwdPending || fwdRunning}Waiting for the forward target…{:else if fwdStalled}{stalledHint}{:else if endpoint.mode === 'server'}{noResultHint}{:else}In browser mode, the forward target's reply is shown for requests that arrive while this page is open.{/if}
 				</p>
 			{:else}
 				<div class="px-5 pt-[18px] font-mono text-[13px] {forwardResult.ok ? 'text-accent' : 'text-danger'}">

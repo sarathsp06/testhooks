@@ -59,6 +59,8 @@ type Capture struct {
 	browserResponseTimeout time.Duration
 	trustedProxies         []*net.IPNet
 	stripHeaders           headerMatcher
+	hideHeaders            headerMatcher
+	serverless             bool
 	maxStoredResponse      int
 	secrets                secretBox
 	log                    zerolog.Logger
@@ -87,6 +89,18 @@ func NewCapture(store Store, h *hub.Hub, fwd *forward.Forwarder, wr *wasm.Runner
 // are stored, shown or forwarded. See config.Config.StripHeaders for patterns.
 func (c *Capture) SetStripHeaders(patterns []string) {
 	c.stripHeaders = newHeaderMatcher(patterns)
+}
+
+// SetHideHeaders sets the headers kept with captured requests but left out of
+// what is shown, forwarded and transformed. See config.Config.HideHeaders.
+func (c *Capture) SetHideHeaders(patterns []string) {
+	c.hideHeaders = newHeaderMatcher(patterns)
+}
+
+// SetServerless makes async forwards finish before the reply, for function
+// hosts that may pause the server once a response is sent.
+func (c *Capture) SetServerless(on bool) {
+	c.serverless = on
 }
 
 // SetMaxStoredResponse sets how many bytes of a reply body are stored with a
@@ -136,18 +150,29 @@ func (c *Capture) forwardAsync(slug, reqID string, stored bool, fwdReq forward.R
 			}
 		}()
 
-		fwdCtx, fwdCancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer fwdCancel()
-		result := c.forwarder.ForwardOne(fwdCtx, fwdReq, target)
-		if result.OK {
-			c.log.Debug().Str("url", result.URL).Int("status", result.StatusCode).Msg("async forwarded")
-		} else {
-			c.log.Warn().Str("url", result.URL).Str("error", result.Error).
-				Int("status", result.StatusCode).Msg("async forward failed")
+		// Record that the forward started, so one that never finishes (the
+		// process stopped mid-forward) shows as such rather than as no result.
+		if stored {
+			c.record(reqID, "forward_result", forwardResultPayload{RequestID: reqID, URL: target, InProgress: true}, c.db.SetRequestForwardResult)
 		}
-		// Publish and record the forward result (arrives after the webhook response).
-		c.publishForwardResult(slug, reqID, stored, result, signed)
+		c.forwardNow(slug, reqID, stored, fwdReq, target, signed)
 	}()
+}
+
+// forwardNow runs an async-mode forward to completion and publishes and
+// records its result. The caller has already answered, or will answer, the
+// sender with the default response.
+func (c *Capture) forwardNow(slug, reqID string, stored bool, fwdReq forward.Request, target string, signed resignResult) {
+	fwdCtx, fwdCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer fwdCancel()
+	result := c.forwarder.ForwardOne(fwdCtx, fwdReq, target)
+	if result.OK {
+		c.log.Debug().Str("url", result.URL).Int("status", result.StatusCode).Msg("async forwarded")
+	} else {
+		c.log.Warn().Str("url", result.URL).Str("error", result.Error).
+			Int("status", result.StatusCode).Msg("async forward failed")
+	}
+	c.publishForwardResult(slug, reqID, stored, result, signed)
 }
 
 // ServeHTTP captures any HTTP request sent to a webhook endpoint.
@@ -204,8 +229,11 @@ func (c *Capture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Drop platform credentials before anything stores, shows or forwards them.
 	c.stripHeaders.strip(r.Header)
 
-	// Serialize headers.
+	// Serialize headers. Everything left is stored, but headers the hosting
+	// platform added are then dropped from what is shown, transformed and
+	// forwarded: the sender never sent them.
 	headersJSON, _ := json.Marshal(r.Header)
+	c.hideHeaders.strip(r.Header)
 
 	// Serialize query params.
 	var queryJSON json.RawMessage
@@ -265,7 +293,7 @@ func (c *Capture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Enforced signature: reject after storing so the rejected attempt is still
 	// visible in the UI. 401 tells senders like Sparrow not to retry.
 	if epConfig.Signature != nil && epConfig.Signature.Enforce && req.Signature != nil && !req.Signature.Verified() {
-		data, _ := json.Marshal(req)
+		data, _ := json.Marshal(c.hideHeaders.shown(req))
 		c.hub.Publish(endpoint.Slug, hub.Message{Type: "request", Data: data}, isBrowserMode)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusUnauthorized)
@@ -320,7 +348,7 @@ func (c *Capture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					Dur("duration", transformDur).Msg("transform dropped request")
 				// Publish the request to WS even if dropped (so UI shows it),
 				// then return default response.
-				data, _ := json.Marshal(req)
+				data, _ := json.Marshal(c.hideHeaders.shown(req))
 				c.hub.Publish(endpoint.Slug, hub.Message{Type: "request", Data: data}, isBrowserMode)
 				c.writeDefaultResponse(w, isBrowserMode, req.ID)
 				defStatus := http.StatusOK
@@ -386,7 +414,7 @@ func (c *Capture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Publish to WebSocket hub.
-		data, _ := json.Marshal(req)
+		data, _ := json.Marshal(c.hideHeaders.shown(req))
 		c.hub.Publish(endpoint.Slug, hub.Message{Type: "request", Data: data}, true)
 		c.writeDefaultResponse(w, true, req.ID)
 		c.publishResponseInfo(slug, req.ID, stored, http.StatusAccepted, nil, defaultResponseBody(req.ID), "application/json", "default")
@@ -396,7 +424,7 @@ func (c *Capture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// ── Server mode continues: Forward → Custom Response → HTTP Response ──
 
 	// Publish to WebSocket hub (so the browser UI sees it regardless of forward/handler).
-	data, _ := json.Marshal(req)
+	data, _ := json.Marshal(c.hideHeaders.shown(req))
 	c.hub.Publish(endpoint.Slug, hub.Message{Type: "request", Data: data}, false)
 
 	// ── STEP 3: Forward ──
@@ -449,10 +477,17 @@ func (c *Capture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				ContentType: result.ContentType,
 			}
 		} else {
-			// Async: fire-and-forget, don't block the webhook response.
-			// Clone headers: the goroutine outlives this request.
-			fwdReq.Headers = http.Header(fwdReq.Headers).Clone()
-			c.forwardAsync(slug, req.ID, stored, fwdReq, epConfig.ForwardURL, signed)
+			if c.serverless {
+				// A function host may pause the server once the reply is
+				// sent, cutting a background forward short. Finish it first;
+				// the sender still gets the default reply, a little later.
+				c.forwardNow(slug, req.ID, stored, fwdReq, epConfig.ForwardURL, signed)
+			} else {
+				// Async: fire-and-forget, don't block the webhook response.
+				// Clone headers: the goroutine outlives this request.
+				fwdReq.Headers = http.Header(fwdReq.Headers).Clone()
+				c.forwardAsync(slug, req.ID, stored, fwdReq, epConfig.ForwardURL, signed)
+			}
 		}
 	}
 
@@ -547,7 +582,7 @@ func (c *Capture) handleBrowserResponse(w http.ResponseWriter, r *http.Request, 
 	c.hub.Publish(slug, msg, false)
 
 	// Also publish the normal "request" event so the request shows up in the UI list.
-	reqData, _ := json.Marshal(req)
+	reqData, _ := json.Marshal(c.hideHeaders.shown(req))
 	reqMsg := hub.Message{
 		Type: "request",
 		Data: reqData,
@@ -731,6 +766,9 @@ type forwardResultPayload struct {
 	ContentType     string            `json:"content_type,omitempty"`
 	// ResponseBodyTruncated is set on the stored copy when ResponseBody was cut short.
 	ResponseBodyTruncated bool `json:"response_body_truncated,omitempty"`
+	// InProgress marks a forward that has started and not yet finished. A
+	// stored one that stays set never finished: the process stopped first.
+	InProgress bool `json:"in_progress,omitempty"`
 	// Resigned is set when the forwarded request carried a fresh signature
 	// (signature.resign); ResignError says why it didn't when re-signing is on.
 	Resigned    bool   `json:"resigned,omitempty"`

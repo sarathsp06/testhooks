@@ -160,7 +160,21 @@ func main() {
 	capture.SetEncryption(cryptoSvc)
 	capture.SetMaxStoredResponse(cfg.MaxStoredResponseSize)
 	log.Info().Strs("strip_headers", stripHeaders).Msg("stripping headers from captured requests (set STRIP_HEADERS to change)")
+	hideHeaders := cfg.ParsedHideHeaders()
+	capture.SetHideHeaders(hideHeaders)
+	if len(hideHeaders) > 0 {
+		log.Info().Strs("hide_headers", hideHeaders).Msg("hiding headers the hosting platform adds: kept, but not shown or forwarded (set HIDE_HEADERS to change)")
+	}
+	capture.SetServerless(cfg.IsServerless())
+	if cfg.IsServerless() {
+		ev := log.Info()
+		if host := cfg.FunctionHost(); host != "" {
+			ev = ev.Str("host", host)
+		}
+		ev.Msg("running on a function host: async forwards finish before the reply (set SERVERLESS=false to change)")
+	}
 	api := handler.NewAPI(store, h, log)
+	api.SetHideHeaders(hideHeaders)
 	api.SetEncryption(cryptoSvc)
 	api.SetLimits(handler.Limits{
 		MaxRequestsPerEndpoint:  cfg.MaxRequestsPerEndpoint,

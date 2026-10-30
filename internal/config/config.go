@@ -106,11 +106,25 @@ type Config struct {
 	// TrustedProxiesAuto reports that TrustedProxies was filled in for Vercel.
 	TrustedProxiesAuto bool
 
+	// host is the function host detected from the environment, or nil.
+	host *functionHost
+
 	// Comma-separated headers removed from captured requests before they are
 	// stored, shown or forwarded. A trailing "*" matches a prefix
 	// ("X-Internal-*"), "default" expands to DefaultStripHeaders, and an empty
 	// value or "none" strips nothing. Unset means "default".
 	StripHeaders string `env:"STRIP_HEADERS"`
+
+	// Comma-separated headers kept with captured requests but left out of what
+	// the UI and API show, and of forwards and transforms: headers the hosting
+	// platform adds, not the sender. Same patterns as StripHeaders; "default"
+	// expands to the detected host's headers. Unset means "default".
+	HideHeaders string `env:"HIDE_HEADERS"`
+
+	// Serverless says whether the server runs on a function host that may
+	// pause it once a response is sent: "auto" (detect from the environment),
+	// "true" or "false". There, async forwards finish before the reply.
+	Serverless string `env:"SERVERLESS" envDefault:"auto"`
 
 	// Lets server-side forwarding reach private, loopback and carrier-grade NAT
 	// addresses (10.x, 192.168.x, localhost, ...). Off by default so a public
@@ -167,6 +181,77 @@ func (c *Config) defaultStripHeaders() string {
 		return DefaultStripHeaders + "," + vercelStripHeaders
 	}
 	return DefaultStripHeaders
+}
+
+// functionHost is a hosting platform that runs the server per request and may
+// pause it once a response is sent.
+type functionHost struct {
+	name string
+	// env is set by the platform's runtime.
+	env string
+	// hide are the headers its proxy adds to every request.
+	hide string
+}
+
+// functionHosts are checked in order; the first whose env is set wins.
+// Netlify Functions run on AWS Lambda and Cloud Functions (2nd gen) on Cloud
+// Run, so they are detected as those.
+var functionHosts = []functionHost{
+	{"Vercel", "VERCEL", "X-Vercel-*,X-Forwarded-*,X-Real-Ip,Forwarded"},
+	{"AWS Lambda", "AWS_LAMBDA_FUNCTION_NAME", "X-Amzn-*,X-Amz-Cf-Id,X-Forwarded-*"},
+	{"Azure Functions", "FUNCTIONS_WORKER_RUNTIME", "X-Arr-*,X-Waws-*,X-Forwarded-*,X-Original-Url,X-Site-Deployment-Id,X-Appservice-Proto,Was-Default-Hostname,Disguised-Host,Client-Ip,X-Client-Ip,X-Client-Port"},
+	{"Google Cloud Functions", "FUNCTION_TARGET", "X-Cloud-Trace-Context,X-Forwarded-*,Forwarded"},
+	{"Google Cloud Run", "K_SERVICE", "X-Cloud-Trace-Context,X-Forwarded-*,Forwarded"},
+}
+
+// detectFunctionHost returns the function host named by the environment, or
+// nil when there is none.
+func detectFunctionHost() *functionHost {
+	for i, h := range functionHosts {
+		if os.Getenv(h.env) != "" {
+			return &functionHosts[i]
+		}
+	}
+	return nil
+}
+
+// FunctionHost returns the detected function host's name, or "" off one.
+func (c *Config) FunctionHost() string {
+	if c.host == nil {
+		return ""
+	}
+	return c.host.name
+}
+
+// IsServerless reports whether async forwards should finish before the reply:
+// SERVERLESS=true, or SERVERLESS=auto on a detected function host.
+func (c *Config) IsServerless() bool {
+	switch strings.ToLower(strings.TrimSpace(c.Serverless)) {
+	case "true", "1", "yes":
+		return true
+	case "false", "0", "no":
+		return false
+	}
+	return c.host != nil
+}
+
+// ParsedHideHeaders returns the header patterns from HideHeaders, with
+// "default" expanded to the detected host's headers.
+func (c *Config) ParsedHideHeaders() []string {
+	var patterns []string
+	for _, p := range strings.Split(c.HideHeaders, ",") {
+		p = strings.TrimSpace(p)
+		switch strings.ToLower(p) {
+		case "", "none":
+		case "default":
+			if c.host != nil {
+				patterns = append(patterns, strings.Split(c.host.hide, ",")...)
+			}
+		default:
+			patterns = append(patterns, p)
+		}
+	}
+	return patterns
 }
 
 // EncryptionKeyring parses EncryptionKeys and EncryptionPrimaryKeyID. It
@@ -273,6 +358,15 @@ func Load() (*Config, error) {
 
 	if _, ok := os.LookupEnv("STRIP_HEADERS"); !ok {
 		cfg.StripHeaders = "default"
+	}
+	if _, ok := os.LookupEnv("HIDE_HEADERS"); !ok {
+		cfg.HideHeaders = "default"
+	}
+	cfg.host = detectFunctionHost()
+	switch strings.ToLower(strings.TrimSpace(cfg.Serverless)) {
+	case "auto", "true", "1", "yes", "false", "0", "no":
+	default:
+		return nil, fmt.Errorf("SERVERLESS must be auto, true or false, got %q", cfg.Serverless)
 	}
 
 	// L-04: Validate configuration bounds.
