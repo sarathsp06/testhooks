@@ -157,6 +157,21 @@ export function deleteEndpoint(id: string) {
 	return request<void>(`/endpoints/${id}`, { method: 'DELETE' });
 }
 
+/**
+ * Get fresh webhook-id, webhook-timestamp and webhook-signature headers for a
+ * body this tab is about to forward (signature.resign). The secret stays on
+ * the server, which first checks that `captured` is signed with it.
+ */
+export function resignRequest(endpointId: string, captured: CapturedRequest, body: string) {
+	return request<{ headers: Record<string, string> }>(`/endpoints/${endpointId}/resign`, {
+		method: 'POST',
+		body: JSON.stringify({
+			request: { id: captured.id, headers: captured.headers, body: captured.body ?? '', body_encoding: captured.body_encoding },
+			body
+		})
+	});
+}
+
 // --- Limits ---
 
 export function getLimits() {

@@ -1,10 +1,12 @@
 package handler
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/rs/zerolog"
 	"github.com/sarathsp06/testhooks/internal/config"
@@ -60,7 +62,7 @@ func (a *API) shown(r *http.Request, req *db.CapturedRequest) *db.CapturedReques
 // cfg doesn't set it. It writes the error response and returns false on failure.
 func (a *API) sealConfig(w http.ResponseWriter, cfg, old json.RawMessage) (json.RawMessage, bool) {
 	sealed, err := a.secrets.seal(cfg, old)
-	if errors.Is(err, errNoEncryptionKeys) {
+	if errors.Is(err, errNoEncryptionKeys) || errors.Is(err, errResignNeedsSecret) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return nil, false
 	}
@@ -222,6 +224,73 @@ func (a *API) GetEndpointBySlug(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.writeEndpoint(w, http.StatusOK, ep)
+}
+
+// ResignRequest handles POST /api/endpoints/{id}/resign. In browser mode the
+// tab transforms and forwards, but the webhook secret never leaves the server,
+// so the tab sends the request as captured and the body it is about to
+// forward, and gets back the webhook-* headers to send with it. The captured
+// request must verify with the endpoint's HMAC secret now, as in server mode,
+// so this can't be used to sign a body nobody signed.
+func (a *API) ResignRequest(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Request struct {
+			ID           string      `json:"id"`
+			Headers      http.Header `json:"headers"`
+			Body         string      `json:"body"`
+			BodyEncoding string      `json:"body_encoding"`
+		} `json:"request"`
+		Body string `json:"body"`
+	}
+	// Two bodies, one possibly base64; leave room for headers.
+	r.Body = http.MaxBytesReader(w, r.Body, 3*a.limits.MaxBodySize+1<<20)
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON: " + err.Error()})
+		return
+	}
+	original := []byte(in.Request.Body)
+	if in.Request.BodyEncoding == "base64" {
+		var err error
+		if original, err = base64.StdEncoding.DecodeString(in.Request.Body); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "request.body is not valid base64"})
+			return
+		}
+	}
+
+	ep, err := a.db.GetEndpointByID(r.Context(), r.PathValue("id"))
+	if err != nil {
+		a.writeLookupError(w, err, "endpoint")
+		return
+	}
+	cfg := config.ParseEndpointConfig(ep.Config)
+	if cfg.Signature == nil || !cfg.Signature.Resign {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "re-signing is off for this endpoint (signature.resign)"})
+		return
+	}
+
+	// Canonical names, whatever case the caller used.
+	orig := http.Header{}
+	for k, v := range in.Request.Headers {
+		for _, s := range v {
+			orig.Add(k, s)
+		}
+	}
+	now := time.Now()
+	incoming := a.secrets.check(cfg, orig, original, now)
+	out := http.Header{}
+	if id := orig.Get("webhook-id"); id != "" {
+		out.Set("webhook-id", id)
+	}
+	signed := a.secrets.resign(cfg, incoming, out, "msg_"+in.Request.ID, []byte(in.Body), now)
+	if !signed.Resigned {
+		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": signed.Error})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"headers": map[string]string{
+		"webhook-id":        out.Get("webhook-id"),
+		"webhook-timestamp": out.Get("webhook-timestamp"),
+		"webhook-signature": out.Get("webhook-signature"),
+	}})
 }
 
 // UpdateEndpoint handles PATCH /api/endpoints/{id}.

@@ -2,7 +2,7 @@
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
 	import { onMount, onDestroy } from 'svelte';
-	import { getEndpointBySlug, deleteEndpoint, getLimits, recordUpgradeInterest } from '$lib/api';
+	import { getEndpointBySlug, deleteEndpoint, getLimits, recordUpgradeInterest, resignRequest } from '$lib/api';
 	import { createWSClient, type WSStatus } from '$lib/ws';
 	import { getEndpointStore } from '$lib/stores/endpoint.svelte';
 	import { getRequestsStore } from '$lib/stores/requests.svelte';
@@ -56,6 +56,27 @@
 	// Mirrors browserDecidesReply on the server: when either is on, the server
 	// holds the sender's request open and sends response_needed to this tab.
 	const tabDecidesReply = () => replyActive() || syncForwardActive();
+
+	type Resigned = Pick<ForwardResultData, 'resigned' | 'resign_error'>;
+	const SIGNATURE_HEADERS = new Set(['webhook-id', 'webhook-timestamp', 'webhook-signature']);
+	// Re-sign what this tab forwards (signature.resign), as the server does in
+	// server mode: only a request the webhook secret signed gets a fresh
+	// signature over the transformed body. The secret stays on the server.
+	async function resignForward(captured: CapturedRequest, fwd: CapturedRequest): Promise<{ req: CapturedRequest } & Resigned> {
+		if (!liveCfg().signature?.resign) return { req: fwd };
+		if (captured.signature?.status !== 'verified' || captured.signature.scheme !== 'v1') {
+			return { req: fwd, resign_error: 'not re-signed: the incoming request has no valid signature made with the webhook secret' };
+		}
+		try {
+			const { headers } = await resignRequest((endpointStore.current ?? endpoint)!.id, captured, fwd.body ?? '');
+			const kept = Object.entries(fwd.headers ?? {}).filter(([k]) => !SIGNATURE_HEADERS.has(k.toLowerCase()));
+			const fresh = Object.entries(headers).map(([k, v]) => [k, [v]]);
+			return { req: { ...fwd, headers: Object.fromEntries([...kept, ...fresh]) }, resigned: true };
+		} catch (err) {
+			const msg = err instanceof Error ? err.message : String(err);
+			return { req: fwd, resign_error: msg.startsWith('not re-signed') ? msg : `not re-signed: ${msg}` };
+		}
+	}
 
 	// ?edit=transform|reply|settings shows that screen in place of the requests;
 	// ?try=<id> starts the editor on that request.
@@ -136,9 +157,12 @@
 								latency_ms: 0,
 								error: '__pending__'
 							});
-							forwardRequestWithResponse(fwdReq, fwdUrl).then((fwdResult) => {
-								requestsStore.attachForwardResult(req.id, fwdResult);
-							}).catch((err) => {
+							const captured = req;
+							resignForward(captured, fwdReq).then(({ req: signedReq, ...signed }) =>
+								forwardRequestWithResponse(signedReq, fwdUrl).then((fwdResult) => {
+									requestsStore.attachForwardResult(captured.id, { ...fwdResult, ...signed });
+								})
+							).catch((err) => {
 								// Always store a result so the UI shows the error instead of nothing.
 								const message = explainForwardError(err, fwdUrl);
 								console.warn('Browser forward error:', message);
@@ -190,13 +214,15 @@
 								}
 							}
 
-							// Step 2: Sync forward (if configured)
+							// Step 2: Re-sign (if configured), then forward. The reply script
+							// still sees the request as transformed.
 							const fwdUrl = dropped ? undefined : liveCfg().forward_url;
 							const fwdMode = liveCfg().forward_mode || 'async';
 							let fwdError: string | undefined;
+							const { req: signedReq, ...signed } = fwdUrl ? await resignForward(data.request, handlerReq) : { req: handlerReq };
 							if (fwdUrl && fwdMode === 'sync') {
 								try {
-									const syncResult = await forwardRequestSync(handlerReq, fwdUrl);
+									const syncResult = await forwardRequestSync(signedReq, fwdUrl);
 									fwdResponse = syncResult.response;
 									fwdError = syncResult.result.error;
 									// Capture forward result for display
@@ -209,7 +235,8 @@
 										error: syncResult.result.error,
 										response_body: syncResult.response?.body,
 										response_headers: syncResult.response?.headers,
-										content_type: syncResult.response?.content_type
+										content_type: syncResult.response?.content_type,
+										...signed
 									});
 								} catch (err) {
 									fwdError = explainForwardError(err, fwdUrl);
@@ -217,10 +244,11 @@
 								}
 							} else if (fwdUrl && fwdMode === 'async') {
 								// Fire-and-forget even in response_needed flow, but capture response
-								forwardRequestWithResponse(handlerReq, fwdUrl).then((fwdResult) => {
+								forwardRequestWithResponse(signedReq, fwdUrl).then((fwdResult) => {
 									// Use the original request_id from the response_needed data
 									requestsStore.attachForwardResult(data.request_id, {
 										...fwdResult,
+										...signed,
 										request_id: data.request_id
 									});
 								}).catch((err) => {

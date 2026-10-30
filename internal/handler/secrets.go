@@ -20,6 +20,10 @@ import (
 // key encryption key is configured to store it with.
 var errNoEncryptionKeys = errors.New("signature secrets are stored encrypted: set ENCRYPTION_KEYS on the server to save one")
 
+// errResignNeedsSecret is returned when re-signing is turned on without an
+// HMAC secret to sign with.
+var errResignNeedsSecret = errors.New("re-signing forwarded requests needs the webhook secret (signature.secret)")
+
 // secretBox keeps endpoint signature secrets write-only and encrypted at rest.
 // Secrets arrive as signature.secret, are stored as signature.secret_enc (an
 // envelope from internal/crypto) and leave the API only as signature.secret_set.
@@ -66,6 +70,9 @@ func (b secretBox) seal(in, old json.RawMessage) (json.RawMessage, error) {
 			}
 		}
 	}
+	if resign, _ := sig["resign"].(bool); resign && sig["secret_enc"] == nil && sig["secret"] == nil {
+		return nil, errResignNeedsSecret
+	}
 	return joinSignature(top, sig)
 }
 
@@ -105,18 +112,61 @@ func (b secretBox) check(cfg config.EndpointConfig, h http.Header, body []byte, 
 	if sig == nil {
 		return nil
 	}
-	secret := sig.Secret
-	if sig.SecretEnc != "" {
-		var err error
-		if secret, err = b.open(sig.SecretEnc); err != nil {
-			return &signature.Result{
-				Status:    signature.StatusInvalid,
-				Error:     "stored signature secret can't be decrypted: " + err.Error(),
-				WebhookID: h.Get("webhook-id"),
-			}
+	secret, err := b.secret(sig)
+	if err != nil {
+		return &signature.Result{
+			Status:    signature.StatusInvalid,
+			Error:     err.Error(),
+			WebhookID: h.Get("webhook-id"),
 		}
 	}
 	return signature.Check(secret, sig.PublicKey, h, body, receivedAt)
+}
+
+// secret returns the HMAC secret in sig, decrypting the stored one.
+func (b secretBox) secret(sig *config.SignatureConfig) (string, error) {
+	if sig.SecretEnc == "" {
+		return sig.Secret, nil
+	}
+	secret, err := b.open(sig.SecretEnc)
+	if err != nil {
+		return "", fmt.Errorf("stored signature secret can't be decrypted: %w", err)
+	}
+	return secret, nil
+}
+
+// resignResult says whether a forwarded request was signed again and, when
+// re-signing is on but it wasn't, why.
+type resignResult struct {
+	Resigned bool
+	Error    string
+}
+
+// resign signs a forwarded request again when cfg asks for it: it replaces
+// the webhook-* headers in h with a signature of body made now. incoming is
+// the request's own verification result. Only a request the same HMAC secret
+// signed is re-signed, so neither knowing the webhook URL nor setting a public
+// key of one's own is enough to get a body signed with the secret.
+// id is the webhook-id to use when h has none.
+func (b secretBox) resign(cfg config.EndpointConfig, incoming *signature.Result, h http.Header, id string, body []byte, now time.Time) resignResult {
+	sig := cfg.Signature
+	if sig == nil || !sig.Resign {
+		return resignResult{}
+	}
+	if !incoming.Verified() || incoming.Scheme != "v1" {
+		return resignResult{Error: "not re-signed: the incoming request has no valid signature made with the webhook secret"}
+	}
+	secret, err := b.secret(sig)
+	if err == nil && secret == "" {
+		err = errResignNeedsSecret
+	}
+	if err == nil {
+		err = signature.Resign(h, secret, id, body, now)
+	}
+	if err != nil {
+		return resignResult{Error: "not re-signed: " + err.Error()}
+	}
+	return resignResult{Resigned: true}
 }
 
 // annotate fills in Signature for stored requests, which don't persist the

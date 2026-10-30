@@ -5,6 +5,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/fastschema/qjs"
+	"github.com/rs/zerolog"
 )
 
 // Scripts must not see qjs's host modules (std, os): they read and write files.
@@ -21,21 +24,89 @@ func TestSandbox_NoHostModules(t *testing.T) {
 	}
 }
 
-// Even with os in hand (the raw eval skips the prelude), the filesystem is an
-// empty, read-only directory, not the server's working directory.
+// Even with os in hand (a bare runtime, without the prelude), the filesystem
+// is an empty, read-only directory, not the server's working directory.
 func TestSandbox_NoServerFiles(t *testing.T) {
 	r := newTestRunner(t)
-	// The test's working directory is this package, which has files in it.
-	out, err := r.eval(context.Background(), "fs.js", `JSON.stringify(os.readdir(".")[0])`)
+	rt, err := qjs.New(r.option)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if out != `[".",".."]` {
+	defer rt.Close()
+	eval := func(code string) string {
+		v, err := rt.Eval("fs.js", qjs.Code(code))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer v.Free()
+		return v.String()
+	}
+	// The test's working directory is this package, which has files in it.
+	if out := eval(`JSON.stringify(os.readdir(".")[0])`); out != `[".",".."]` {
 		t.Fatalf("script can see files: %s", out)
 	}
-	out, err = r.eval(context.Background(), "w.js", `String(os.open("x.txt", os.O_WRONLY | os.O_CREAT, 420) < 0)`)
-	if err != nil || out != "true" {
-		t.Fatalf("script could create a file: %q %v", out, err)
+	if out := eval(`String(os.open("x.txt", os.O_WRONLY | os.O_CREAT, 420) < 0)`); out != "true" {
+		t.Fatalf("script could create a file: %q", out)
+	}
+}
+
+// Runtimes are reused, so nothing a script leaves behind may reach the next
+// one: globals, changed built-ins, or the Math.random sequence.
+func TestSandbox_NoStateBetweenRuns(t *testing.T) {
+	r := newTestRunner(t)
+	ctx := context.Background()
+	for i := 0; i < 3; i++ {
+		out, err := r.eval(ctx, "a.js", `
+			var before = [typeof leaked, typeof globalThis.alsoLeaked, typeof Object.prototype.polluted, JSON.stringify.name].join(",");
+			var leaked = 1; globalThis.alsoLeaked = 2; Object.prototype.polluted = 3; JSON.stringify = function hijacked() {};
+			before`)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if out != "undefined,undefined,undefined,stringify" {
+			t.Fatalf("run %d saw state from an earlier run: %s", i, out)
+		}
+	}
+	seen := map[string]bool{}
+	for i := 0; i < 5; i++ {
+		out, err := r.eval(ctx, "r.js", `String(Math.random())`)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if seen[out] {
+			t.Fatalf("Math.random repeated %s across runs", out)
+		}
+		seen[out] = true
+	}
+}
+
+// A run that times out or fills memory loses its runtime; the next run gets a
+// working one.
+func TestSandbox_RecoversAfterFailedRun(t *testing.T) {
+	log := zerolog.Nop()
+	r, err := New(context.Background(), Config{Timeout: 200 * time.Millisecond, PoolSize: 1, MemoryLimit: 32 << 20, MaxStackSize: 512 << 10}, log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close(context.Background())
+	ctx := context.Background()
+	if _, err := r.eval(ctx, "loop.js", `for (;;) {}`); err == nil || !strings.Contains(err.Error(), "longer than") {
+		t.Fatalf("infinite loop: err = %v", err)
+	}
+	if out, err := r.eval(ctx, "ok.js", `String(1 + 1)`); err != nil || out != "2" {
+		t.Fatalf("after timeout: %q %v", out, err)
+	}
+	if _, err := r.eval(ctx, "m.js", `var a = []; for (;;) a.push("x".repeat(1000000))`); err == nil {
+		t.Fatal("unbounded allocation succeeded")
+	}
+	if out, err := r.eval(ctx, "ok.js", `String(1 + 1)`); err != nil || out != "2" {
+		t.Fatalf("after out of memory: %q %v", out, err)
+	}
+	if _, err := r.eval(ctx, "throw.js", `throw new Error("boom")`); err == nil {
+		t.Fatal("throw: want error")
+	}
+	if out, err := r.eval(ctx, "ok.js", `String(1 + 1)`); err != nil || out != "2" {
+		t.Fatalf("after throw: %q %v", out, err)
 	}
 }
 
