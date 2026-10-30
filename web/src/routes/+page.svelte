@@ -3,10 +3,8 @@
 	import { goto } from '$app/navigation';
 	import { createEndpoint, listEndpoints, deleteEndpoint } from '$lib/api';
 	import { getWebhookURL, formatTime, copyToClipboard, slugNameError, SLUG_NAME_MAX } from '$lib/utils';
-	import { DEFAULT_SCRIPTS, DEFAULT_RESPONSE_SCRIPTS, initWasm, isWasmReady, validateResponseHandler } from '$lib/wasm';
-	import CodeEditor from '$lib/components/CodeEditor.svelte';
-	import { Trash2, Copy, ChevronRight, Plus, X, Check, AlertTriangle, Loader2 } from 'lucide-svelte';
-	import type { Endpoint, EndpointConfig } from '$lib/types';
+	import { Trash2, Copy, Plus, X, Check, Loader2 } from 'lucide-svelte';
+	import type { Endpoint } from '$lib/types';
 
 	let endpoints = $state<Endpoint[]>([]);
 	let loading = $state(true);
@@ -16,27 +14,11 @@
 	let createError = $state<string | null>(null);
 	let loadError = $state<string | null>(null);
 	let deleteError = $state<string | null>(null);
-	let forwardUrlError = $state<string | null>(null);
 
 	// Creation form state
 	let newName = $state('');
 	let newSlugName = $state('');
 	let newMode = $state<'server' | 'browser'>('server');
-	let showAdvanced = $state(false);
-
-	// Advanced: Forward URL (single URL + mode)
-	let newForwardUrl = $state('');
-	let newForwardMode = $state<'async' | 'sync'>('async');
-
-	// Advanced: Transform (JavaScript)
-	let newTransformEnabled = $state(false);
-	let newTransformScript = $state('');
-
-	// Advanced: Custom Response (JavaScript)
-	let newCustomResponseEnabled = $state(false);
-	let newCustomResponseScript = $state('');
-	let newResponseValidating = $state(false);
-	let newResponseValidationResult = $state<{ valid: boolean; error?: string } | null>(null);
 
 	const modes = [
 		{
@@ -62,33 +44,6 @@
 		`/h/${newSlugName.trim() && !newSlugNameError ? newSlugName.trim().toLowerCase() + '-' : ''}three-random-words`
 	);
 
-	const advancedSummary = $derived(
-		[
-			newForwardUrl.trim() ? 'forwarding' : '',
-			newTransformEnabled ? 'transform' : '',
-			newCustomResponseEnabled ? 'custom reply' : ''
-		]
-			.filter(Boolean)
-			.join(', ')
-	);
-
-	async function handleNewResponseValidate() {
-		if (!isWasmReady('javascript')) {
-			await initWasm('javascript');
-		}
-		if (!isWasmReady('javascript')) return;
-		newResponseValidating = true;
-		newResponseValidationResult = null;
-		try {
-			newResponseValidationResult = await validateResponseHandler(
-				newCustomResponseScript || DEFAULT_RESPONSE_SCRIPTS.javascript,
-				'javascript'
-			);
-		} finally {
-			newResponseValidating = false;
-		}
-	}
-
 	async function loadEndpoints() {
 		loading = true;
 		loadError = null;
@@ -106,13 +61,6 @@
 		newName = '';
 		newSlugName = '';
 		newMode = 'server';
-		showAdvanced = false;
-		newForwardUrl = '';
-		newForwardMode = 'async';
-		newTransformEnabled = false;
-		newTransformScript = '';
-		newCustomResponseEnabled = false;
-		newCustomResponseScript = '';
 	}
 
 	async function handleCreate(e?: SubmitEvent) {
@@ -121,30 +69,10 @@
 		creating = true;
 		createError = null;
 		try {
-			const config: EndpointConfig = {};
-
-			if (newForwardUrl.trim()) {
-				config.forward_url = newForwardUrl.trim();
-				config.forward_mode = newForwardMode;
-			}
-			// Scripts are JavaScript, the server's default language.
-			if (newTransformEnabled && newTransformScript.trim()) {
-				config.wasm_script = newTransformScript;
-			}
-			if (newCustomResponseEnabled && newCustomResponseScript.trim()) {
-				config.custom_response = {
-					enabled: true,
-					script: newCustomResponseScript
-				};
-			}
-
-			const hasConfig = Object.keys(config).length > 0;
-
 			const ep = await createEndpoint({
 				name: newName || undefined,
 				slug_name: newSlugName.trim() || undefined,
-				mode: newMode,
-				config: hasConfig ? config : undefined
+				mode: newMode
 			});
 			resetForm();
 			goto(`/${ep.slug}`);
@@ -152,19 +80,6 @@
 			createError = err instanceof Error ? err.message : 'Failed to create endpoint. Please try again.';
 		} finally {
 			creating = false;
-		}
-	}
-
-	function validateForwardUrl(): boolean {
-		const url = newForwardUrl.trim();
-		if (!url) return true;
-		try {
-			new URL(url);
-			forwardUrlError = null;
-			return true;
-		} catch {
-			forwardUrlError = 'Invalid URL. Must include protocol (e.g. https://example.com)';
-			return false;
 		}
 	}
 
@@ -317,153 +232,6 @@
 					</div>
 					<p class="m-0 text-[13px] text-faint">Not sure? Start on the server. You can switch any time.</p>
 				</fieldset>
-
-				<!-- Advanced configuration (collapsed) -->
-				<div class="border-t border-line -mx-5 sm:-mx-6 px-5 sm:px-6 pt-3.5">
-					<button
-						type="button"
-						onclick={() => (showAdvanced = !showAdvanced)}
-						aria-expanded={showAdvanced}
-						class="flex items-center gap-1.5 text-[13px] font-medium text-soft hover:text-ink transition-colors py-1"
-					>
-						<ChevronRight class="w-3.5 h-3.5 transition-transform {showAdvanced ? 'rotate-90' : ''}" />
-						Advanced configuration
-						{#if advancedSummary}
-							<span class="ml-1 text-xs font-normal text-accent">{advancedSummary}</span>
-						{/if}
-					</button>
-
-					{#if showAdvanced}
-						<div class="pt-4 pb-1 flex flex-col gap-6">
-							<p class="m-0 text-[13px] text-faint">All optional, and all can be changed later from the endpoint page.</p>
-
-							<!-- Forward URL -->
-							<div class="flex flex-col gap-2">
-								<label for="forward-url" class="text-[13px] font-medium text-soft">
-									Forward to
-									<span class="font-normal text-faint">
-										{newMode === 'browser' ? '(sent from this tab, so localhost works; turn on the local reply in Settings)' : '(sent from the server, so it must be reachable from there)'}
-									</span>
-								</label>
-								<input
-									id="forward-url"
-									bind:value={newForwardUrl}
-									placeholder="https://example.com/webhook or http://localhost:3000/hook"
-									oninput={() => (forwardUrlError = null)}
-									onblur={validateForwardUrl}
-									class="font-sans text-sm text-ink px-3 py-2.5 border rounded-[10px] bg-page placeholder:text-faint/70 focus:outline-none focus:border-accent transition-colors {forwardUrlError ? 'border-danger/60' : 'border-line-strong'}"
-								/>
-								{#if forwardUrlError}
-									<p class="m-0 text-xs text-danger">{forwardUrlError}</p>
-								{/if}
-								{#if newForwardUrl.trim()}
-									<div class="flex items-center gap-3 flex-wrap">
-										<div class="flex items-center border border-line-strong rounded-lg overflow-hidden" role="radiogroup" aria-label="Forward mode">
-											{#each [{ id: 'async', label: 'Async' }, { id: 'sync', label: 'Sync' }] as const as fm (fm.id)}
-												<button
-													type="button"
-													role="radio"
-													aria-checked={newForwardMode === fm.id}
-													onclick={() => (newForwardMode = fm.id)}
-													class="text-xs px-3 py-1.5 transition-colors {newForwardMode === fm.id ? 'bg-ink text-on-ink' : 'text-soft hover:bg-chip'}"
-												>
-													{fm.label}
-												</button>
-											{/each}
-										</div>
-										<span class="text-xs text-faint">
-											{newForwardMode === 'async' ? "Doesn't wait for the target before replying." : "Waits for the target's response, so your reply script can use it."}
-										</span>
-									</div>
-								{/if}
-							</div>
-
-							<!-- Transform -->
-							<div class="flex flex-col gap-2">
-								<label class="flex items-center justify-between gap-3 cursor-pointer">
-									<span class="text-[13px] font-medium text-soft">
-										Transform <span class="font-normal text-faint">(JavaScript, reshapes each request)</span>
-									</span>
-									<input type="checkbox" bind:checked={newTransformEnabled} class="w-4 h-4 accent-accent" />
-								</label>
-								{#if newTransformEnabled}
-									{#if !newTransformScript}
-										<button
-											type="button"
-											onclick={() => (newTransformScript = DEFAULT_SCRIPTS.javascript)}
-											class="self-start text-xs px-2.5 py-1.5 rounded-lg border border-line-strong text-soft hover:bg-chip transition-colors"
-										>
-											Insert example
-										</button>
-									{/if}
-									<CodeEditor
-										value={newTransformScript}
-										onchange={(v) => (newTransformScript = v)}
-										placeholder={DEFAULT_SCRIPTS.javascript.split('\n')[0]}
-										minHeight="140px"
-										language="javascript"
-									/>
-								{/if}
-							</div>
-
-							<!-- Custom response -->
-							<div class="flex flex-col gap-2">
-								<label class="flex items-center justify-between gap-3 cursor-pointer">
-									<span class="text-[13px] font-medium text-soft">
-										Custom reply <span class="font-normal text-faint">(JavaScript, what the sender gets back)</span>
-									</span>
-									<input type="checkbox" bind:checked={newCustomResponseEnabled} class="w-4 h-4 accent-accent" />
-								</label>
-								{#if newCustomResponseEnabled}
-									<div class="flex items-center gap-2 flex-wrap">
-										{#if !newCustomResponseScript}
-											<button
-												type="button"
-												onclick={() => (newCustomResponseScript = DEFAULT_RESPONSE_SCRIPTS.javascript)}
-												class="text-xs px-2.5 py-1.5 rounded-lg border border-line-strong text-soft hover:bg-chip transition-colors"
-											>
-												Insert example
-											</button>
-										{/if}
-										<button
-											type="button"
-											onclick={handleNewResponseValidate}
-											disabled={newResponseValidating || !newCustomResponseScript}
-											class="text-xs px-2.5 py-1.5 rounded-lg border border-line-strong text-soft hover:bg-chip transition-colors flex items-center gap-1 disabled:opacity-50"
-										>
-											{#if newResponseValidating}
-												<Loader2 class="w-3 h-3 animate-spin" />
-											{:else}
-												<Check class="w-3 h-3" />
-											{/if}
-											Validate
-										</button>
-									</div>
-									<CodeEditor
-										value={newCustomResponseScript}
-										onchange={(v) => (newCustomResponseScript = v)}
-										placeholder={DEFAULT_RESPONSE_SCRIPTS.javascript.split('\n')[0]}
-										minHeight="140px"
-										language="javascript"
-									/>
-									{#if newResponseValidationResult}
-										<div
-											class="text-xs px-3 py-2 rounded-lg border flex items-center gap-1.5 {newResponseValidationResult.valid
-												? 'border-accent/30 bg-accent/5 text-accent'
-												: 'border-danger/30 bg-danger/5 text-danger'}"
-										>
-											{#if newResponseValidationResult.valid}
-												<Check class="w-3 h-3" /> Reply script is valid
-											{:else}
-												<AlertTriangle class="w-3 h-3" /> {newResponseValidationResult.error}
-											{/if}
-										</div>
-									{/if}
-								{/if}
-							</div>
-						</div>
-					{/if}
-				</div>
 
 				{#if createError}
 					{@render errorBanner(createError, () => (createError = null))}
