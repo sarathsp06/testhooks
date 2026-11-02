@@ -38,6 +38,27 @@ export interface SignatureConfig {
 	 * re-signed. Needs a secret.
 	 */
 	resign?: boolean;
+	/**
+	 * Header names the signature travels in, for senders that use the
+	 * Standard Webhooks scheme under their own names (Svix: svix-id,
+	 * svix-timestamp, svix-signature). Left out: webhook-id,
+	 * webhook-timestamp and webhook-signature. Re-signing writes the same ones.
+	 */
+	id_header?: string;
+	timestamp_header?: string;
+	signature_header?: string;
+}
+
+/** The Standard Webhooks header names, used when a config names none. */
+export const DEFAULT_SIGNATURE_HEADERS = { id: 'webhook-id', timestamp: 'webhook-timestamp', signature: 'webhook-signature' };
+
+/** The headers sig reads signatures from and re-signs into. */
+export function signatureHeaders(sig?: SignatureConfig) {
+	return {
+		id: sig?.id_header || DEFAULT_SIGNATURE_HEADERS.id,
+		timestamp: sig?.timestamp_header || DEFAULT_SIGNATURE_HEADERS.timestamp,
+		signature: sig?.signature_header || DEFAULT_SIGNATURE_HEADERS.signature
+	};
 }
 
 /** Server-side Standard Webhooks verification result for a captured request. */

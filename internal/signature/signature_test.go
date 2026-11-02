@@ -52,9 +52,9 @@ func TestSparrowVectors(t *testing.T) {
 			var verr error
 			switch c.Scheme {
 			case "hmac":
-				verr = VerifyHMAC(c.Key, h, body, now, tol)
+				verr = VerifyHMAC(c.Key, Headers{}, h, body, now, tol)
 			case "ed25519":
-				verr = VerifyEd25519(c.Key, h, body, now, tol)
+				verr = VerifyEd25519(c.Key, Headers{}, h, body, now, tol)
 			default:
 				t.Fatalf("unknown scheme %q", c.Scheme)
 			}
@@ -74,16 +74,16 @@ func TestCheck(t *testing.T) {
 	body, _ := base64.StdEncoding.DecodeString("eyJvcmRlcl9pZCI6Im9yZF8xMjMiLCJub3RlIjoiY2Fmw6kg4piVXG4ifQo=")
 	const secret = "whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw"
 
-	if r := Check("", "", h, body, now); r != nil {
+	if r := Check("", "", Headers{}, h, body, now); r != nil {
 		t.Errorf("no keys configured: got %+v, want nil", r)
 	}
-	if r := Check(secret, "", h, body, now); !r.Verified() || r.Scheme != "v1" || r.WebhookID != "msg_4f1c2a8e-delivery" {
+	if r := Check(secret, "", Headers{}, h, body, now); !r.Verified() || r.Scheme != "v1" || r.WebhookID != "msg_4f1c2a8e-delivery" {
 		t.Errorf("valid request: got %+v", r)
 	}
-	if r := Check(secret, "", h, append(body, ' '), now); r.Status != StatusInvalid {
+	if r := Check(secret, "", Headers{}, h, append(body, ' '), now); r.Status != StatusInvalid {
 		t.Errorf("tampered body: got %+v, want invalid", r)
 	}
-	if r := Check(secret, "", http.Header{}, body, now); r.Status != StatusMissing {
+	if r := Check(secret, "", Headers{}, http.Header{}, body, now); r.Status != StatusMissing {
 		t.Errorf("no headers: got %+v, want missing", r)
 	}
 }
@@ -139,7 +139,7 @@ func TestResign(t *testing.T) {
 			"Content-Type":      {"application/json"},
 		}
 		body := []byte(`{"changed":true}`)
-		if err := Resign(h, secret, "fallback", body, now); err != nil {
+		if err := Resign(h, Headers{}, secret, "fallback", body, now); err != nil {
 			t.Fatal(err)
 		}
 		if len(h) != 4 {
@@ -148,7 +148,7 @@ func TestResign(t *testing.T) {
 		if got := h.Get("webhook-id"); got != "msg_1" {
 			t.Errorf("webhook-id = %q, want msg_1", got)
 		}
-		if err := VerifyHMAC(secret, h, body, now, DefaultTolerance); err != nil {
+		if err := VerifyHMAC(secret, Headers{}, h, body, now, DefaultTolerance); err != nil {
 			t.Errorf("re-signed request does not verify: %v", err)
 		}
 		if strings.Contains(h.Get("webhook-signature"), "v1a,") {
@@ -158,20 +158,60 @@ func TestResign(t *testing.T) {
 
 	t.Run("uses the fallback id when there is none", func(t *testing.T) {
 		h := http.Header{}
-		if err := Resign(h, "raw-secret", "msg_req42", []byte("x"), now); err != nil {
+		if err := Resign(h, Headers{}, "raw-secret", "msg_req42", []byte("x"), now); err != nil {
 			t.Fatal(err)
 		}
 		if got := h.Get("webhook-id"); got != "msg_req42" {
 			t.Errorf("webhook-id = %q, want msg_req42", got)
 		}
-		if err := VerifyHMAC("raw-secret", h, []byte("x"), now, DefaultTolerance); err != nil {
+		if err := VerifyHMAC("raw-secret", Headers{}, h, []byte("x"), now, DefaultTolerance); err != nil {
 			t.Error(err)
 		}
 	})
 
 	t.Run("bad secret", func(t *testing.T) {
-		if err := Resign(http.Header{}, "whsec_!!", "id", nil, now); err == nil {
+		if err := Resign(http.Header{}, Headers{}, "whsec_!!", "id", nil, now); err == nil {
 			t.Error("want error for a non-base64 whsec_ secret")
 		}
 	})
+}
+
+// A sender using the Standard Webhooks scheme under its own header names
+// (Svix's svix-*) verifies and re-signs with those names, not webhook-*.
+func TestCustomHeaders(t *testing.T) {
+	const secret = "whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw"
+	now := time.Unix(1790000000, 0)
+	svix := Headers{ID: "svix-id", Timestamp: "svix-timestamp", Signature: "svix-signature"}
+	body := []byte(`{"a":1}`)
+
+	sig, err := SignHMAC(secret, "msg_1", "1790000000", body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := http.Header{}
+	h.Set("svix-id", "msg_1")
+	h.Set("svix-timestamp", "1790000000")
+	h.Set("svix-signature", sig)
+
+	if r := Check(secret, "", svix, h, body, now); !r.Verified() || r.WebhookID != "msg_1" {
+		t.Errorf("svix headers: got %+v, want verified msg_1", r)
+	}
+	r := Check(secret, "", Headers{}, h, body, now)
+	if r.Status != StatusMissing || !strings.Contains(r.Error, "webhook-signature") {
+		t.Errorf("default names on svix request: got %+v, want missing webhook-*", r)
+	}
+	if r := Check(secret, "", svix, http.Header{}, body, now); !strings.Contains(r.Error, "svix-signature") {
+		t.Errorf("missing error should name the configured header: %q", r.Error)
+	}
+
+	changed := []byte(`{"a":2}`)
+	if err := Resign(h, svix, secret, "fallback", changed, now); err != nil {
+		t.Fatal(err)
+	}
+	if h.Get("webhook-signature") != "" || h.Get("svix-id") != "msg_1" {
+		t.Errorf("re-signed headers = %v, want svix-* only, id kept", h)
+	}
+	if err := VerifyHMAC(secret, svix, h, changed, now, DefaultTolerance); err != nil {
+		t.Errorf("re-signed request does not verify: %v", err)
+	}
 }
