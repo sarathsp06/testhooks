@@ -159,6 +159,10 @@
 				<p class="m-0 text-lg leading-[1.55] text-body">
 					Point any service at it and watch requests arrive here as they happen. Then transform them, forward them, or script the reply.
 				</p>
+				<a href="https://www.producthunt.com/products/testhooks?embed=true&utm_source=badge-featured&utm_medium=badge&utm_campaign=badge-testhooks" target="_blank" rel="noopener noreferrer" class="self-start">
+					<img alt="Testhooks - Webhooks tester, made for humans and for machines | Product Hunt" width="250" height="54" src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1298324&t=1793626518707&theme=light" class="dark:hidden" />
+					<img alt="Testhooks - Webhooks tester, made for humans and for machines | Product Hunt" width="250" height="54" src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1298324&t=1793626518707&theme=dark" class="hidden dark:block" />
+				</a>
 			</div>
 
 			<form onsubmit={handleCreate} class="flex flex-col gap-[18px] bg-surface border border-line rounded-[14px] p-5 sm:p-6">

@@ -33,14 +33,15 @@ func SecurityHeaders(next http.Handler) http.Handler {
 		//   inline styles + Google Fonts stylesheets
 		// - connect-src 'self' ws: wss: https: http:: allow API calls, WebSocket, and
 		//   browser-side forwarding to arbitrary targets (including localhost)
-		// - img-src 'self' data:: allow same-origin images + data URIs
+		// - img-src 'self' data: https://api.producthunt.com: same-origin images, data URIs
+		//   and the Product Hunt badge on the home page
 		// - font-src 'self' https://fonts.gstatic.com: same-origin + Google Fonts files
 		h.Set("Content-Security-Policy",
 			"default-src 'self'; "+
 				"script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; "+
 				"style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "+
 				"connect-src 'self' ws: wss: https: http:; "+
-				"img-src 'self' data:; "+
+				"img-src 'self' data: https://api.producthunt.com; "+
 				"font-src 'self' https://fonts.gstatic.com")
 
 		next.ServeHTTP(w, r)
