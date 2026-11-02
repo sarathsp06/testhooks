@@ -22,6 +22,12 @@ The signed content is `{webhook-id}.{webhook-timestamp}.{raw body}`.
 
 A request verifies if any signature of a configured type matches, and the timestamp is within 5 minutes of when it was received.
 
+## Senders with their own header names
+
+Some senders use this scheme under other header names. Svix, for one, sends `svix-id`, `svix-timestamp` and `svix-signature`. Under **Signature Verification**, open **Header names** and type the sender's three names; leave a field empty to keep the standard one. Verification reads those headers, and [re-signing](#re-sign-after-a-transform) writes them, so your app gets the names it already checks.
+
+Each name must be a valid header name (letters, digits and dashes, such as `svix-signature`), and the three must differ. Saving anything else is `400` with the reason.
+
 ## Turn it on
 
 In the endpoint's **Settings** tab, under **Signature Verification**:
@@ -79,6 +85,8 @@ A [transform](../scripts/) that changes the body breaks the sender's signature: 
 - `webhook-timestamp` becomes the time of the forward.
 - `webhook-id` stays the sender's, so your app can still spot retries. A request without one gets `msg_<request id>`.
 
+With [other header names](#senders-with-their-own-header-names) set, the same happens to those headers instead.
+
 Your app keeps checking signatures with the secret it already has, and sees the transformed body.
 
 Only a request whose `v1` signature verified with this secret is re-signed. Anything else (unsigned, a bad signature, or one that only verified with the Ed25519 public key) is forwarded with its headers as they were, and your app rejects it as it should. So knowing your webhook URL is not enough to get a body signed. The request shows **re-signed** or **not re-signed** next to the forward result, with the reason under **What was forwarded**.
@@ -124,6 +132,9 @@ curl -X PATCH http://localhost:8080/api/endpoints/<id> \
 | `signature.public_key` | Hex Ed25519 public key for `v1a` signatures |
 | `signature.enforce` | Reject failures with `401` |
 | `signature.resign` | [Re-sign forwarded requests](#re-sign-after-a-transform) with the secret. Needs `signature.secret` |
+| `signature.id_header` | Header holding the message ID. Default `webhook-id` |
+| `signature.timestamp_header` | Header holding the timestamp. Default `webhook-timestamp` |
+| `signature.signature_header` | Header holding the signatures. Default `webhook-signature` |
 
 Requests returned by the API include a `signature` object: `status` (`verified`, `invalid` or `missing`), `scheme`, `error` and `webhook_id`.
 

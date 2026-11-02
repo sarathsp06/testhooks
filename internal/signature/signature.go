@@ -1,7 +1,9 @@
 // Package signature verifies and creates Standard Webhooks signatures
 // (https://www.standardwebhooks.com), the scheme Sparrow and other webhook
 // senders use: headers webhook-id, webhook-timestamp and webhook-signature,
-// over the message "{id}.{timestamp}.{raw body}".
+// over the message "{id}.{timestamp}.{raw body}". Senders that use the same
+// scheme under other header names (Svix sends svix-id, svix-timestamp and
+// svix-signature) are handled by passing those names as Headers.
 //
 //   - "v1,<base64>"  is HMAC-SHA256 keyed with a shared secret. A "whsec_"
 //     secret is base64-decoded first; any other secret is used as raw bytes.
@@ -33,6 +35,31 @@ const (
 	StatusMissing  = "missing"  // one or more Standard Webhooks headers absent
 )
 
+// Headers names the three headers a signature travels in. An empty name
+// means the Standard Webhooks one.
+type Headers struct {
+	ID        string
+	Timestamp string
+	Signature string
+}
+
+// DefaultHeaders are the Standard Webhooks header names.
+var DefaultHeaders = Headers{ID: "webhook-id", Timestamp: "webhook-timestamp", Signature: "webhook-signature"}
+
+// OrDefault returns n with each empty name replaced by the Standard Webhooks one.
+func (n Headers) OrDefault() Headers {
+	if n.ID == "" {
+		n.ID = DefaultHeaders.ID
+	}
+	if n.Timestamp == "" {
+		n.Timestamp = DefaultHeaders.Timestamp
+	}
+	if n.Signature == "" {
+		n.Signature = DefaultHeaders.Signature
+	}
+	return n
+}
+
 // Result is the outcome of checking one request.
 type Result struct {
 	Status    string `json:"status"`
@@ -44,37 +71,49 @@ type Result struct {
 // Verified reports whether the request carried a valid signature.
 func (r *Result) Verified() bool { return r != nil && r.Status == StatusVerified }
 
-var errMissingHeaders = errors.New("missing webhook-id, webhook-timestamp or webhook-signature header")
+// missingHeadersError says which headers a request had to carry.
+type missingHeadersError struct{ names Headers }
+
+func (e missingHeadersError) Error() string {
+	return fmt.Sprintf("missing %s, %s or %s header", e.names.ID, e.names.Timestamp, e.names.Signature)
+}
+
+func isMissingHeaders(err error) bool {
+	var m missingHeadersError
+	return errors.As(err, &m)
+}
 
 // Check verifies the request against whichever keys are configured (an HMAC
-// secret, an Ed25519 public key, or both; matching either is enough). now is
-// the time the request was received. Returns nil when no key is configured.
-func Check(secret, publicKey string, h http.Header, body []byte, now time.Time) *Result {
+// secret, an Ed25519 public key, or both; matching either is enough). names
+// are the headers to read. now is the time the request was received. Returns
+// nil when no key is configured.
+func Check(secret, publicKey string, names Headers, h http.Header, body []byte, now time.Time) *Result {
 	if secret == "" && publicKey == "" {
 		return nil
 	}
-	res := &Result{WebhookID: h.Get("webhook-id")}
+	names = names.OrDefault()
+	res := &Result{WebhookID: h.Get(names.ID)}
 
 	var errs []string
 	if secret != "" {
-		err := VerifyHMAC(secret, h, body, now, DefaultTolerance)
+		err := VerifyHMAC(secret, names, h, body, now, DefaultTolerance)
 		if err == nil {
 			res.Status, res.Scheme = StatusVerified, "v1"
 			return res
 		}
-		if errors.Is(err, errMissingHeaders) {
+		if isMissingHeaders(err) {
 			res.Status, res.Error = StatusMissing, err.Error()
 			return res
 		}
 		errs = append(errs, err.Error())
 	}
 	if publicKey != "" {
-		err := VerifyEd25519(publicKey, h, body, now, DefaultTolerance)
+		err := VerifyEd25519(publicKey, names, h, body, now, DefaultTolerance)
 		if err == nil {
 			res.Status, res.Scheme = StatusVerified, "v1a"
 			return res
 		}
-		if errors.Is(err, errMissingHeaders) {
+		if isMissingHeaders(err) {
 			res.Status, res.Error = StatusMissing, err.Error()
 			return res
 		}
@@ -85,12 +124,12 @@ func Check(secret, publicKey string, h http.Header, body []byte, now time.Time) 
 }
 
 // VerifyHMAC checks the "v1" HMAC-SHA256 signature.
-func VerifyHMAC(secret string, h http.Header, body []byte, now time.Time, tolerance time.Duration) error {
+func VerifyHMAC(secret string, names Headers, h http.Header, body []byte, now time.Time, tolerance time.Duration) error {
 	key, err := hmacKey(secret)
 	if err != nil {
 		return err
 	}
-	return verify(h, body, now, tolerance, "v1", func(msg, sig []byte) bool {
+	return verify(names.OrDefault(), h, body, now, tolerance, "v1", func(msg, sig []byte) bool {
 		mac := hmac.New(sha256.New, key)
 		mac.Write(msg)
 		return hmac.Equal(mac.Sum(nil), sig)
@@ -98,7 +137,7 @@ func VerifyHMAC(secret string, h http.Header, body []byte, now time.Time, tolera
 }
 
 // VerifyEd25519 checks the "v1a" Ed25519 signature with a hex public key.
-func VerifyEd25519(publicKeyHex string, h http.Header, body []byte, now time.Time, tolerance time.Duration) error {
+func VerifyEd25519(publicKeyHex string, names Headers, h http.Header, body []byte, now time.Time, tolerance time.Duration) error {
 	pub, err := hex.DecodeString(strings.TrimSpace(publicKeyHex))
 	if err != nil {
 		return fmt.Errorf("invalid public key: not hex")
@@ -106,7 +145,7 @@ func VerifyEd25519(publicKeyHex string, h http.Header, body []byte, now time.Tim
 	if len(pub) != ed25519.PublicKeySize {
 		return fmt.Errorf("invalid public key: want %d bytes, got %d", ed25519.PublicKeySize, len(pub))
 	}
-	return verify(h, body, now, tolerance, "v1a", func(msg, sig []byte) bool {
+	return verify(names.OrDefault(), h, body, now, tolerance, "v1a", func(msg, sig []byte) bool {
 		return ed25519.Verify(ed25519.PublicKey(pub), msg, sig)
 	})
 }
@@ -123,16 +162,17 @@ func SignHMAC(secret, id, timestamp string, body []byte) (string, error) {
 	return "v1," + base64.StdEncoding.EncodeToString(mac.Sum(nil)), nil
 }
 
-// Resign replaces the Standard Webhooks headers in h with a v1 signature of
+// Resign replaces the signature headers (names) in h with a v1 signature of
 // body made now with secret, so a receiver holding the same secret accepts a
-// body that was changed after it was signed. webhook-id is kept, so the
+// body that was changed after it was signed. The id header is kept, so the
 // receiver can still spot retries; id is used when h has none. Any other
 // signature (such as an Ed25519 v1a one) is dropped: it would not verify.
 // Header names are matched case-insensitively, since a transform script may
 // return them in any case.
-func Resign(h http.Header, secret, id string, body []byte, now time.Time) error {
+func Resign(h http.Header, names Headers, secret, id string, body []byte, now time.Time) error {
+	names = names.OrDefault()
 	for k, v := range h {
-		if strings.EqualFold(k, "webhook-id") && len(v) > 0 && v[0] != "" {
+		if strings.EqualFold(k, names.ID) && len(v) > 0 && v[0] != "" {
 			id = v[0]
 		}
 	}
@@ -142,14 +182,13 @@ func Resign(h http.Header, secret, id string, body []byte, now time.Time) error 
 		return err
 	}
 	for k := range h {
-		switch strings.ToLower(k) {
-		case "webhook-id", "webhook-timestamp", "webhook-signature":
+		if strings.EqualFold(k, names.ID) || strings.EqualFold(k, names.Timestamp) || strings.EqualFold(k, names.Signature) {
 			delete(h, k)
 		}
 	}
-	h.Set("webhook-id", id)
-	h.Set("webhook-timestamp", ts)
-	h.Set("webhook-signature", sig)
+	h.Set(names.ID, id)
+	h.Set(names.Timestamp, ts)
+	h.Set(names.Signature, sig)
 	return nil
 }
 
@@ -182,19 +221,19 @@ func hmacKey(secret string) ([]byte, error) {
 
 // verify does the shared header/timestamp handling and tries every
 // signature of the given version until match returns true.
-func verify(h http.Header, body []byte, now time.Time, tolerance time.Duration, version string, match func(msg, sig []byte) bool) error {
-	id, ts, sigHeader := h.Get("webhook-id"), h.Get("webhook-timestamp"), h.Get("webhook-signature")
+func verify(names Headers, h http.Header, body []byte, now time.Time, tolerance time.Duration, version string, match func(msg, sig []byte) bool) error {
+	id, ts, sigHeader := h.Get(names.ID), h.Get(names.Timestamp), h.Get(names.Signature)
 	if id == "" || ts == "" || sigHeader == "" {
-		return errMissingHeaders
+		return missingHeadersError{names}
 	}
 
 	sec, err := strconv.ParseInt(ts, 10, 64)
 	if err != nil {
-		return fmt.Errorf("invalid webhook-timestamp %q", ts)
+		return fmt.Errorf("invalid %s %q", names.Timestamp, ts)
 	}
 	skew := now.Sub(time.Unix(sec, 0))
 	if skew > tolerance || skew < -tolerance {
-		return fmt.Errorf("webhook-timestamp outside %s tolerance (skew %s)", tolerance, skew.Round(time.Second))
+		return fmt.Errorf("%s outside %s tolerance (skew %s)", names.Timestamp, tolerance, skew.Round(time.Second))
 	}
 
 	msg := signedMessage(id, ts, body)
@@ -215,7 +254,7 @@ func verify(h http.Header, body []byte, now time.Time, tolerance time.Duration, 
 		}
 	}
 	if !found {
-		return fmt.Errorf("no %s signature in webhook-signature header", version)
+		return fmt.Errorf("no %s signature in %s header", version, names.Signature)
 	}
 	return fmt.Errorf("%s signature does not match", version)
 }

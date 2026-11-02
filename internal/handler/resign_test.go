@@ -106,7 +106,7 @@ func TestCapture_ResignsAfterTransform(t *testing.T) {
 			if !strings.Contains(string(got.body), `"transformed":true`) {
 				t.Fatalf("target got %s, want the transformed body", got.body)
 			}
-			err := signature.VerifyHMAC(resignSecret, got.header, got.body, time.Now(), signature.DefaultTolerance)
+			err := signature.VerifyHMAC(resignSecret, signature.Headers{}, got.header, got.body, time.Now(), signature.DefaultTolerance)
 			if tc.wantResigned != (err == nil) {
 				t.Errorf("target's verify error = %v, want re-signed %v", err, tc.wantResigned)
 			}
@@ -146,7 +146,7 @@ func TestCapture_NoResignWhenOff(t *testing.T) {
 
 func signWith(r *http.Request, secret, id, body string) {
 	h := http.Header{}
-	_ = signature.Resign(h, secret, id, []byte(body), time.Now())
+	_ = signature.Resign(h, signature.Headers{}, secret, id, []byte(body), time.Now())
 	for k, v := range h {
 		r.Header[k] = v
 	}
@@ -198,7 +198,7 @@ func TestAPI_Resign(t *testing.T) {
 		for k, v := range out["headers"].(map[string]any) {
 			h.Set(k, v.(string))
 		}
-		if err := signature.VerifyHMAC(resignSecret, h, []byte(forwarded), time.Now(), signature.DefaultTolerance); err != nil {
+		if err := signature.VerifyHMAC(resignSecret, signature.Headers{}, h, []byte(forwarded), time.Now(), signature.DefaultTolerance); err != nil {
 			t.Errorf("returned headers don't verify the forwarded body: %v", err)
 		}
 		if h.Get("webhook-id") != "msg_9" {
@@ -233,4 +233,67 @@ func TestAPI_Resign(t *testing.T) {
 			t.Errorf("status = %d, want 400", w.Code)
 		}
 	})
+}
+
+// An endpoint can read and re-sign signatures under the sender's own header
+// names; bad names are refused when saved.
+func TestCapture_CustomSignatureHeaders(t *testing.T) {
+	svix := signature.Headers{ID: "svix-id", Timestamp: "svix-timestamp", Signature: "svix-signature"}
+	target, got := recordingTarget(t)
+	capture, store := resigningCapture(t, target.URL, map[string]any{
+		"secret": resignSecret, "resign": true,
+		"id_header": "svix-id", "timestamp_header": "svix-timestamp", "signature_header": "svix-signature",
+	})
+
+	const body = `{"event":"order.created"}`
+	req := httptest.NewRequest("POST", "/h/rs", strings.NewReader(body))
+	h := http.Header{}
+	_ = signature.Resign(h, svix, resignSecret, "msg_svix", []byte(body), time.Now())
+	for k, v := range h {
+		req.Header[k] = v
+	}
+	w := httptest.NewRecorder()
+	captureMux(capture).ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d: %s", w.Code, w.Body)
+	}
+	if sig := onlyRequest(t, store).Signature; !sig.Verified() || sig.WebhookID != "msg_svix" {
+		t.Errorf("signature = %+v, want verified msg_svix", sig)
+	}
+	got.mu.Lock()
+	defer got.mu.Unlock()
+	if err := signature.VerifyHMAC(resignSecret, svix, got.header, got.body, time.Now(), signature.DefaultTolerance); err != nil {
+		t.Errorf("forwarded request does not verify under svix-*: %v", err)
+	}
+	if got.header.Get("webhook-signature") != "" {
+		t.Errorf("forwarded webhook-signature = %q, want none", got.header.Get("webhook-signature"))
+	}
+}
+
+func TestAPI_SignatureHeaderNamesValidated(t *testing.T) {
+	store := newMockStore()
+	api := newTestAPI(store)
+	api.SetEncryption(testCrypto(t, "a", "a"))
+	mux := newMux(api)
+
+	for _, sig := range []string{
+		`{"public_key":"00","signature_header":"bad header"}`,
+		`{"public_key":"00","id_header":"x-sig","signature_header":"X-Sig"}`,
+		`{"public_key":"00","timestamp_header":5}`,
+	} {
+		if w, out := doJSON(t, mux, "POST", "/api/endpoints", `{"config":{"signature":`+sig+`}}`); w.Code != http.StatusBadRequest {
+			t.Errorf("%s: status = %d (%v), want 400", sig, w.Code, out)
+		}
+	}
+	w, ep := doJSON(t, mux, "POST", "/api/endpoints", `{"config":{"signature":{"public_key":"00","signature_header":" X-Signature ","id_header":""}}}`)
+	if w.Code != http.StatusCreated && w.Code != http.StatusOK {
+		t.Fatalf("status = %d: %v", w.Code, ep)
+	}
+	sig := signatureOf(ep)
+	if sig["signature_header"] != "X-Signature" {
+		t.Errorf("signature_header = %v, want trimmed X-Signature", sig["signature_header"])
+	}
+	if _, ok := sig["id_header"]; ok {
+		t.Errorf("empty id_header stored: %v", sig)
+	}
 }

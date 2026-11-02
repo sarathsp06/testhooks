@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { Endpoint } from '$lib/types';
+	import { DEFAULT_SIGNATURE_HEADERS, signatureHeaders } from '$lib/types';
 	import { Server, Monitor, Globe, Reply, Info, AlertCircle, Check, Save, ShieldCheck } from 'lucide-svelte';
 	import Tooltip from './Tooltip.svelte';
 	import { getWebhookURL, slugNameError, SLUG_NAME_MAX } from '$lib/utils';
@@ -37,6 +38,10 @@
 	let sigPublicKey = $state('');
 	let sigEnforce = $state(false);
 	let sigResign = $state(false);
+	// Header names; empty means the Standard Webhooks ones (see DEFAULT_SIGNATURE_HEADERS).
+	let sigIdHeader = $state('');
+	let sigTimestampHeader = $state('');
+	let sigSignatureHeader = $state('');
 
 	// Sync local state from endpoint prop when it changes
 	$effect(() => {
@@ -53,10 +58,17 @@
 		sigPublicKey = endpoint.config?.signature?.public_key ?? '';
 		sigEnforce = !!endpoint.config?.signature?.enforce;
 		sigResign = !!endpoint.config?.signature?.resign;
+		sigIdHeader = endpoint.config?.signature?.id_header ?? '';
+		sigTimestampHeader = endpoint.config?.signature?.timestamp_header ?? '';
+		sigSignatureHeader = endpoint.config?.signature?.signature_header ?? '';
 	});
 
 	const isServerMode = $derived(endpoint.mode === 'server');
 	const hasSecret = $derived(sigSecret.trim() !== '' || (secretSet && !clearSecret));
+	const sigNames = $derived(
+		signatureHeaders({ id_header: sigIdHeader.trim(), timestamp_header: sigTimestampHeader.trim(), signature_header: sigSignatureHeader.trim() })
+	);
+	const customHeaders = $derived(!!(sigIdHeader.trim() || sigTimestampHeader.trim() || sigSignatureHeader.trim()));
 
 	// Track whether settings have unsaved changes
 	let dirty = $state(false);
@@ -131,7 +143,10 @@
 									secret: sigSecret.trim() || (clearSecret ? '' : undefined),
 									public_key: sigPublicKey.trim() || undefined,
 									enforce: sigEnforce || undefined,
-									resign: (hasSecret && sigResign) || undefined
+									resign: (hasSecret && sigResign) || undefined,
+									id_header: sigIdHeader.trim() || undefined,
+									timestamp_header: sigTimestampHeader.trim() || undefined,
+									signature_header: sigSignatureHeader.trim() || undefined
 								}
 							: undefined
 				}
@@ -396,7 +411,7 @@
 		<div class="flex items-center gap-2 mb-1">
 			<ShieldCheck class="w-3.5 h-3.5 text-[var(--text-muted)]" />
 			<h4 class="text-xs font-semibold text-[var(--text)] uppercase tracking-wider">Signature Verification</h4>
-			<Tooltip text="Verify Standard Webhooks signatures (webhook-id, webhook-timestamp, webhook-signature headers), as sent by Sparrow, Svix and others." />
+			<Tooltip text="Verify Standard Webhooks signatures, as sent by Sparrow, Svix and others. They arrive in three headers: webhook-id, webhook-timestamp and webhook-signature unless you change the names below." />
 		</div>
 		<p class="text-[10px] text-[var(--text-muted)] mb-3">
 			Paste the sender's webhook secret (<code class="text-[10px]">whsec_…</code>) or Ed25519 public key. Each captured request is then marked verified or invalid.
@@ -436,6 +451,28 @@
 				/>
 			</label>
 			{#if hasSecret || sigPublicKey.trim()}
+				<details open={customHeaders}>
+					<summary class="text-xs text-[var(--text-muted)] cursor-pointer hover:text-[var(--accent)] transition-colors">
+						Header names: <code class="text-[10px]">{sigNames.id}</code>, <code class="text-[10px]">{sigNames.timestamp}</code>, <code class="text-[10px]">{sigNames.signature}</code>
+					</summary>
+					<p class="text-[10px] text-[var(--text-muted)] mt-2 mb-2">
+						Change these when the sender uses the same scheme under its own names, such as Svix's <code class="text-[10px]">svix-id</code>, <code class="text-[10px]">svix-timestamp</code> and <code class="text-[10px]">svix-signature</code>. Leave a field empty for the standard name. Re-signing writes the same headers.
+					</p>
+					<div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+						<label class="flex flex-col gap-1">
+							<span class="text-xs text-[var(--text-muted)]">Message ID</span>
+							<input bind:value={sigIdHeader} oninput={markDirty} placeholder={DEFAULT_SIGNATURE_HEADERS.id} autocomplete="off" spellcheck="false" class="w-full bg-[var(--bg)] border border-[var(--border)] rounded px-3 py-1.5 text-sm font-mono text-[var(--text)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent)]" />
+						</label>
+						<label class="flex flex-col gap-1">
+							<span class="text-xs text-[var(--text-muted)]">Timestamp</span>
+							<input bind:value={sigTimestampHeader} oninput={markDirty} placeholder={DEFAULT_SIGNATURE_HEADERS.timestamp} autocomplete="off" spellcheck="false" class="w-full bg-[var(--bg)] border border-[var(--border)] rounded px-3 py-1.5 text-sm font-mono text-[var(--text)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent)]" />
+						</label>
+						<label class="flex flex-col gap-1">
+							<span class="text-xs text-[var(--text-muted)]">Signature</span>
+							<input bind:value={sigSignatureHeader} oninput={markDirty} placeholder={DEFAULT_SIGNATURE_HEADERS.signature} autocomplete="off" spellcheck="false" class="w-full bg-[var(--bg)] border border-[var(--border)] rounded px-3 py-1.5 text-sm font-mono text-[var(--text)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent)]" />
+						</label>
+					</div>
+				</details>
 				<label class="flex items-center gap-3 cursor-pointer group">
 					<button
 						role="switch"
@@ -464,7 +501,7 @@
 					<span class="flex flex-col gap-0.5">
 						<span class="text-xs text-[var(--text)] group-hover:text-[var(--accent)] transition-colors">Sign what I forward with this secret</span>
 						<span class="text-[10px] text-[var(--text-muted)]">
-							Once a transform changes the body, the sender's signature no longer matches it. With this on, what is forwarded gets a fresh <code class="text-[10px]">webhook-signature</code> and <code class="text-[10px]">webhook-timestamp</code> (same <code class="text-[10px]">webhook-id</code>), so your app can keep checking signatures with this secret. Only requests signed with this secret are re-signed, so knowing your webhook URL is not enough to get something signed.
+							Once a transform changes the body, the sender's signature no longer matches it. With this on, what is forwarded gets a fresh <code class="text-[10px]">{sigNames.signature}</code> and <code class="text-[10px]">{sigNames.timestamp}</code> (same <code class="text-[10px]">{sigNames.id}</code>), so your app can keep checking signatures with this secret. Only requests signed with this secret are re-signed, so knowing your webhook URL is not enough to get something signed.
 						</span>
 					</span>
 				</label>

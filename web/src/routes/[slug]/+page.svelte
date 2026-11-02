@@ -15,6 +15,7 @@
 	import ScriptEditorPage from '$lib/components/ScriptEditorPage.svelte';
 	import ForwardConfig from '$lib/components/ForwardConfig.svelte';
 	import type { CapturedRequest, CapturedResponse, Endpoint, Limits, ResponseNeededData, ResponseInfoData, ForwardResponse, ForwardResultData } from '$lib/types';
+	import { signatureHeaders } from '$lib/types';
 	import { Copy, Check, Download, Trash2 } from 'lucide-svelte';
 	import { ago, bodyText, eventLabel, forwardMayBeRunning, shortURL } from '$lib/requestutil';
 	import { formatBytes } from '$lib/utils';
@@ -58,7 +59,6 @@
 	const tabDecidesReply = () => replyActive() || syncForwardActive();
 
 	type Resigned = Pick<ForwardResultData, 'resigned' | 'resign_error'>;
-	const SIGNATURE_HEADERS = new Set(['webhook-id', 'webhook-timestamp', 'webhook-signature']);
 	// Re-sign what this tab forwards (signature.resign), as the server does in
 	// server mode: only a request the webhook secret signed gets a fresh
 	// signature over the transformed body. The secret stays on the server.
@@ -69,7 +69,8 @@
 		}
 		try {
 			const { headers } = await resignRequest((endpointStore.current ?? endpoint)!.id, captured, fwd.body ?? '');
-			const kept = Object.entries(fwd.headers ?? {}).filter(([k]) => !SIGNATURE_HEADERS.has(k.toLowerCase()));
+			const names = new Set(Object.values(signatureHeaders(liveCfg().signature)).map((n) => n.toLowerCase()));
+			const kept = Object.entries(fwd.headers ?? {}).filter(([k]) => !names.has(k.toLowerCase()));
 			const fresh = Object.entries(headers).map(([k, v]) => [k, [v]]);
 			return { req: { ...fwd, headers: Object.fromEntries([...kept, ...fresh]) }, resigned: true };
 		} catch (err) {

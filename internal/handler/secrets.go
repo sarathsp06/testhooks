@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -23,6 +24,64 @@ var errNoEncryptionKeys = errors.New("signature secrets are stored encrypted: se
 // errResignNeedsSecret is returned when re-signing is turned on without an
 // HMAC secret to sign with.
 var errResignNeedsSecret = errors.New("re-signing forwarded requests needs the webhook secret (signature.secret)")
+
+// signatureHeaderError is returned when a configured signature header name
+// is not a header name, or two of them are the same.
+type signatureHeaderError string
+
+func (e signatureHeaderError) Error() string { return string(e) }
+
+// checkHeaderNames validates signature.id_header, timestamp_header and
+// signature_header in sig. Empty names fall back to the Standard Webhooks ones.
+func checkHeaderNames(sig map[string]any) error {
+	seen := map[string]string{}
+	for _, key := range []string{"id_header", "timestamp_header", "signature_header"} {
+		v, present := sig[key]
+		if !present || v == nil {
+			continue
+		}
+		name, ok := v.(string)
+		if !ok {
+			return signatureHeaderError(fmt.Sprintf("signature.%s must be a string", key))
+		}
+		name = strings.TrimSpace(name)
+		if name == "" {
+			delete(sig, key)
+			continue
+		}
+		if !isHeaderName(name) {
+			return signatureHeaderError(fmt.Sprintf("signature.%s %q is not a header name: use letters, digits and dashes, like svix-signature", key, name))
+		}
+		lower := strings.ToLower(name)
+		if other, dup := seen[lower]; dup {
+			return signatureHeaderError(fmt.Sprintf("signature.%s and signature.%s are both %q: each header needs its own name", other, key, name))
+		}
+		seen[lower] = key
+		sig[key] = name
+	}
+	return nil
+}
+
+// isHeaderName reports whether s is an HTTP field name (an RFC 9110 token).
+func isHeaderName(s string) bool {
+	for _, c := range s {
+		switch {
+		case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z', c >= '0' && c <= '9':
+		case strings.ContainsRune("!#$%&'*+-.^_`|~", c):
+		default:
+			return false
+		}
+	}
+	return s != ""
+}
+
+// headerNames returns the headers sig reads signatures from and writes them to.
+func headerNames(sig *config.SignatureConfig) signature.Headers {
+	if sig == nil {
+		return signature.DefaultHeaders
+	}
+	return signature.Headers{ID: sig.IDHeader, Timestamp: sig.TimestampHeader, Signature: sig.SignatureHeader}.OrDefault()
+}
 
 // secretBox keeps endpoint signature secrets write-only and encrypted at rest.
 // Secrets arrive as signature.secret, are stored as signature.secret_enc (an
@@ -42,6 +101,9 @@ func (b secretBox) seal(in, old json.RawMessage) (json.RawMessage, error) {
 	}
 	delete(sig, "secret_set")
 	delete(sig, "secret_enc")
+	if err := checkHeaderNames(sig); err != nil {
+		return nil, err
+	}
 	value, present := sig["secret"]
 	delete(sig, "secret")
 	secret, _ := value.(string)
@@ -117,10 +179,10 @@ func (b secretBox) check(cfg config.EndpointConfig, h http.Header, body []byte, 
 		return &signature.Result{
 			Status:    signature.StatusInvalid,
 			Error:     err.Error(),
-			WebhookID: h.Get("webhook-id"),
+			WebhookID: h.Get(headerNames(sig).ID),
 		}
 	}
-	return signature.Check(secret, sig.PublicKey, h, body, receivedAt)
+	return signature.Check(secret, sig.PublicKey, headerNames(sig), h, body, receivedAt)
 }
 
 // secret returns the HMAC secret in sig, decrypting the stored one.
@@ -143,11 +205,11 @@ type resignResult struct {
 }
 
 // resign signs a forwarded request again when cfg asks for it: it replaces
-// the webhook-* headers in h with a signature of body made now. incoming is
+// the signature headers in h with a signature of body made now. incoming is
 // the request's own verification result. Only a request the same HMAC secret
 // signed is re-signed, so neither knowing the webhook URL nor setting a public
 // key of one's own is enough to get a body signed with the secret.
-// id is the webhook-id to use when h has none.
+// id is the message id to use when h has none.
 func (b secretBox) resign(cfg config.EndpointConfig, incoming *signature.Result, h http.Header, id string, body []byte, now time.Time) resignResult {
 	sig := cfg.Signature
 	if sig == nil || !sig.Resign {
@@ -161,7 +223,7 @@ func (b secretBox) resign(cfg config.EndpointConfig, incoming *signature.Result,
 		err = errResignNeedsSecret
 	}
 	if err == nil {
-		err = signature.Resign(h, secret, id, body, now)
+		err = signature.Resign(h, headerNames(sig), secret, id, body, now)
 	}
 	if err != nil {
 		return resignResult{Error: "not re-signed: " + err.Error()}

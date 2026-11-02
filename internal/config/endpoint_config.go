@@ -64,6 +64,14 @@ type SignatureConfig struct {
 	// changed body. Only requests whose incoming signature verified are
 	// re-signed; the rest are forwarded with their original headers. Needs Secret.
 	Resign bool `json:"resign,omitempty"`
+	// IDHeader, TimestampHeader and SignatureHeader name the headers the
+	// signature travels in, for senders that use the Standard Webhooks scheme
+	// under their own names (Svix sends svix-id, svix-timestamp and
+	// svix-signature). Empty means webhook-id, webhook-timestamp and
+	// webhook-signature. Re-signing writes the same headers.
+	IDHeader        string `json:"id_header,omitempty"`
+	TimestampHeader string `json:"timestamp_header,omitempty"`
+	SignatureHeader string `json:"signature_header,omitempty"`
 }
 
 // CustomResponseConfig allows users to define a programmable response handler.

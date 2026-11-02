@@ -6,6 +6,7 @@
 	import { toJSONSchema, toTypeScript, typeName } from '$lib/typegen';
 	import { getRequestsStore } from '$lib/stores/requests.svelte';
 	import type { CapturedRequest, CapturedResponse, Endpoint, ForwardResultData } from '$lib/types';
+	import { signatureHeaders } from '$lib/types';
 
 	let {
 		request,
@@ -34,6 +35,7 @@
 	let replayed = $state<string | null>(null);
 
 	const cfg = $derived(endpoint.config ?? {});
+	const sigNames = $derived(signatureHeaders(cfg.signature));
 	const script = $derived(cfg.wasm_script && !cfg.transform_disabled && (!cfg.transform_language || cfg.transform_language === 'javascript') ? cfg.wasm_script : '');
 	const headerCount = $derived(Object.keys(request.headers ?? {}).length);
 	const text = $derived(bodyText(request));
@@ -351,11 +353,11 @@
 					{cfg.forward_url.replace(/\/$/, '')}{forwardedReq.path}
 				</div>
 				{#if forwardResult?.resigned}
-					<p class="m-0 px-5 pt-2 text-[13px] text-body">Re-signed: sent with a fresh <code class="font-mono">webhook-timestamp</code> and <code class="font-mono">webhook-signature</code> over this body, in place of the ones below.</p>
+					<p class="m-0 px-5 pt-2 text-[13px] text-body">Re-signed: sent with a fresh <code class="font-mono">{sigNames.timestamp}</code> and <code class="font-mono">{sigNames.signature}</code> over this body, in place of the ones below.</p>
 				{:else if forwardResult?.resign_error}
 					<p class="m-0 px-5 pt-2 text-[13px] text-danger">{forwardResult.resign_error[0].toUpperCase() + forwardResult.resign_error.slice(1)}. Sent with the headers below.</p>
 				{:else if cfg.signature?.resign}
-					<p class="m-0 px-5 pt-2 text-[13px] text-body">When forwarded, a request signed with the webhook secret gets a fresh <code class="font-mono">webhook-timestamp</code> and <code class="font-mono">webhook-signature</code> over this body.</p>
+					<p class="m-0 px-5 pt-2 text-[13px] text-body">When forwarded, a request signed with the webhook secret gets a fresh <code class="font-mono">{sigNames.timestamp}</code> and <code class="font-mono">{sigNames.signature}</code> over this body.</p>
 				{/if}
 				{@render kv(Object.entries(forwardedReq.headers ?? {}).map(([k, v]) => [k, (v ?? []).join(', ')]), 'No headers.')}
 				<div class="border-t border-line">

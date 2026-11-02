@@ -62,7 +62,8 @@ func (a *API) shown(r *http.Request, req *db.CapturedRequest) *db.CapturedReques
 // cfg doesn't set it. It writes the error response and returns false on failure.
 func (a *API) sealConfig(w http.ResponseWriter, cfg, old json.RawMessage) (json.RawMessage, bool) {
 	sealed, err := a.secrets.seal(cfg, old)
-	if errors.Is(err, errNoEncryptionKeys) || errors.Is(err, errResignNeedsSecret) {
+	var badHeader signatureHeaderError
+	if errors.Is(err, errNoEncryptionKeys) || errors.Is(err, errResignNeedsSecret) || errors.As(err, &badHeader) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return nil, false
 	}
@@ -229,7 +230,7 @@ func (a *API) GetEndpointBySlug(w http.ResponseWriter, r *http.Request) {
 // ResignRequest handles POST /api/endpoints/{id}/resign. In browser mode the
 // tab transforms and forwards, but the webhook secret never leaves the server,
 // so the tab sends the request as captured and the body it is about to
-// forward, and gets back the webhook-* headers to send with it. The captured
+// forward, and gets back the signature headers to send with it. The captured
 // request must verify with the endpoint's HMAC secret now, as in server mode,
 // so this can't be used to sign a body nobody signed.
 func (a *API) ResignRequest(w http.ResponseWriter, r *http.Request) {
@@ -277,9 +278,10 @@ func (a *API) ResignRequest(w http.ResponseWriter, r *http.Request) {
 	}
 	now := time.Now()
 	incoming := a.secrets.check(cfg, orig, original, now)
+	names := headerNames(cfg.Signature)
 	out := http.Header{}
-	if id := orig.Get("webhook-id"); id != "" {
-		out.Set("webhook-id", id)
+	if id := orig.Get(names.ID); id != "" {
+		out.Set(names.ID, id)
 	}
 	signed := a.secrets.resign(cfg, incoming, out, "msg_"+in.Request.ID, []byte(in.Body), now)
 	if !signed.Resigned {
@@ -287,9 +289,9 @@ func (a *API) ResignRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"headers": map[string]string{
-		"webhook-id":        out.Get("webhook-id"),
-		"webhook-timestamp": out.Get("webhook-timestamp"),
-		"webhook-signature": out.Get("webhook-signature"),
+		names.ID:        out.Get(names.ID),
+		names.Timestamp: out.Get(names.Timestamp),
+		names.Signature: out.Get(names.Signature),
 	}})
 }
 

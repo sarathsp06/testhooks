@@ -158,7 +158,7 @@ curl -X POST http://localhost:8080/api/endpoints/<id>/resign \
 
 | Field | |
 |---|---|
-| `request` | The request as captured: `headers`, `body` and `body_encoding` as the API returns them. `id` names the `webhook-id` (`msg_<id>`) when the headers have none |
+| `request` | The request as captured: `headers`, `body` and `body_encoding` as the API returns them. `id` names the message ID (`msg_<id>`) when the headers have none |
 | `body` | The body to sign, as it will be sent |
 
 `request` must carry a `v1` signature made with the endpoint's secret, with a timestamp within 5 minutes of now, so this can't sign a body nobody signed. Returns:
@@ -167,7 +167,7 @@ curl -X POST http://localhost:8080/api/endpoints/<id>/resign \
 { "headers": { "webhook-id": "msg_123", "webhook-timestamp": "1790000123", "webhook-signature": "v1,..." } }
 ```
 
-Replace the request's three `webhook-*` headers with these. `422` with an `error` when `request` doesn't verify; `400` when re-signing is off.
+Replace the request's three signature headers with these. They use the endpoint's [header names](#endpoint-config) (`signature.id_header` and the others), `webhook-*` by default. `422` with an `error` when `request` doesn't verify; `400` when re-signing is off.
 
 ### Delete requests
 
@@ -222,6 +222,9 @@ This is the "I'd pay for that" button. `endpoint_id` is optional and records whe
 | `signature.public_key` | string | Hex Ed25519 public key |
 | `signature.enforce` | bool | Reject invalid signatures with `401` |
 | `signature.resign` | bool | [Sign forwarded requests again](../../guides/signatures/#re-sign-after-a-transform) with the secret, after the transform. Only requests the secret signed are re-signed. Needs `signature.secret`; saving it without one is `400` |
+| `signature.id_header` | string | Header that holds the message ID, for [senders with their own header names](../../guides/signatures/#senders-with-their-own-header-names) such as Svix's `svix-id`. Default `webhook-id` |
+| `signature.timestamp_header` | string | Header that holds the timestamp. Default `webhook-timestamp` |
+| `signature.signature_header` | string | Header that holds the signatures. Default `webhook-signature`. The three names must be valid header names and differ from each other, or saving is `400`. Re-signing writes the same three |
 
 ## Capture
 
