@@ -7,7 +7,7 @@ Many webhook senders sign each delivery so receivers can prove it is genuine. Te
 
 ## How the scheme works
 
-The sender adds three headers:
+The sender adds the three headers defined in the Standard Webhooks spec, under [Webhook headers](https://github.com/standard-webhooks/standard-webhooks/blob/main/spec/standard-webhooks.md#webhook-headers-sending-metadata-to-consumers). These are the headers Testhooks verifies, and the ones it rewrites when it [re-signs](#re-sign-after-a-transform):
 
 | Header | Value |
 |---|---|
@@ -79,7 +79,7 @@ Rejected requests are still captured, so you can see what was sent. Senders such
 
 ## Re-sign after a transform
 
-A [transform](../scripts/) that changes the body breaks the sender's signature: the signature covers the body as it was sent, so the app you forward to rejects the changed one. Turn on **Sign what I forward with this secret** (under the secret field) and Testhooks signs the forwarded request again with the same secret, after the transform:
+A [transform](../scripts/) that changes the body breaks the sender's signature: the signature covers the body as it was sent, so the app you forward to rejects the changed one. Turn on **Sign what I forward with this secret** (under the secret field) and Testhooks signs the forwarded request again with the same secret, after the transform. It rewrites the same three [Standard Webhooks headers](https://github.com/standard-webhooks/standard-webhooks/blob/main/spec/standard-webhooks.md#webhook-headers-sending-metadata-to-consumers) it verified:
 
 - `webhook-signature` becomes a fresh `v1` signature of the forwarded body. Other signatures, such as `v1a`, are dropped, since they would no longer verify.
 - `webhook-timestamp` becomes the time of the forward.
