@@ -176,6 +176,13 @@ const arrow = '<path d="M1 6h37M33 1l5 5-5 5"></path>';
 					<li><b class="mono">0</b><span>installs to reach localhost: your tab is the tunnel</span></li>
 				</ul>
 				<p class="hero-demo-note">No account: create an endpoint on the demo and point any service at its URL.</p>
+				<a class="ph-card" href="https://www.producthunt.com/products/testhooks?embed=true&utm_source=embed&utm_medium=post_embed" target="_blank" rel="noopener noreferrer">
+					<img src={`${base}favicon.svg`} alt="" width="40" height="40" />
+					<span class="ph-card-text">
+						<span class="ph-card-tagline">Open-source webhook tester that replies from your localhost</span>
+						<span class="ph-card-cta">Check out Testhooks on Product Hunt →</span>
+					</span>
+				</a>
 
 				<div id="install" class="install">
 					<div class="install-head">
@@ -551,6 +558,13 @@ const arrow = '<path d="M1 6h37M33 1l5 5-5 5"></path>';
 			.lede { margin-top: 22px; font-size: 19px; line-height: 1.55; color: var(--text); max-width: 640px; }
 			.hero-actions { margin-top: 28px; display: flex; gap: 12px; flex-wrap: wrap; }
 			.hero-demo-note { margin-top: 12px; font-size: 14px; color: var(--faint); }
+			.ph-card { margin-top: 24px; display: inline-flex; align-items: center; gap: 12px; max-width: 100%; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); text-decoration: none; }
+			.ph-card:hover { border-color: var(--line-2); }
+			.ph-card img { width: 40px; height: 40px; flex-shrink: 0; }
+			.ph-card-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+			.ph-card-tagline { font-size: 13px; line-height: 1.4; color: var(--faint); }
+			.ph-card-cta { font-size: 14px; font-weight: 500; color: var(--ink); }
+			.ph-card:hover .ph-card-cta { color: var(--accent); }
 			.ticker-band { padding: 8px 0 40px; }
 			.ticker-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
 			.ticker-legend { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--faint); }
