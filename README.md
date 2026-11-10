@@ -15,7 +15,7 @@
 </p>
 
 <p align="center">
-  <a href="https://www.producthunt.com/products/testhooks?embed=true&amp;utm_source=badge-featured&amp;utm_medium=badge&amp;utm_campaign=badge-testhooks" target="_blank" rel="noopener noreferrer"><img alt="Testhooks - Webhooks tester, made for humans and for machines | Product Hunt" width="250" height="54" src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1298324&amp;theme=light&amp;t=1793626518707"></a>
+  <a href="https://www.producthunt.com/products/testhooks?embed=true&amp;utm_source=badge-featured&amp;utm_medium=badge&amp;utm_campaign=badge-testhooks" target="_blank" rel="noopener noreferrer"><img alt="Testhooks - Webhooks tester, made for humans and for machines | Product Hunt" width="250" height="54" src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1309809&amp;theme=light&amp;t=1793626518707"></a>
 </p>
 
 ## Try it

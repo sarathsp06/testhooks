@@ -159,9 +159,19 @@
 				<p class="m-0 text-lg leading-[1.55] text-body">
 					Point any service at it and watch requests arrive here as they happen. Then transform them, forward them, or script the reply.
 				</p>
-				<a href="https://www.producthunt.com/products/testhooks?embed=true&utm_source=badge-featured&utm_medium=badge&utm_campaign=badge-testhooks" target="_blank" rel="noopener noreferrer" class="self-start">
-					<img alt="Testhooks - Webhooks tester, made for humans and for machines | Product Hunt" width="250" height="54" src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1298324&t=1793626518707&theme=light" class="dark:hidden" />
-					<img alt="Testhooks - Webhooks tester, made for humans and for machines | Product Hunt" width="250" height="54" src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1298324&t=1793626518707&theme=dark" class="hidden dark:block" />
+				<a
+					href="https://www.producthunt.com/products/testhooks?embed=true&utm_source=embed&utm_medium=post_embed"
+					target="_blank"
+					rel="noopener noreferrer"
+					class="group self-start max-w-full flex items-center gap-3 no-underline bg-surface border border-line rounded-[12px] px-3.5 py-3 hover:border-line-strong transition-colors"
+				>
+					<span class="w-10 h-10 shrink-0 rounded-[10px] bg-[#111613] dark:bg-[#1B231F] flex items-center justify-center" aria-hidden="true">
+						<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#5BD08F" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h5l2-5 3 10 2-5h4"></path></svg>
+					</span>
+					<span class="min-w-0 flex flex-col gap-0.5">
+						<span class="text-[13px] leading-[1.4] text-soft">Open-source webhook tester that replies from your localhost</span>
+						<span class="text-sm font-medium text-ink group-hover:text-accent transition-colors">Check out Testhooks on Product Hunt →</span>
+					</span>
 				</a>
 			</div>
 
