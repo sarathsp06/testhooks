@@ -19,6 +19,7 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/sarathsp06/testhooks/internal/cleanup"
+	"github.com/sarathsp06/testhooks/internal/cli"
 	"github.com/sarathsp06/testhooks/internal/config"
 	"github.com/sarathsp06/testhooks/internal/crypto"
 	"github.com/sarathsp06/testhooks/internal/db"
@@ -36,9 +37,15 @@ import (
 var version = "dev"
 
 func main() {
-	if len(os.Args) > 1 && (os.Args[1] == "--version" || os.Args[1] == "version") {
+	if len(os.Args) > 1 && os.Args[1] == "--version" {
 		fmt.Println("testhooks", version)
 		return
+	}
+	if len(os.Args) > 1 && os.Args[1] != "mcp" {
+		// Anything with arguments is the command line; the server takes
+		// its settings from the environment and runs with none.
+		_ = godotenv.Load()
+		os.Exit(cli.Run(os.Args[1:], cli.Env{Version: version, IsTerminal: stdoutIsTerminal}))
 	}
 	if len(os.Args) > 1 && os.Args[1] == "mcp" {
 		// MCP server on stdin/stdout for AI agents; it talks to a running
@@ -427,4 +434,10 @@ func encryptionService(cfg *config.Config, log zerolog.Logger) (*crypto.Service,
 		log.Info().Msg("signature secrets encrypted with a per-process key (in-memory storage)")
 	}
 	return crypto.NewServiceFromKeyring(keyring)
+}
+
+// stdoutIsTerminal reports whether a person, not a pipe, is reading stdout.
+func stdoutIsTerminal() bool {
+	fi, err := os.Stdout.Stat()
+	return err == nil && fi.Mode()&os.ModeCharDevice != 0
 }

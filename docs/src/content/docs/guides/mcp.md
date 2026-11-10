@@ -64,6 +64,10 @@ mkdir -p .claude/skills/testhooks && testhooks skill > .claude/skills/testhooks/
 
 `testhooks skill` prints the file that matches the binary. Without the MCP server, the skill tells the agent to use the [CLI](#from-the-command-line) or the REST API, which every Testhooks describes at `/api/openapi.json`. The docs site has an [`llms.txt`](https://sarathsp06.github.io/testhooks/llms.txt) for agents that browse.
 
+## From the command line
+
+Without an MCP client, a shell-driven agent or a script gets the same operations from the [`testhooks` command line](../../reference/cli/): `testhooks endpoints create`, `testhooks requests wait`, `testhooks requests send`, `testhooks requests preview`. Output is JSON when piped, and `requests wait` exits `3` when nothing arrived.
+
 ## Tools
 
 | Tool | What it does |

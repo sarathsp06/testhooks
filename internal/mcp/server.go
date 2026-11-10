@@ -1,29 +1,25 @@
+// Package mcp is a stdio MCP server that lets an AI agent drive a running
+// Testhooks. Every tool is an apiclient operation, the same ones the CLI
+// offers, so both say and do the same things.
 package mcp
 
 import (
 	"context"
-	"os"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/sarathsp06/testhooks/internal/apiclient"
 )
-
-// DefaultURL is used when TESTHOOKS_URL is not set.
-const DefaultURL = "http://localhost:8080"
 
 // Run serves MCP over stdin/stdout until the client disconnects or ctx ends.
 // It talks to the Testhooks at TESTHOOKS_URL, with TESTHOOKS_AUTH_TOKEN as
 // the bearer token when set.
 func Run(ctx context.Context, version string) error {
-	base := os.Getenv("TESTHOOKS_URL")
-	if base == "" {
-		base = DefaultURL
-	}
-	return NewServer(base, os.Getenv("TESTHOOKS_AUTH_TOKEN"), version).Run(ctx, &mcp.StdioTransport{})
+	return NewServer(apiclient.FromEnv(), version).Run(ctx, &mcp.StdioTransport{})
 }
 
-// NewServer returns an MCP server whose tools call the Testhooks API at base.
-func NewServer(base, token, version string) *mcp.Server {
-	c := newClient(base, token)
+// NewServer returns an MCP server whose tools call the Testhooks API through api.
+func NewServer(api *apiclient.Client, version string) *mcp.Server {
+	c := tools{api}
 	s := mcp.NewServer(&mcp.Implementation{Name: "testhooks", Title: "Testhooks", Version: version}, &mcp.ServerOptions{
 		Instructions: "Testhooks gives you webhook URLs that record every request sent to them. " +
 			"Create an endpoint, give its capture_url to a webhook provider (or send to it yourself), " +

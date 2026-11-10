@@ -3,7 +3,7 @@ title: REST API
 description: Manage endpoints and captured requests over HTTP.
 ---
 
-The UI is built on this API, so anything it does you can script. All bodies are JSON. When [`AUTH_TOKEN`](../configuration/#security) is set, send `Authorization: Bearer <token>`.
+The UI is built on this API, so anything it does you can script, with `curl`, the [command line](../cli/) or [`testhooks mcp`](../../guides/mcp/). All bodies are JSON. When [`AUTH_TOKEN`](../configuration/#security) is set, send `Authorization: Bearer <token>`.
 
 Errors look like `{"error": "endpoint not found"}`. A missing record is `404`; a database failure is `500`; a [read-only token](../../deployment/production/#a-read-only-token) on a write is `403`.
 

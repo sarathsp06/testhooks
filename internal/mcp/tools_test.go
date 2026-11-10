@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/sarathsp06/testhooks/internal/apiclient"
 )
 
 // fakeAPI is just enough of the Testhooks REST API and capture route for the tools.
@@ -99,7 +100,7 @@ func connectTo(t *testing.T, base, token string) *mcp.ClientSession {
 	t.Helper()
 	ctx := context.Background()
 	ct, st := mcp.NewInMemoryTransports()
-	ss, err := NewServer(base, token, "test").Connect(ctx, st, nil)
+	ss, err := NewServer(apiclient.New(base, token), "test").Connect(ctx, st, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -307,18 +308,6 @@ func TestListAndGetRequestAndDelete(t *testing.T) {
 	}
 	if res := call(t, cs, "delete_endpoint", map[string]any{"id": "nope"}, nil); !res.IsError || !strings.Contains(errText(res), "404") {
 		t.Fatalf("got %q", errText(res))
-	}
-}
-
-func TestMergeConfig(t *testing.T) {
-	base := map[string]any{"a": 1, "n": map[string]any{"x": 1, "y": 2}}
-	got := mergeConfig(base, map[string]any{"a": nil, "b": 2, "n": map[string]any{"y": nil, "z": 3}})
-	want := map[string]any{"b": 2, "n": map[string]any{"x": 1, "z": 3}}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("got %v", got)
-	}
-	if base["a"] != 1 || len(base["n"].(map[string]any)) != 2 {
-		t.Fatal("base was modified")
 	}
 }
 
