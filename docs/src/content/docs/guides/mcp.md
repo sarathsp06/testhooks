@@ -21,7 +21,7 @@ You need the `testhooks` binary on your machine (see [Installation](../../gettin
 | Variable | | |
 |---|---|---|
 | `TESTHOOKS_URL` | optional | Address of the Testhooks to use. Defaults to `http://localhost:8080` |
-| `TESTHOOKS_AUTH_TOKEN` | optional | The server's [`AUTH_TOKEN`](../../reference/configuration/#security), when it has one. Sent as `Authorization: Bearer <token>` |
+| `TESTHOOKS_AUTH_TOKEN` | optional | The server's [`AUTH_TOKEN`](../../reference/configuration/#security), when it has one. Sent as `Authorization: Bearer <token>`. Give it the server's [`READ_TOKEN`](../../deployment/production/#a-read-only-token) instead to let the agent list, read and wait but not create, change, delete or send |
 
 The capture URLs the agent hands out start with `TESTHOOKS_URL`, so a provider on the internet can only reach them when that address is public.
 

@@ -21,6 +21,7 @@ Testhooks is configured entirely with environment variables. A `.env` file in th
 | Variable | Default | Description |
 |---|---|---|
 | `AUTH_TOKEN` | | Shared password for everything that reads or changes data: the API and the live view. The UI prompts for it; capture URLs (`/h/`) and `/healthz` stay public. Without it, anyone who reaches the server can read and change everything. See [Authentication](../../deployment/production/#authentication) |
+| `READ_TOKEN` | | A second token that can only read: `GET` on the API and the live view. For an agent or a dashboard that should watch without being able to change, delete or send anything. A write with it gets `403`. Needs `AUTH_TOKEN` to be set too. See [Authentication](../../deployment/production/#a-read-only-token) |
 | `ALLOWED_ORIGINS` | `*` | Comma-separated origins allowed for CORS and WebSocket connections |
 | `ALLOWED_HEADERS` | `Content-Type,Authorization,X-Requested-With` | Comma-separated CORS request headers |
 | `TRUSTED_PROXIES` | | Comma-separated CIDRs allowed to set `X-Forwarded-For` and `X-Real-IP`. On Vercel (`VERCEL=1`) it defaults to loopback, `127.0.0.1/32,::1/128` |

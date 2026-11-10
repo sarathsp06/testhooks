@@ -45,6 +45,18 @@ A missing or wrong token gets `401 Unauthorized`, and the attempt is logged with
 
 When the UI gets a `401`, it asks for the token, checks it against the server and stores it in that browser's `localStorage`. Requests that were waiting retry automatically and the live view reconnects. If the token changes on the server, the UI says the saved token was rejected and asks again. Use the sign-out button in the header to forget the token.
 
+### A read-only token
+
+`READ_TOKEN` is an optional second token for anyone who should see but not touch: an AI agent that watches an endpoint and writes your handler from the traffic, a dashboard, a teammate. It works wherever `AUTH_TOKEN` does, for reading:
+
+| With `READ_TOKEN` | |
+|---|---|
+| `GET` and `HEAD` on `/api/*`, including [waiting for requests](../../reference/api/#wait-for-the-next-request) | Allowed |
+| `/ws/*` | Allowed |
+| Anything else on `/api/*`: creating, changing or deleting endpoints and requests, re-signing, [previewing a script](../../reference/api/#try-a-script-on-a-request) | `403 Forbidden` with `{"error": "this token can only read; …"}` |
+
+A `403` means the token was right but can't do that, where a `401` means it was wrong. For `testhooks mcp`, set `TESTHOOKS_AUTH_TOKEN` to the read token and the agent can list, read and wait but not create, change, delete or send; give it the full token when it should.
+
 ### What it doesn't do
 
 - **It doesn't stop anyone sending webhooks.** Capture URLs stay open, so anyone who knows a slug can post to it. They can't see anything back. To reject forged deliveries, turn on [signature verification](../../guides/signatures/) with **Reject invalid signatures**.

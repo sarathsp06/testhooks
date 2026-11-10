@@ -282,7 +282,10 @@ func main() {
 	// C-01: Token auth middleware. When AUTH_TOKEN is set, all API and WS
 	// requests require a valid Bearer token. Capture endpoints (/h/) and
 	// /healthz remain public.
-	authHandler := middleware.TokenAuth(cfg.AuthToken, log, trustedProxies)(c.Handler(mux))
+	authHandler := middleware.TokenAuth(cfg.AuthToken, cfg.ReadToken, log, trustedProxies)(c.Handler(mux))
+	if cfg.ReadToken != "" && cfg.AuthToken == "" {
+		log.Warn().Msg("READ_TOKEN is set but AUTH_TOKEN is not, so nothing requires a token (set AUTH_TOKEN too)")
+	}
 
 	// LOW-001: Wrap with security headers middleware.
 	securityHandler := middleware.SecurityHeaders(authHandler)
