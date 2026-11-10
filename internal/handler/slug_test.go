@@ -10,11 +10,14 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/sarathsp06/testhooks/internal/db"
+	"github.com/sarathsp06/testhooks/internal/hub"
 )
 
 type fakeHub struct{ removed []string }
 
 func (h *fakeHub) RemoveBuffer(slug string) { h.removed = append(h.removed, slug) }
+
+func (h *fakeHub) Subscribe(string, int) (<-chan hub.Message, func()) { return nil, nil }
 
 func doEndpoint(t *testing.T, mux *http.ServeMux, method, path, body string) (*httptest.ResponseRecorder, db.Endpoint) {
 	t.Helper()

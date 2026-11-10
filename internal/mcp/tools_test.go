@@ -6,10 +6,13 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"reflect"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -83,9 +86,15 @@ func connect(t *testing.T, f *fakeAPI) (*mcp.ClientSession, string) {
 	t.Helper()
 	api := httptest.NewServer(f)
 	t.Cleanup(api.Close)
+	return connectTo(t, api.URL+"/", "s3cret"), api.URL
+}
+
+// connectTo starts the MCP server against the Testhooks at base.
+func connectTo(t *testing.T, base, token string) *mcp.ClientSession {
+	t.Helper()
 	ctx := context.Background()
 	ct, st := mcp.NewInMemoryTransports()
-	ss, err := NewServer(api.URL+"/", "s3cret", "test").Connect(ctx, st, nil)
+	ss, err := NewServer(base, token, "test").Connect(ctx, st, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -95,7 +104,7 @@ func connect(t *testing.T, f *fakeAPI) (*mcp.ClientSession, string) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { cs.Close() })
-	return cs, api.URL
+	return cs
 }
 
 // call runs a tool and decodes its structured output into out.
@@ -278,5 +287,165 @@ func TestMergeConfig(t *testing.T) {
 	}
 	if base["a"] != 1 || len(base["n"].(map[string]any)) != 2 {
 		t.Fatal("base was modified")
+	}
+}
+
+// waitAPI is a Testhooks whose request list is empty until a request is added,
+// honouring wait and after like the real API when honourWait is set, and
+// answering at once (an older server) when it is not.
+type waitAPI struct {
+	mu          sync.Mutex
+	honourWait  bool
+	reqs        []string // JSON, newest first
+	calls       int
+	lastQuery   url.Values
+	addedSignal chan struct{}
+}
+
+func (f *waitAPI) add(req string) {
+	f.mu.Lock()
+	f.reqs = append([]string{req}, f.reqs...)
+	f.mu.Unlock()
+	select {
+	case f.addedSignal <- struct{}{}:
+	default:
+	}
+}
+
+func (f *waitAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	switch {
+	case r.URL.Path == "/api/requests/req0":
+		io.WriteString(w, `{"id":"req0","endpoint_id":"ep1","created_at":"2026-11-10T10:00:00Z"}`)
+	case r.URL.Path == "/api/requests/other":
+		io.WriteString(w, `{"id":"other","endpoint_id":"ep2","created_at":"2026-11-10T10:00:00Z"}`)
+	case r.URL.Path == "/api/endpoints/ep1/requests":
+		f.mu.Lock()
+		f.calls++
+		f.lastQuery = r.URL.Query()
+		f.mu.Unlock()
+		after := r.URL.Query().Get("after")
+		current := func() []string {
+			f.mu.Lock()
+			defer f.mu.Unlock()
+			if !f.honourWait || after != "req0" {
+				return f.reqs
+			}
+			var kept []string
+			for _, q := range f.reqs {
+				if !strings.Contains(q, `"id":"req0"`) {
+					kept = append(kept, q)
+				}
+			}
+			return kept
+		}
+		reqs := current()
+		if f.honourWait {
+			wait, _ := strconv.Atoi(r.URL.Query().Get("wait"))
+			timeout := time.After(time.Duration(wait) * time.Second)
+		waiting:
+			for len(reqs) == 0 {
+				select {
+				case <-f.addedSignal: // may be stale, from an add before this call
+					reqs = current()
+				case <-timeout:
+					break waiting
+				}
+			}
+		}
+		io.WriteString(w, `{"requests":[`+strings.Join(reqs, ",")+`],"total":`+strconv.Itoa(len(reqs))+`}`)
+	default:
+		w.WriteHeader(404)
+		io.WriteString(w, `{"error":"not found"}`)
+	}
+}
+
+func newWaitAPI(honourWait bool) (*waitAPI, *httptest.Server) {
+	f := &waitAPI{honourWait: honourWait, addedSignal: make(chan struct{}, 1)}
+	return f, httptest.NewServer(f)
+}
+
+const newReq = `{"id":"req1","endpoint_id":"ep1","method":"POST","created_at":"2026-11-10T10:00:05Z"}`
+const oldReq = `{"id":"req0","endpoint_id":"ep1","method":"POST","created_at":"2026-11-10T10:00:00Z"}`
+
+func TestWaitForRequest_ServerHonoursWait(t *testing.T) {
+	f, srv := newWaitAPI(true)
+	defer srv.Close()
+	cs := connectTo(t, srv.URL, "")
+	f.add(oldReq)
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		f.add(newReq)
+	}()
+	var out WaitForRequestOutput
+	started := time.Now()
+	if res := call(t, cs, "wait_for_request", map[string]any{"endpoint_id": "ep1", "after": "req0", "timeout_seconds": 10}, &out); res.IsError {
+		t.Fatal(errText(res))
+	}
+	if out.TimedOut || len(out.Requests) != 1 || out.Requests[0]["id"] != "req1" {
+		t.Fatalf("got %+v", out)
+	}
+	if time.Since(started) > 5*time.Second {
+		t.Fatal("waited for the timeout instead of the request")
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.calls != 1 || f.lastQuery.Get("wait") != "10" || f.lastQuery.Get("after") != "req0" {
+		t.Fatalf("calls %d query %v; want one call with wait=10 after=req0", f.calls, f.lastQuery)
+	}
+}
+
+func TestWaitForRequest_PollsAnOlderServer(t *testing.T) {
+	f, srv := newWaitAPI(false)
+	defer srv.Close()
+	cs := connectTo(t, srv.URL, "")
+	f.add(oldReq) // an older server ignores after and returns this too
+	go func() {
+		time.Sleep(1500 * time.Millisecond)
+		f.add(newReq)
+	}()
+	var out WaitForRequestOutput
+	if res := call(t, cs, "wait_for_request", map[string]any{"endpoint_id": "ep1", "after": "req0", "timeout_seconds": 10}, &out); res.IsError {
+		t.Fatal(errText(res))
+	}
+	if out.TimedOut || len(out.Requests) != 1 || out.Requests[0]["id"] != "req1" {
+		t.Fatalf("got %+v; want only req1, filtered on the client", out)
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.calls < 2 {
+		t.Fatalf("calls = %d; want the tool to have asked again", f.calls)
+	}
+}
+
+func TestWaitForRequest_TimesOut(t *testing.T) {
+	_, srv := newWaitAPI(false)
+	defer srv.Close()
+	cs := connectTo(t, srv.URL, "")
+	var out WaitForRequestOutput
+	started := time.Now()
+	if res := call(t, cs, "wait_for_request", map[string]any{"endpoint_id": "ep1", "timeout_seconds": 1}, &out); res.IsError {
+		t.Fatal(errText(res))
+	}
+	if !out.TimedOut || len(out.Requests) != 0 {
+		t.Fatalf("got %+v", out)
+	}
+	if d := time.Since(started); d < 900*time.Millisecond || d > 3*time.Second {
+		t.Fatalf("took %v, want about 1s", d)
+	}
+}
+
+func TestWaitForRequest_BadAfter(t *testing.T) {
+	_, srv := newWaitAPI(true)
+	defer srv.Close()
+	cs := connectTo(t, srv.URL, "")
+	if res := call(t, cs, "wait_for_request", map[string]any{"endpoint_id": "ep1", "after": "gone"}, nil); !res.IsError || !strings.Contains(errText(res), "without after") {
+		t.Fatalf("got %q", errText(res))
+	}
+	if res := call(t, cs, "wait_for_request", map[string]any{"endpoint_id": "ep1", "after": "other"}, nil); !res.IsError || !strings.Contains(errText(res), "this endpoint") {
+		t.Fatalf("got %q", errText(res))
+	}
+	if res := call(t, cs, "wait_for_request", map[string]any{}, nil); !res.IsError || !strings.Contains(errText(res), "endpoint_id") {
+		t.Fatalf("got %q", errText(res))
 	}
 }

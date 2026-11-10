@@ -27,7 +27,8 @@ func NewServer(base, token, version string) *mcp.Server {
 	s := mcp.NewServer(&mcp.Implementation{Name: "testhooks", Title: "Testhooks", Version: version}, &mcp.ServerOptions{
 		Instructions: "Testhooks gives you webhook URLs that record every request sent to them. " +
 			"Create an endpoint, give its capture_url to a webhook provider (or send to it yourself), " +
-			"then list and read the requests that arrived to see exactly what the provider sends.",
+			"then wait_for_request until the provider sends something and read it to see exactly what it sends. " +
+			"Pass the id of the last request you saw as after to wait only for newer ones.",
 	})
 
 	no := false
@@ -58,6 +59,11 @@ func NewServer(base, token, version string) *mcp.Server {
 		Description: "List the requests an endpoint has received, newest first, with their method, headers and body.",
 		Annotations: read,
 	}, c.listRequests)
+	mcp.AddTool(s, &mcp.Tool{
+		Name:        "wait_for_request",
+		Description: "Wait until an endpoint receives a request and return it, instead of polling list_requests. Returns at once when the endpoint already has requests newer than after.",
+		Annotations: read,
+	}, c.waitForRequest)
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "get_request",
 		Description: "Show one received request in full: method, path, query, headers, body, and what was forwarded and replied.",

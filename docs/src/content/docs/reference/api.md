@@ -91,6 +91,23 @@ The old URL stops working at once: senders still using it get `404` until you up
 
 Returns `{"requests": [...], "total": 123, "limit": 50, "offset": 0}`, newest first. `limit` is at most 200.
 
+#### Wait for the next request
+
+A script or an agent that has handed out a capture URL and is waiting for the provider to send something doesn't have to poll:
+
+`GET /api/endpoints/{id}/requests?after=<request id>&wait=30`
+
+| Parameter | |
+|---|---|
+| `after` | The id of the last request you have seen. Only requests that arrived after it are returned; `total` still counts them all. A request captured in the same instant is included, so you may see one twice but never miss one. An id that no longer exists (deleted or pruned) is `404` with an `error` saying to call again without `after`; one from another endpoint is `400` |
+| `wait` | Seconds to hold the call open, up to 60, until a request newer than `after` arrives. Without `after`, any request counts, so an endpoint that already has requests answers at once. When the time is up the reply is a normal `200` with an empty list; call again to keep waiting |
+
+```bash
+curl "http://localhost:8080/api/endpoints/<id>/requests?after=299e2e41-2c91-4baf-bc2d-9e38034667fe&wait=30"
+```
+
+In browser mode the request isn't stored, so it is taken from the live event instead and is the same as what the tab receives. Requests from the last few minutes that no tab has fetched count as already there and are returned at once, so pass `after` to wait for a newer one. [`testhooks mcp`](../../guides/mcp/) uses this for its `wait_for_request` tool.
+
 ### Get a request
 
 `GET /api/requests/{reqId}`

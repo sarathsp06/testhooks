@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -12,15 +13,25 @@ import (
 	"github.com/sarathsp06/testhooks/internal/config"
 	"github.com/sarathsp06/testhooks/internal/crypto"
 	"github.com/sarathsp06/testhooks/internal/db"
+	"github.com/sarathsp06/testhooks/internal/hub"
 	"github.com/sarathsp06/testhooks/internal/slug"
 )
 
+// APIHub is what the API needs from the hub: ring-buffer cleanup when an
+// endpoint is deleted, and a subscription so ListRequests can wait for the
+// next request instead of making callers poll.
+type APIHub interface {
+	RemoveBuffer(slug string)
+	Subscribe(slug string, bufferSize int) (<-chan hub.Message, func())
+}
+
+// maxListWait caps the wait query parameter of ListRequests.
+const maxListWait = 60 * time.Second
+
 // API handles REST endpoints for managing endpoints and viewing requests.
 type API struct {
-	db  Store
-	hub interface {
-		RemoveBuffer(slug string)
-	}
+	db      Store
+	hub     APIHub
 	log     zerolog.Logger
 	secrets secretBox
 	limits  Limits
@@ -28,9 +39,9 @@ type API struct {
 	hideHeaders headerMatcher
 }
 
-// NewAPI creates a new API handler.
-// The hub parameter is used to clean up ring buffers when endpoints are deleted.
-func NewAPI(store Store, hub interface{ RemoveBuffer(slug string) }, log zerolog.Logger) *API {
+// NewAPI creates a new API handler. hub may be nil, in which case
+// ListRequests never waits.
+func NewAPI(store Store, hub APIHub, log zerolog.Logger) *API {
 	return &API{
 		db:  store,
 		hub: hub,
@@ -403,6 +414,13 @@ func (a *API) DeleteEndpoint(w http.ResponseWriter, r *http.Request) {
 // --- Request handlers ---
 
 // ListRequests handles GET /api/endpoints/{id}/requests.
+//
+// ?after=<request id> returns only requests that arrived after that one, so a
+// caller can ask "what's new since I last looked". ?wait=<seconds> (at most
+// 60) holds the call open until a matching request arrives or the time is up,
+// so a script or an agent waiting for a provider to send something doesn't
+// have to poll. The reply shape is the same either way; a timed-out wait is
+// an empty list.
 func (a *API) ListRequests(w http.ResponseWriter, r *http.Request) {
 	endpointID := r.PathValue("id")
 
@@ -426,19 +444,62 @@ func (a *API) ListRequests(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	reqs, err := a.db.ListRequests(r.Context(), endpointID, limit, offset)
+	var since cursor
+	if id := r.URL.Query().Get("after"); id != "" {
+		prev, err := a.db.GetRequest(r.Context(), id)
+		if errors.Is(err, db.ErrNotFound) {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "after: no request with that id; it may have been deleted or pruned. Call again without after"})
+			return
+		}
+		if err != nil {
+			a.writeLookupError(w, err, "request")
+			return
+		}
+		if prev.EndpointID != endpointID {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "after must be the id of a request this endpoint received"})
+			return
+		}
+		since = cursor{id: prev.ID, at: prev.CreatedAt}
+	}
+
+	var wait time.Duration
+	if v := r.URL.Query().Get("wait"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 0 {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "wait must be a number of seconds, 0 to 60"})
+			return
+		}
+		wait = min(time.Duration(n)*time.Second, maxListWait)
+	}
+
+	epConfig := config.ParseEndpointConfig(ep.Config)
+	list := func() ([]any, error) {
+		reqs, err := a.db.ListRequests(r.Context(), endpointID, limit, offset)
+		if err != nil {
+			return nil, err
+		}
+		out := make([]any, 0, len(reqs))
+		for i := range reqs {
+			if !since.before(reqs[i].ID, reqs[i].CreatedAt) {
+				continue
+			}
+			a.secrets.annotate(epConfig, &reqs[i])
+			out = append(out, a.shown(r, &reqs[i]))
+		}
+		return out, nil
+	}
+
+	reqs, err := list()
+	if err == nil && len(reqs) == 0 && wait > 0 && a.hub != nil {
+		reqs, err = a.waitForRequests(r.Context(), ep.Slug, wait, since, list)
+		if errors.Is(err, context.Canceled) {
+			return // the caller went away
+		}
+	}
 	if err != nil {
 		a.log.Error().Err(err).Msg("failed to list requests")
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
 		return
-	}
-	if reqs == nil {
-		reqs = []db.CapturedRequest{}
-	}
-	epConfig := config.ParseEndpointConfig(ep.Config)
-	for i := range reqs {
-		a.secrets.annotate(epConfig, &reqs[i])
-		reqs[i] = *a.shown(r, &reqs[i])
 	}
 
 	// Also return total count.
@@ -450,6 +511,70 @@ func (a *API) ListRequests(w http.ResponseWriter, r *http.Request) {
 		"limit":    limit,
 		"offset":   offset,
 	})
+}
+
+// cursor is the request a caller has already seen; the zero cursor means none.
+type cursor struct {
+	id string
+	at time.Time
+}
+
+// before reports whether a request with this id and time is newer than the
+// cursor. Requests captured in the same instant are kept, so a caller may see
+// one twice but never misses one.
+func (c cursor) before(id string, at time.Time) bool {
+	if c.id == "" {
+		return true
+	}
+	return id != c.id && !at.Before(c.at)
+}
+
+// waitForRequests subscribes to the endpoint's events and, each time a request
+// arrives, lists again until something newer than since shows up or wait is
+// over. A browser-mode request is not stored, so when the list stays empty the
+// request is taken from the event itself.
+func (a *API) waitForRequests(ctx context.Context, slug string, wait time.Duration, since cursor, list func() ([]any, error)) ([]any, error) {
+	ch, cancel := a.hub.Subscribe(slug, 0)
+	if ch == nil { // too many subscribers on this endpoint: answer at once
+		return []any{}, nil
+	}
+	defer cancel()
+
+	// A request captured between the first list and the subscription would
+	// otherwise be missed until the next one.
+	reqs, err := list()
+	if err != nil || len(reqs) > 0 {
+		return reqs, err
+	}
+
+	timer := time.NewTimer(wait)
+	defer timer.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return nil, context.Canceled
+		case <-timer.C:
+			return []any{}, nil
+		case msg, ok := <-ch:
+			if !ok {
+				return []any{}, nil
+			}
+			if msg.Type != "request" {
+				continue
+			}
+			reqs, err := list()
+			if err != nil || len(reqs) > 0 {
+				return reqs, err
+			}
+			var head struct {
+				ID        string    `json:"id"`
+				CreatedAt time.Time `json:"created_at"`
+			}
+			if json.Unmarshal(msg.Data, &head) == nil && since.before(head.ID, head.CreatedAt) {
+				return []any{msg.Data}, nil
+			}
+		}
+	}
 }
 
 // GetRequest handles GET /api/requests/{reqId}.
