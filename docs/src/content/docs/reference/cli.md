@@ -1,6 +1,6 @@
 ---
 title: Command line
-description: Everything the UI does, from a shell: endpoints, requests, waiting, sending, previewing scripts.
+description: "Everything the UI does, from a shell: endpoints, requests, waiting, sending, previewing scripts."
 ---
 
 The `testhooks` binary that runs the server is also a client for one. Each command is a call to the [REST API](../api/), the same calls the UI and [`testhooks mcp`](../../guides/mcp/) make, so they say and do the same things.
