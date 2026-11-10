@@ -27,7 +27,9 @@ func newClient(base, token string) *client {
 		base:  strings.TrimRight(base, "/"),
 		token: token,
 		// No automatic gzip, so a replay carries only the headers it was captured with.
-		http: &http.Client{Timeout: 30 * time.Second, Transport: &http.Transport{
+		// No Timeout here: do applies defaultTimeout unless the context has its own
+		// deadline, which a long-polling call sets higher.
+		http: &http.Client{Transport: &http.Transport{
 			Proxy:              http.ProxyFromEnvironment,
 			DisableCompression: true,
 		}},
@@ -39,9 +41,17 @@ func (c *client) captureURL(slug string) string {
 	return c.base + "/h/" + url.PathEscape(slug)
 }
 
+// defaultTimeout bounds an API call whose context has no deadline of its own.
+const defaultTimeout = 30 * time.Second
+
 // do sends a JSON request to the API and decodes a JSON reply into out
 // (which may be nil). Non-2xx replies become errors carrying the API's message.
 func (c *client) do(ctx context.Context, method, path string, body, out any) error {
+	if _, ok := ctx.Deadline(); !ok {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, defaultTimeout)
+		defer cancel()
+	}
 	var rd io.Reader
 	if body != nil {
 		b, err := json.Marshal(body)

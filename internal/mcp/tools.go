@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -220,6 +221,114 @@ func (c *client) listRequests(ctx context.Context, _ *mcp.CallToolRequest, in Li
 		out.Requests = []map[string]any{}
 	}
 	return nil, out, nil
+}
+
+// --- wait_for_request
+
+// maxServerWait is the longest one ListRequests call may wait (the API caps
+// wait at 60 seconds); longer timeouts are several calls.
+const maxServerWait = 60 * time.Second
+
+// pollInterval is used against a Testhooks too old to honour wait: it answers
+// at once, so the tool asks again after this long.
+const pollInterval = time.Second
+
+type WaitForRequestInput struct {
+	EndpointID     string `json:"endpoint_id" jsonschema:"the endpoint id"`
+	After          string `json:"after,omitempty" jsonschema:"the id of the last request you have already seen, so only newer ones are returned. Leave out to take any request, including ones that arrived before this call"`
+	TimeoutSeconds int    `json:"timeout_seconds,omitempty" jsonschema:"how long to wait, 1 to 300 (default 60). Call again with the same arguments to keep waiting"`
+}
+
+type WaitForRequestOutput struct {
+	Requests []map[string]any `json:"requests" jsonschema:"the requests that arrived, newest first; empty when the wait timed out"`
+	TimedOut bool             `json:"timed_out" jsonschema:"true when nothing arrived in time: the provider has not sent anything yet, so check the URL is configured there, or wait again"`
+}
+
+func (c *client) waitForRequest(ctx context.Context, _ *mcp.CallToolRequest, in WaitForRequestInput) (*mcp.CallToolResult, WaitForRequestOutput, error) {
+	if in.EndpointID == "" {
+		return nil, WaitForRequestOutput{}, errors.New("endpoint_id is required")
+	}
+	timeout := 60 * time.Second
+	if in.TimeoutSeconds > 0 {
+		timeout = min(time.Duration(in.TimeoutSeconds)*time.Second, 300*time.Second)
+	}
+
+	// The server filters by after; this fetch repeats the filter here for a
+	// Testhooks too old to know the parameter, and gives a clear error when the
+	// request is gone.
+	var since cursor
+	if in.After != "" {
+		var prev struct {
+			ID         string    `json:"id"`
+			EndpointID string    `json:"endpoint_id"`
+			CreatedAt  time.Time `json:"created_at"`
+		}
+		if err := c.do(ctx, http.MethodGet, "/api/requests/"+url.PathEscape(in.After), nil, &prev); err != nil {
+			return nil, WaitForRequestOutput{}, fmt.Errorf("after: %w; call again without after to take any request", err)
+		}
+		if prev.EndpointID != in.EndpointID {
+			return nil, WaitForRequestOutput{}, errors.New("after must be the id of a request this endpoint received")
+		}
+		since = cursor{id: prev.ID, at: prev.CreatedAt}
+	}
+
+	deadline := time.Now().Add(timeout)
+	base := "/api/endpoints/" + url.PathEscape(in.EndpointID) + "/requests"
+	for {
+		remaining := time.Until(deadline)
+		if remaining <= 0 {
+			return nil, WaitForRequestOutput{Requests: []map[string]any{}, TimedOut: true}, nil
+		}
+		wait := min(remaining, maxServerWait)
+		q := url.Values{"limit": {"50"}, "wait": {strconv.Itoa(int(wait.Round(time.Second) / time.Second))}}
+		if in.After != "" {
+			q.Set("after", in.After)
+		}
+		callCtx, cancel := context.WithTimeout(ctx, wait+15*time.Second)
+		started := time.Now()
+		var out ListRequestsOutput
+		err := c.do(callCtx, http.MethodGet, base+"?"+q.Encode(), nil, &out)
+		cancel()
+		if err != nil {
+			return nil, WaitForRequestOutput{}, err
+		}
+		if reqs := since.filter(out.Requests); len(reqs) > 0 {
+			return nil, WaitForRequestOutput{Requests: reqs}, nil
+		}
+		// A Testhooks that honours wait answers only when the time is up; one
+		// that doesn't answers at once, so pause before asking again.
+		if time.Since(started) < wait/2 {
+			select {
+			case <-ctx.Done():
+				return nil, WaitForRequestOutput{}, ctx.Err()
+			case <-time.After(min(pollInterval, time.Until(deadline))):
+			}
+		}
+	}
+}
+
+// cursor is the request the caller has already seen.
+type cursor struct {
+	id string
+	at time.Time
+}
+
+// filter keeps the requests newer than the cursor. Requests captured in the
+// same instant are kept, so one may be seen twice but none is missed.
+func (c cursor) filter(reqs []map[string]any) []map[string]any {
+	if c.id == "" {
+		return reqs
+	}
+	out := make([]map[string]any, 0, len(reqs))
+	for _, r := range reqs {
+		id, _ := r["id"].(string)
+		at, _ := r["created_at"].(string)
+		t, err := time.Parse(time.RFC3339Nano, at)
+		if id != c.id && (err != nil || !t.Before(c.at)) {
+			out = append(out, r)
+		}
+	}
+	return out
 }
 
 // --- get_request
