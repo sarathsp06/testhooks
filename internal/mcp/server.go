@@ -56,6 +56,11 @@ func NewServer(base, token, version string) *mcp.Server {
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: &no, IdempotentHint: true, OpenWorldHint: &no},
 	}, c.updateConfig)
 	mcp.AddTool(s, &mcp.Tool{
+		Name:        "preview_script",
+		Description: "Try a transform or reply script on a captured request without saving or sending anything: shows the request as it would be forwarded and what the sender would get, or the error the script threw. Do this before saving a script with update_endpoint_config.",
+		Annotations: read,
+	}, c.previewScript)
+	mcp.AddTool(s, &mcp.Tool{
 		Name:        "list_requests",
 		Description: "List the requests an endpoint has received, newest first, with their method, headers and body.",
 		Annotations: read,

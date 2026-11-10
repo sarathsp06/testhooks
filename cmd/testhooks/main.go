@@ -176,6 +176,9 @@ func main() {
 	api := handler.NewAPI(store, h, log)
 	api.SetHideHeaders(hideHeaders)
 	api.SetEncryption(cryptoSvc)
+	if wasmRunner != nil {
+		api.SetScriptRunner(wasmRunner)
+	}
 	api.SetLimits(handler.Limits{
 		MaxRequestsPerEndpoint:  cfg.MaxRequestsPerEndpoint,
 		MaxEndpointStorageBytes: cfg.MaxEndpointStorageBytes,
@@ -242,6 +245,7 @@ func main() {
 	mux.Handle("PATCH /api/endpoints/{id}", wrapAPI(api.UpdateEndpoint))
 	mux.Handle("DELETE /api/endpoints/{id}", wrapAPI(api.DeleteEndpoint))
 	mux.Handle("POST /api/endpoints/{id}/resign", wrapAPI(api.ResignRequest))
+	mux.Handle("POST /api/endpoints/{id}/preview", wrapAPI(api.PreviewScript))
 	mux.Handle("GET /api/endpoints/{id}/requests", wrapAPI(api.ListRequests))
 	mux.Handle("DELETE /api/endpoints/{id}/requests", wrapAPI(api.DeleteAllRequests))
 	mux.Handle("GET /api/requests/{reqId}", wrapAPI(api.GetRequest))

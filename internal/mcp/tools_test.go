@@ -65,6 +65,11 @@ func (f *fakeAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			"query":{"debug":["1"]},"body":"{\"hello\":\"world\"}","body_encoding":"text"}`)
 	case r.Method == "GET" && r.URL.Path == "/api/endpoints/ep1/requests":
 		io.WriteString(w, `{"requests":[{"id":"req1","method":"PUT"}],"total":1,"limit":`+r.URL.Query().Get("limit")+`,"offset":0}`)
+	case r.Method == "POST" && r.URL.Path == "/api/endpoints/ep1/preview":
+		var in map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&in)
+		f.patched = in
+		io.WriteString(w, `{"input":{"method":"PUT"},"transform":null,"reply":{"status":200,"source":"default"}}`)
 	case r.Method == "DELETE" && r.URL.Path == "/api/endpoints/ep1":
 		w.WriteHeader(204)
 	case r.Method == "GET" && r.URL.Path == "/api/requests/missing":
@@ -288,6 +293,13 @@ func TestListAndGetRequestAndDelete(t *testing.T) {
 	}
 	if got["capture_url"] != api+"/h/abc123" || !strings.Contains(got["curl"].(string), "-H 'Webhook-Id: msg_1'") || strings.Contains(got["curl"].(string), "Host:") {
 		t.Fatalf("get_request curl = %v %v", got["capture_url"], got["curl"])
+	}
+	var pv map[string]any
+	if res := call(t, cs, "preview_script", map[string]any{"endpoint_id": "ep1", "reply": "function handler(req) { return {status: 204}; }"}, &pv); res.IsError {
+		t.Fatal(errText(res))
+	}
+	if pv["request_id"] != "req1" || f.patched["request_id"] != "req1" || f.patched["reply"] == nil || f.patched["transform"] != nil {
+		t.Fatalf("preview sent %v, got %v", f.patched, pv)
 	}
 	var del DeleteEndpointOutput
 	if res := call(t, cs, "delete_endpoint", map[string]any{"id": "ep1"}, &del); res.IsError || del.Deleted != "ep1" {

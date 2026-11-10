@@ -342,6 +342,45 @@ func (c cursor) filter(reqs []map[string]any) []map[string]any {
 	return out
 }
 
+// --- preview_script
+
+type PreviewScriptInput struct {
+	EndpointID string  `json:"endpoint_id" jsonschema:"the endpoint id"`
+	RequestID  string  `json:"request_id,omitempty" jsonschema:"a captured request to try the scripts on; leave out to use the newest one the endpoint received"`
+	Transform  *string `json:"transform,omitempty" jsonschema:"a transform script defining transform(req); leave out to use the endpoint's saved one, pass an empty string to run none"`
+	Reply      *string `json:"reply,omitempty" jsonschema:"a reply script defining handler(req); leave out to use the endpoint's saved one, pass an empty string to run none"`
+}
+
+func (c *client) previewScript(ctx context.Context, _ *mcp.CallToolRequest, in PreviewScriptInput) (*mcp.CallToolResult, map[string]any, error) {
+	if in.EndpointID == "" {
+		return nil, nil, errors.New("endpoint_id is required")
+	}
+	reqID := in.RequestID
+	if reqID == "" {
+		var list ListRequestsOutput
+		if err := c.do(ctx, http.MethodGet, "/api/endpoints/"+url.PathEscape(in.EndpointID)+"/requests?limit=1", nil, &list); err != nil {
+			return nil, nil, err
+		}
+		if len(list.Requests) == 0 {
+			return nil, nil, errors.New("the endpoint has no captured requests to try the script on; send one with send_request first, or wait_for_request")
+		}
+		reqID, _ = list.Requests[0]["id"].(string)
+	}
+	body := map[string]any{"request_id": reqID}
+	if in.Transform != nil {
+		body["transform"] = *in.Transform
+	}
+	if in.Reply != nil {
+		body["reply"] = *in.Reply
+	}
+	var out map[string]any
+	if err := c.do(ctx, http.MethodPost, "/api/endpoints/"+url.PathEscape(in.EndpointID)+"/preview", body, &out); err != nil {
+		return nil, nil, err
+	}
+	out["request_id"] = reqID
+	return nil, out, nil
+}
+
 // --- get_request
 
 type GetRequestInput struct {

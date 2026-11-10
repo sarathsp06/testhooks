@@ -35,6 +35,7 @@ type API struct {
 	log     zerolog.Logger
 	secrets secretBox
 	limits  Limits
+	scripts ScriptRunner // runs previews; nil when scripts are unavailable
 	// hideHeaders are left out of served requests unless ?include_hidden=true.
 	hideHeaders headerMatcher
 }

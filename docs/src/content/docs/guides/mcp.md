@@ -9,7 +9,7 @@ A typical session:
 
 1. You ask the agent to "set up a webhook endpoint for Stripe". It creates one and gives you the URL.
 2. You paste that URL into the provider's webhook settings and trigger an event. The agent waits for it to arrive.
-3. The agent reads the request (headers, body, signature) and writes the handler to match.
+3. The agent reads the request (headers, body, signature) and writes the handler to match. If it also writes a transform or reply script for the endpoint, it previews it on that request before saving.
 4. It sends a test request, or replays a captured one, to check the handler, as if the provider sent it again.
 
 The MCP server runs on your machine and talks to a running Testhooks over the [REST API](../../reference/api/). It adds nothing of its own: every tool is an API call you could make with `curl`.
@@ -62,6 +62,7 @@ If the app can't find `testhooks`, use its full path, for example `/usr/local/bi
 | `list_endpoints` | Lists endpoints, each with its `capture_url` |
 | `get_endpoint` | Shows one endpoint by `id`, or by the `slug` in its capture URL |
 | `update_endpoint_config` | Changes only the settings you pass and keeps the rest. Set a field to `null` to remove it |
+| `preview_script` | Tries a `transform` or `reply` script on a captured request (`request_id`, or the newest one) without saving or sending anything, and returns what would be forwarded and what the sender would get, or the error the script threw. Leave a script out to use the endpoint's saved one; pass `""` to run none. Uses [`POST /api/endpoints/{id}/preview`](../../reference/api/#try-a-script-on-a-request) |
 | `list_requests` | Lists the requests an endpoint received, newest first. `after` (a request id) lists only newer ones |
 | `wait_for_request` | Waits until the endpoint receives a request and returns it, so the agent doesn't poll. Takes `endpoint_id`, an optional `after` (the id of the last request it saw, to wait only for newer ones) and `timeout_seconds` (default 60, up to 300). Returns `requests` and `timed_out`; when it timed out, the provider hasn't sent anything yet and the agent can wait again. Uses the API's [`wait` parameter](../../reference/api/#wait-for-the-next-request); against an older Testhooks it asks once a second instead |
 | `get_request` | Shows one request in full: method, path, query, headers, body (and `body_json` when it is JSON), signature check, what was forwarded and what the sender got back. Adds the endpoint's `capture_url` and a `curl` line that sends the same request again |
