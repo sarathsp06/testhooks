@@ -10,7 +10,7 @@ A typical session:
 1. You ask the agent to "set up a webhook endpoint for Stripe". It creates one and gives you the URL.
 2. You paste that URL into the provider's webhook settings and trigger an event. The agent waits for it to arrive.
 3. The agent reads the request (headers, body, signature) and writes the handler to match.
-4. It replays a captured request to check the handler, as if the provider sent it again.
+4. It sends a test request, or replays a captured one, to check the handler, as if the provider sent it again.
 
 The MCP server runs on your machine and talks to a running Testhooks over the [REST API](../../reference/api/). It adds nothing of its own: every tool is an API call you could make with `curl`.
 
@@ -62,9 +62,10 @@ If the app can't find `testhooks`, use its full path, for example `/usr/local/bi
 | `list_endpoints` | Lists endpoints, each with its `capture_url` |
 | `get_endpoint` | Shows one endpoint by `id`, or by the `slug` in its capture URL |
 | `update_endpoint_config` | Changes only the settings you pass and keeps the rest. Set a field to `null` to remove it |
-| `list_requests` | Lists the requests an endpoint received, newest first |
+| `list_requests` | Lists the requests an endpoint received, newest first. `after` (a request id) lists only newer ones |
 | `wait_for_request` | Waits until the endpoint receives a request and returns it, so the agent doesn't poll. Takes `endpoint_id`, an optional `after` (the id of the last request it saw, to wait only for newer ones) and `timeout_seconds` (default 60, up to 300). Returns `requests` and `timed_out`; when it timed out, the provider hasn't sent anything yet and the agent can wait again. Uses the API's [`wait` parameter](../../reference/api/#wait-for-the-next-request); against an older Testhooks it asks once a second instead |
-| `get_request` | Shows one request in full: method, path, query, headers, body, signature check, what was forwarded and what the sender got back |
+| `get_request` | Shows one request in full: method, path, query, headers, body (and `body_json` when it is JSON), signature check, what was forwarded and what the sender got back. Adds the endpoint's `capture_url` and a `curl` line that sends the same request again |
+| `send_request` | Sends a test request to the endpoint's capture URL, as a provider would: `method` (default `POST`), `path`, `query`, `headers`, `body` and `content_type` (JSON bodies get `application/json` by default). Returns the `status` and `reply` the sender got, the `request` as Testhooks captured it (with signature check, forward result and reply) and a `curl` line that does the same |
 | `replay_request` | Sends a captured request to its endpoint again with the same method, path, query, headers and body, and returns the reply. Connection headers such as `Host` and `Content-Length` are not copied |
 | `delete_endpoint` | Deletes an endpoint and all its requests. This cannot be undone; it is marked destructive, and most MCP clients ask before running such tools |
 

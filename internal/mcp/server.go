@@ -28,7 +28,8 @@ func NewServer(base, token, version string) *mcp.Server {
 		Instructions: "Testhooks gives you webhook URLs that record every request sent to them. " +
 			"Create an endpoint, give its capture_url to a webhook provider (or send to it yourself), " +
 			"then wait_for_request until the provider sends something and read it to see exactly what it sends. " +
-			"Pass the id of the last request you saw as after to wait only for newer ones.",
+			"Pass the id of the last request you saw as after to wait only for newer ones. " +
+			"send_request sends a test request yourself; replay_request sends a captured one again.",
 	})
 
 	no := false
@@ -69,6 +70,11 @@ func NewServer(base, token, version string) *mcp.Server {
 		Description: "Show one received request in full: method, path, query, headers, body, and what was forwarded and replied.",
 		Annotations: read,
 	}, c.getRequest)
+	mcp.AddTool(s, &mcp.Tool{
+		Name:        "send_request",
+		Description: "Send a test request to an endpoint's capture URL, as a provider would, and return what the sender got back and what Testhooks captured. Use it to try an endpoint, a script or your handler before the real provider sends anything.",
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: &no, OpenWorldHint: &no},
+	}, c.sendRequest)
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "replay_request",
 		Description: "Send a received request to its endpoint again, as if the provider sent it twice, and return the reply.",

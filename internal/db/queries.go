@@ -1,6 +1,7 @@
 package db
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -87,6 +88,13 @@ type CapturedRequest struct {
 
 // isTextBody heuristically determines whether the body is displayable text.
 // It first checks the Content-Type, then falls back to UTF-8 validity.
+// looksLikeJSON reports whether body starts with a JSON object or array; a
+// bare string or number is not worth a second field.
+func looksLikeJSON(body []byte) bool {
+	b := bytes.TrimLeft(body, " \t\r\n")
+	return len(b) > 0 && (b[0] == '{' || b[0] == '[')
+}
+
 func isTextBody(body []byte, contentType string) bool {
 	if len(body) == 0 {
 		return true
@@ -138,12 +146,19 @@ func (r *CapturedRequest) MarshalJSON() ([]byte, error) {
 			*Alias
 			Body         string `json:"body"`
 			BodyEncoding string `json:"body_encoding"`
+			// BodyJSON is the body parsed, when it is JSON, so a client
+			// doesn't decode the string a second time.
+			BodyJSON json.RawMessage `json:"body_json,omitempty"`
 		}
-		return json.Marshal(&WithText{
+		out := &WithText{
 			Alias:        (*Alias)(r),
 			Body:         string(r.Body),
 			BodyEncoding: "text",
-		})
+		}
+		if looksLikeJSON(r.Body) && json.Valid(r.Body) {
+			out.BodyJSON = json.RawMessage(r.Body)
+		}
+		return json.Marshal(out)
 	}
 
 	type WithBase64 struct {

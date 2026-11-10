@@ -4,14 +4,17 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -201,6 +204,7 @@ type ListRequestsInput struct {
 	EndpointID string `json:"endpoint_id" jsonschema:"the endpoint id"`
 	Limit      int    `json:"limit,omitempty" jsonschema:"how many to return, newest first, 1 to 200 (default 50)"`
 	Offset     int    `json:"offset,omitempty" jsonschema:"how many to skip, for paging"`
+	After      string `json:"after,omitempty" jsonschema:"the id of the last request you have already seen; only newer ones are returned"`
 }
 
 type ListRequestsOutput struct {
@@ -214,6 +218,13 @@ func (c *client) listRequests(ctx context.Context, _ *mcp.CallToolRequest, in Li
 	}
 	var out ListRequestsOutput
 	path := "/api/endpoints/" + url.PathEscape(in.EndpointID) + "/requests" + page(in.Limit, in.Offset)
+	if in.After != "" {
+		sep := "?"
+		if strings.Contains(path, "?") {
+			sep = "&"
+		}
+		path += sep + "after=" + url.QueryEscape(in.After)
+	}
 	if err := c.do(ctx, http.MethodGet, path, nil, &out); err != nil {
 		return nil, ListRequestsOutput{}, err
 	}
@@ -356,7 +367,174 @@ func (c *client) getRequest(ctx context.Context, _ *mcp.CallToolRequest, in GetR
 	if err := c.do(ctx, http.MethodGet, "/api/requests/"+url.PathEscape(in.ID), nil, &out); err != nil {
 		return nil, nil, err
 	}
+	// Add the URL it was sent to and a curl line that sends it again, so the
+	// agent can hand either to the user or to a test.
+	var cr capturedRequest
+	if b, err := json.Marshal(out); err == nil && json.Unmarshal(b, &cr) == nil && cr.EndpointID != "" {
+		var ep Endpoint
+		if err := c.do(ctx, http.MethodGet, "/api/endpoints/"+url.PathEscape(cr.EndpointID), nil, &ep); err == nil {
+			target := c.targetURL(ep.Slug, cr.Path, cr.Query)
+			out["capture_url"] = c.captureURL(ep.Slug)
+			if body, err := cr.bodyBytes(); err == nil {
+				out["curl"] = curlLine(cr.Method, target, cr.Headers, body)
+			}
+		}
+	}
 	return nil, out, nil
+}
+
+// targetURL is the capture URL for slug with a captured request's path and query.
+func (c *client) targetURL(slug, path string, query map[string][]string) string {
+	target := c.captureURL(slug)
+	if path != "" && path != "/" {
+		target += "/" + strings.TrimLeft(path, "/")
+	}
+	if q := url.Values(query).Encode(); q != "" {
+		target += "?" + q
+	}
+	return target
+}
+
+// bodyBytes decodes the stored body.
+func (cr capturedRequest) bodyBytes() ([]byte, error) {
+	if cr.BodyEncoding == "base64" {
+		b, err := base64.StdEncoding.DecodeString(cr.Body)
+		if err != nil {
+			return nil, fmt.Errorf("decoding stored body: %w", err)
+		}
+		return b, nil
+	}
+	return []byte(cr.Body), nil
+}
+
+// curlLine renders a request as a curl command, skipping connection headers.
+// A body that isn't printable text is left out with a note.
+func curlLine(method, target string, headers map[string][]string, body []byte) string {
+	var b strings.Builder
+	b.WriteString("curl -X " + shellQuote(strings.ToUpper(method)) + " " + shellQuote(target))
+	keys := make([]string, 0, len(headers))
+	for k := range headers {
+		if !skipOnReplay[http.CanonicalHeaderKey(k)] {
+			keys = append(keys, k)
+		}
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		for _, v := range headers[k] {
+			b.WriteString(" \\\n  -H " + shellQuote(k+": "+v))
+		}
+	}
+	if len(body) > 0 {
+		if utf8.Valid(body) && !bytes.ContainsAny(body, "\x00") {
+			b.WriteString(" \\\n  --data-raw " + shellQuote(string(body)))
+		} else {
+			b.WriteString(" \\\n  --data-binary @body.bin # binary body: save it from the request first")
+		}
+	}
+	return b.String()
+}
+
+// shellQuote single-quotes s for a POSIX shell.
+func shellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+}
+
+// --- send_request
+
+type SendRequestInput struct {
+	EndpointID  string            `json:"endpoint_id" jsonschema:"the endpoint id"`
+	Method      string            `json:"method,omitempty" jsonschema:"HTTP method (default POST)"`
+	Path        string            `json:"path,omitempty" jsonschema:"path after the capture URL, e.g. /stripe/events (default none)"`
+	Query       map[string]string `json:"query,omitempty" jsonschema:"query parameters"`
+	Headers     map[string]string `json:"headers,omitempty" jsonschema:"headers to send; Content-Type defaults to application/json when body is JSON"`
+	Body        string            `json:"body,omitempty" jsonschema:"the body as text"`
+	ContentType string            `json:"content_type,omitempty" jsonschema:"shortcut for the Content-Type header"`
+}
+
+type SendRequestOutput struct {
+	URL     string         `json:"url" jsonschema:"where the request was sent"`
+	Status  int            `json:"status" jsonschema:"the status code the sender got back: what a provider would see"`
+	Reply   string         `json:"reply" jsonschema:"the reply body, cut at 64 KB"`
+	Request map[string]any `json:"request,omitempty" jsonschema:"the request as Testhooks captured it, with signature check, forward result and reply when stored"`
+	Curl    string         `json:"curl" jsonschema:"a curl command that sends the same request"`
+}
+
+func (c *client) sendRequest(ctx context.Context, _ *mcp.CallToolRequest, in SendRequestInput) (*mcp.CallToolResult, SendRequestOutput, error) {
+	if in.EndpointID == "" {
+		return nil, SendRequestOutput{}, errors.New("endpoint_id is required")
+	}
+	var ep Endpoint
+	if err := c.do(ctx, http.MethodGet, "/api/endpoints/"+url.PathEscape(in.EndpointID), nil, &ep); err != nil {
+		return nil, SendRequestOutput{}, err
+	}
+	query := map[string][]string{}
+	for k, v := range in.Query {
+		query[k] = []string{v}
+	}
+	target := c.targetURL(ep.Slug, in.Path, query)
+	method := strings.ToUpper(in.Method)
+	if method == "" {
+		method = http.MethodPost
+	}
+	headers := http.Header{}
+	for k, v := range in.Headers {
+		headers.Add(k, v)
+	}
+	if in.ContentType != "" {
+		headers.Set("Content-Type", in.ContentType)
+	}
+	if headers.Get("Content-Type") == "" && in.Body != "" && json.Valid([]byte(in.Body)) {
+		headers.Set("Content-Type", "application/json")
+	}
+
+	status, reply, err := c.send(ctx, method, target, headers, []byte(in.Body))
+	if err != nil {
+		return nil, SendRequestOutput{}, err
+	}
+	out := SendRequestOutput{URL: target, Status: status, Reply: reply, Curl: curlLine(method, target, headers, []byte(in.Body))}
+
+	// The default reply names the captured request; a scripted one may not.
+	var def struct {
+		ID string `json:"id"`
+	}
+	if json.Unmarshal([]byte(reply), &def) == nil && def.ID != "" {
+		var req map[string]any
+		if err := c.do(ctx, http.MethodGet, "/api/requests/"+url.PathEscape(def.ID), nil, &req); err == nil {
+			out.Request = req
+		}
+	}
+	if out.Request == nil {
+		var list ListRequestsOutput
+		if err := c.do(ctx, http.MethodGet, "/api/endpoints/"+url.PathEscape(in.EndpointID)+"/requests?limit=1", nil, &list); err == nil && len(list.Requests) == 1 {
+			out.Request = list.Requests[0]
+		}
+	}
+	return nil, out, nil
+}
+
+// send delivers a request to a capture URL and returns the status and the
+// reply body, cut at 64 KB. No Testhooks auth token is sent: the capture URL
+// is public, and the request keeps whatever Authorization header it carries.
+func (c *client) send(ctx context.Context, method, target string, headers http.Header, body []byte) (int, string, error) {
+	req, err := http.NewRequestWithContext(ctx, method, target, bytes.NewReader(body))
+	if err != nil {
+		return 0, "", err
+	}
+	for k, vs := range headers {
+		if skipOnReplay[http.CanonicalHeaderKey(k)] {
+			continue
+		}
+		for _, v := range vs {
+			req.Header.Add(k, v)
+		}
+	}
+	res, err := c.http.Do(req)
+	if err != nil {
+		return 0, "", fmt.Errorf("sending to %s: %w", target, err)
+	}
+	defer res.Body.Close()
+	reply, _ := io.ReadAll(io.LimitReader(res.Body, 64<<10))
+	return res.StatusCode, string(reply), nil
 }
 
 // --- replay_request
@@ -392,45 +570,18 @@ func (c *client) replayRequest(ctx context.Context, _ *mcp.CallToolRequest, in R
 		return nil, ReplayRequestOutput{}, err
 	}
 
-	target := c.captureURL(ep.Slug)
-	if cr.Path != "" && cr.Path != "/" {
-		target += "/" + strings.TrimLeft(cr.Path, "/")
-	}
-	if q := url.Values(cr.Query).Encode(); q != "" {
-		target += "?" + q
-	}
-
-	body := []byte(cr.Body)
-	if cr.BodyEncoding == "base64" {
-		b, err := base64.StdEncoding.DecodeString(cr.Body)
-		if err != nil {
-			return nil, ReplayRequestOutput{}, fmt.Errorf("decoding stored body: %w", err)
-		}
-		body = b
+	target := c.targetURL(ep.Slug, cr.Path, cr.Query)
+	body, err := cr.bodyBytes()
+	if err != nil {
+		return nil, ReplayRequestOutput{}, err
 	}
 	method := cr.Method
 	if method == "" {
 		method = http.MethodPost
 	}
-	req, err := http.NewRequestWithContext(ctx, method, target, bytes.NewReader(body))
+	status, reply, err := c.send(ctx, method, target, cr.Headers, body)
 	if err != nil {
 		return nil, ReplayRequestOutput{}, err
 	}
-	for k, vs := range cr.Headers {
-		if skipOnReplay[http.CanonicalHeaderKey(k)] {
-			continue
-		}
-		for _, v := range vs {
-			req.Header.Add(k, v)
-		}
-	}
-	// No Testhooks auth token here: the capture URL is public, and the
-	// request keeps the Authorization header it was captured with, if any.
-	res, err := c.http.Do(req)
-	if err != nil {
-		return nil, ReplayRequestOutput{}, fmt.Errorf("sending to %s: %w", target, err)
-	}
-	defer res.Body.Close()
-	reply, _ := io.ReadAll(io.LimitReader(res.Body, 64<<10))
-	return nil, ReplayRequestOutput{URL: target, Status: res.StatusCode, Body: string(reply)}, nil
+	return nil, ReplayRequestOutput{URL: target, Status: status, Body: reply}, nil
 }
