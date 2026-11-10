@@ -1,0 +1,34 @@
+# Testhooks
+
+> Webhooks, made for humans and for machines. A small, self-hostable tool to test webhooks: catch one, change its payload, reply with any status, watch the sender react. One click, or one curl. Open source (Apache 2.0), one binary with the UI built in. Live demo: https://testhooks.vercel.app/
+
+Every UI action is an API call, so anything a person can do in the browser, a script or an agent can do over REST, WebSocket, MCP or the CLI with the same words and defaults. The typical agent session: create an endpoint, give its capture URL to a webhook provider, wait for the request to arrive, read exactly what the provider sent, write the handler to match, preview any transform or reply script on that request before saving it, then send a test request or replay the captured one to check.
+
+## For agents
+
+- [Use it from an AI agent (MCP)](https://sarathsp06.github.io/testhooks/guides/mcp/): `testhooks mcp` tools: create_endpoint, wait_for_request, get_request, preview_script, send_request, replay_request, update_endpoint_config, list/get/delete. Set-up for Claude Code, Cursor and Claude Desktop, and the SKILL.md that teaches the workflow.
+- [OpenAPI document](https://raw.githubusercontent.com/sarathsp06/testhooks/main/internal/handler/openapi.json): also served by every Testhooks at `/api/openapi.json`, without a token.
+- [AGENTS.md](https://github.com/sarathsp06/testhooks/blob/main/AGENTS.md): the product principles every change must keep.
+
+## Reference
+
+- [REST API](https://sarathsp06.github.io/testhooks/reference/api/): endpoints, requests, waiting for the next request (`?after=&wait=`), previewing scripts, re-signing, limits, the endpoint config object.
+- [WebSocket events](https://sarathsp06.github.io/testhooks/reference/websocket/): the live stream at `/ws/{slug}`.
+- [Configuration](https://sarathsp06.github.io/testhooks/reference/configuration/): every environment variable, including AUTH_TOKEN and READ_TOKEN.
+- [Status codes](https://sarathsp06.github.io/testhooks/reference/status-codes/): what a sender gets back from a capture URL.
+
+## Guides
+
+- [Quickstart](https://sarathsp06.github.io/testhooks/getting-started/quickstart/)
+- [Installation](https://sarathsp06.github.io/testhooks/getting-started/installation/)
+- [Server and browser mode](https://sarathsp06.github.io/testhooks/guides/modes/)
+- [Webhooks to localhost](https://sarathsp06.github.io/testhooks/guides/localhost/): the browser tab as the tunnel.
+- [Forwarding](https://sarathsp06.github.io/testhooks/guides/forwarding/)
+- [Transforms and custom responses](https://sarathsp06.github.io/testhooks/guides/scripts/)
+- [Verifying signed webhooks](https://sarathsp06.github.io/testhooks/guides/signatures/): Standard Webhooks, HMAC, Ed25519.
+- [Running in production](https://sarathsp06.github.io/testhooks/deployment/production/)
+- [Deploy on Vercel](https://sarathsp06.github.io/testhooks/deployment/vercel/)
+
+## Source
+
+- [GitHub](https://github.com/sarathsp06/testhooks)

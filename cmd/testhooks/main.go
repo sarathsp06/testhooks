@@ -251,6 +251,7 @@ func main() {
 	mux.Handle("GET /api/requests/{reqId}", wrapAPI(api.GetRequest))
 	mux.Handle("DELETE /api/requests/{reqId}", wrapAPI(api.DeleteRequest))
 	mux.Handle("GET /api/limits", wrapAPI(api.GetLimits))
+	mux.Handle("GET /api/openapi.json", wrapAPI(handler.OpenAPI))
 	mux.Handle("POST /api/upgrade-interest", wrapAPI(api.RecordUpgradeInterest))
 
 	// SPA serving: dev mode proxies to Vite, prod serves embedded static files.

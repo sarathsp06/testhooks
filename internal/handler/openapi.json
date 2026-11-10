@@ -1,0 +1,498 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Testhooks API",
+    "version": "1",
+    "summary": "Webhook URLs that record every request sent to them.",
+    "description": "The UI is built on this API, so anything it does you can script. Create an endpoint, give its capture URL (/h/{slug}) to a webhook provider, then read or wait for the requests that arrive. All bodies are JSON. Errors are {\"error\": \"...\"}: 400 for a bad request, 401 for a missing or wrong token, 403 for a read-only token on a write, 404 for a missing record, 500 for a database failure.",
+    "license": { "name": "Apache-2.0", "identifier": "Apache-2.0" }
+  },
+  "externalDocs": { "description": "REST API reference", "url": "https://sarathsp06.github.io/testhooks/reference/api/" },
+  "servers": [{ "url": "/", "description": "This Testhooks" }],
+  "security": [{ "bearer": [] }, {}],
+  "tags": [
+    { "name": "endpoints", "description": "Webhook URLs and their settings" },
+    { "name": "requests", "description": "What the endpoints received" },
+    { "name": "scripts", "description": "Try a transform or reply script before saving it" },
+    { "name": "capture", "description": "Where providers send webhooks" },
+    { "name": "server", "description": "Limits and health" }
+  ],
+  "paths": {
+    "/api/endpoints": {
+      "post": {
+        "tags": ["endpoints"],
+        "operationId": "createEndpoint",
+        "summary": "Create an endpoint",
+        "description": "Returns the endpoint; its webhook URL is /h/{slug}. The slug is slug_name plus three random words, or just the words.",
+        "parameters": [{ "$ref": "#/components/parameters/clientID" }],
+        "requestBody": { "content": { "application/json": { "schema": { "$ref": "#/components/schemas/NewEndpoint" } } } },
+        "responses": {
+          "201": { "description": "Created", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Endpoint" } } } },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "409": { "description": "Every slug tried was taken; send the request again", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      },
+      "get": {
+        "tags": ["endpoints"],
+        "operationId": "listEndpoints",
+        "summary": "List endpoints",
+        "parameters": [
+          { "$ref": "#/components/parameters/limit" },
+          { "$ref": "#/components/parameters/offset" },
+          { "$ref": "#/components/parameters/clientID" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Newest first",
+            "content": { "application/json": { "schema": {
+              "type": "object",
+              "required": ["endpoints", "limit", "offset"],
+              "properties": {
+                "endpoints": { "type": "array", "items": { "$ref": "#/components/schemas/Endpoint" } },
+                "limit": { "type": "integer" },
+                "offset": { "type": "integer" }
+              }
+            } } }
+          }
+        }
+      }
+    },
+    "/api/endpoints/{id}": {
+      "parameters": [{ "$ref": "#/components/parameters/endpointID" }],
+      "get": {
+        "tags": ["endpoints"],
+        "operationId": "getEndpoint",
+        "summary": "Get an endpoint",
+        "responses": {
+          "200": { "description": "The endpoint", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Endpoint" } } } },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      },
+      "patch": {
+        "tags": ["endpoints"],
+        "operationId": "updateEndpoint",
+        "summary": "Update an endpoint",
+        "description": "Fields left out are unchanged, but config is replaced as a whole: include every setting to keep. Sending slug_name gives the endpoint a new URL; the old one stops working at once.",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/NewEndpoint" } } } },
+        "responses": {
+          "200": { "description": "The updated endpoint", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Endpoint" } } } },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "409": { "description": "Every slug tried was taken; send the request again", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      },
+      "delete": {
+        "tags": ["endpoints"],
+        "operationId": "deleteEndpoint",
+        "summary": "Delete an endpoint and all its requests",
+        "description": "Cannot be undone.",
+        "responses": { "204": { "description": "Deleted" }, "404": { "$ref": "#/components/responses/NotFound" } }
+      }
+    },
+    "/api/slug/{slug}": {
+      "get": {
+        "tags": ["endpoints"],
+        "operationId": "getEndpointBySlug",
+        "summary": "Get an endpoint by the slug in its capture URL",
+        "parameters": [{ "name": "slug", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": {
+          "200": { "description": "The endpoint", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Endpoint" } } } },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/api/endpoints/{id}/requests": {
+      "parameters": [{ "$ref": "#/components/parameters/endpointID" }],
+      "get": {
+        "tags": ["requests"],
+        "operationId": "listRequests",
+        "summary": "List, or wait for, an endpoint's requests",
+        "description": "Newest first. With after, only requests that arrived after that one. With wait, the call is held open until a matching request arrives or the time is up; a timed-out wait is a normal 200 with an empty list, so call again to keep waiting. Without after, an endpoint that already has requests answers at once.",
+        "parameters": [
+          { "$ref": "#/components/parameters/limit" },
+          { "$ref": "#/components/parameters/offset" },
+          { "name": "after", "in": "query", "description": "The id of the last request you have seen; only newer ones are returned. A request captured in the same instant is included, so one may be seen twice but none is missed.", "schema": { "type": "string" } },
+          { "name": "wait", "in": "query", "description": "Seconds to hold the call open, 0 to 60, until a request newer than after arrives.", "schema": { "type": "integer", "minimum": 0, "maximum": 60 } },
+          { "$ref": "#/components/parameters/includeHidden" }
+        ],
+        "responses": {
+          "200": {
+            "description": "The requests, newest first",
+            "content": { "application/json": { "schema": {
+              "type": "object",
+              "required": ["requests", "total", "limit", "offset"],
+              "properties": {
+                "requests": { "type": "array", "items": { "$ref": "#/components/schemas/CapturedRequest" } },
+                "total": { "type": "integer", "description": "How many requests the endpoint has stored, ignoring after" },
+                "limit": { "type": "integer" },
+                "offset": { "type": "integer" }
+              }
+            } } }
+          },
+          "400": { "description": "after is a request of another endpoint, or wait is not a number", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+          "404": { "description": "No such endpoint, or the after request no longer exists (deleted or pruned): call again without after", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      },
+      "delete": {
+        "tags": ["requests"],
+        "operationId": "deleteAllRequests",
+        "summary": "Delete all of an endpoint's requests",
+        "responses": { "204": { "description": "Deleted" }, "404": { "$ref": "#/components/responses/NotFound" } }
+      }
+    },
+    "/api/requests/{reqId}": {
+      "parameters": [{ "name": "reqId", "in": "path", "required": true, "schema": { "type": "string" } }],
+      "get": {
+        "tags": ["requests"],
+        "operationId": "getRequest",
+        "summary": "Get a request",
+        "parameters": [{ "$ref": "#/components/parameters/includeHidden" }],
+        "responses": {
+          "200": { "description": "The request in full", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CapturedRequest" } } } },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      },
+      "delete": {
+        "tags": ["requests"],
+        "operationId": "deleteRequest",
+        "summary": "Delete a request",
+        "responses": { "204": { "description": "Deleted" }, "404": { "$ref": "#/components/responses/NotFound" } }
+      }
+    },
+    "/api/endpoints/{id}/preview": {
+      "parameters": [{ "$ref": "#/components/parameters/endpointID" }],
+      "post": {
+        "tags": ["scripts"],
+        "operationId": "previewScript",
+        "summary": "Try a transform or reply script on a request",
+        "description": "Runs the scripts on a captured or given request and reports what would be forwarded and what the sender would get. Nothing is sent and nothing is saved, so check a script here before saving it with PATCH.",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PreviewRequest" } } } },
+        "responses": {
+          "200": { "description": "What the scripts did", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PreviewResult" } } } },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "503": { "description": "This server can't run scripts", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      }
+    },
+    "/api/endpoints/{id}/resign": {
+      "parameters": [{ "$ref": "#/components/parameters/endpointID" }],
+      "post": {
+        "tags": ["scripts"],
+        "operationId": "resignRequest",
+        "summary": "Re-sign a body you are about to forward",
+        "description": "Returns fresh Standard Webhooks headers for body, signed with the endpoint's stored secret. request must carry a v1 signature made with that secret, with a timestamp within 5 minutes. Needs signature.resign on.",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": {
+          "type": "object",
+          "required": ["request", "body"],
+          "properties": {
+            "request": { "$ref": "#/components/schemas/CapturedRequest" },
+            "body": { "type": "string", "description": "The body to sign, as it will be sent" }
+          }
+        } } } },
+        "responses": {
+          "200": { "description": "Headers to replace the request's three signature headers with", "content": { "application/json": { "schema": {
+            "type": "object",
+            "properties": { "headers": { "type": "object", "additionalProperties": { "type": "string" } } }
+          } } } },
+          "400": { "description": "Re-signing is off for this endpoint", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+          "422": { "description": "request doesn't verify", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      }
+    },
+    "/api/limits": {
+      "get": {
+        "tags": ["server"],
+        "operationId": "getLimits",
+        "summary": "Read the storage limits",
+        "responses": { "200": { "description": "Limits", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Limits" } } } } }
+      }
+    },
+    "/api/upgrade-interest": {
+      "post": {
+        "tags": ["server"],
+        "operationId": "recordUpgradeInterest",
+        "summary": "Say you would pay for more",
+        "parameters": [{ "$ref": "#/components/parameters/clientID" }],
+        "requestBody": { "content": { "application/json": { "schema": { "type": "object", "properties": { "endpoint_id": { "type": "string" } } } } } },
+        "responses": { "200": { "description": "How many have asked", "content": { "application/json": { "schema": { "type": "object", "properties": { "count": { "type": "integer" } } } } } } }
+      }
+    },
+    "/api/openapi.json": {
+      "get": {
+        "tags": ["server"],
+        "operationId": "getOpenAPI",
+        "summary": "This document",
+        "security": [{}],
+        "responses": { "200": { "description": "OpenAPI 3.1", "content": { "application/json": { "schema": { "type": "object" } } } } }
+      }
+    },
+    "/healthz": {
+      "get": {
+        "tags": ["server"],
+        "operationId": "health",
+        "summary": "Health check",
+        "security": [{}],
+        "responses": {
+          "200": { "description": "Up", "content": { "application/json": { "schema": { "type": "object", "properties": { "status": { "const": "ok" } } } } } },
+          "503": { "description": "Database unreachable" }
+        }
+      }
+    },
+    "/h/{slug}": {
+      "parameters": [{ "name": "slug", "in": "path", "required": true, "schema": { "type": "string" } }],
+      "post": { "$ref": "#/components/pathItems/capture/post" }
+    },
+    "/h/{slug}/{path}": {
+      "parameters": [
+        { "name": "slug", "in": "path", "required": true, "schema": { "type": "string" } },
+        { "name": "path", "in": "path", "required": true, "description": "Any further path; captured as the request's path", "schema": { "type": "string" } }
+      ],
+      "post": { "$ref": "#/components/pathItems/capture/post" }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearer": { "type": "http", "scheme": "bearer", "description": "The server's AUTH_TOKEN, or its READ_TOKEN for GET only. Not needed when the server has no AUTH_TOKEN." }
+    },
+    "parameters": {
+      "endpointID": { "name": "id", "in": "path", "required": true, "schema": { "type": "string" }, "description": "The endpoint id" },
+      "limit": { "name": "limit", "in": "query", "schema": { "type": "integer", "minimum": 1, "maximum": 200, "default": 50 } },
+      "offset": { "name": "offset", "in": "query", "schema": { "type": "integer", "minimum": 0, "default": 0 } },
+      "includeHidden": { "name": "include_hidden", "in": "query", "description": "Also return headers the hosting platform added (HIDE_HEADERS)", "schema": { "type": "boolean", "default": false } },
+      "clientID": { "name": "X-Client-ID", "in": "header", "description": "Tags endpoints so a list with the same header shows only them. A convenience, not access control.", "schema": { "type": "string" } }
+    },
+    "responses": {
+      "BadRequest": { "description": "Bad request", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+      "NotFound": { "description": "Not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+    },
+    "pathItems": {
+      "capture": {
+        "post": {
+          "tags": ["capture"],
+          "operationId": "capture",
+          "summary": "Send a webhook",
+          "description": "Any method is captured, not only POST. Public: senders can't authenticate. The reply is 200 {\"status\":\"ok\",\"id\":\"<request id>\"} in server mode, 202 in browser mode, or whatever a reply script or sync forward target set. 401 when signature enforcement is on and the signature fails, 404 for an unknown slug, 413 when the body exceeds MAX_BODY_SIZE, 429 when rate limited.",
+          "security": [{}],
+          "requestBody": { "content": { "*/*": { "schema": { "type": "string" } } } },
+          "responses": {
+            "200": { "description": "Captured (server mode)", "content": { "application/json": { "schema": { "type": "object", "properties": { "status": { "const": "ok" }, "id": { "type": "string" } } } } } },
+            "202": { "description": "Captured (browser mode)" },
+            "401": { "description": "Signature missing or invalid, with enforcement on" },
+            "404": { "description": "No endpoint has that slug" },
+            "413": { "description": "Body too large" },
+            "429": { "description": "Rate limited; retry after Retry-After seconds" }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "required": ["error"],
+        "properties": { "error": { "type": "string", "description": "What went wrong, in plain words" } }
+      },
+      "NewEndpoint": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string", "maxLength": 255, "description": "A label; doesn't change the URL" },
+          "slug_name": { "type": "string", "maxLength": 20, "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$", "description": "Start of the URL. Three random words are added after it." },
+          "mode": { "type": "string", "enum": ["server", "browser"], "default": "server" },
+          "config": { "$ref": "#/components/schemas/EndpointConfig" }
+        }
+      },
+      "Endpoint": {
+        "type": "object",
+        "required": ["id", "slug", "name", "mode", "created_at", "config"],
+        "properties": {
+          "id": { "type": "string" },
+          "slug": { "type": "string", "description": "The webhook URL is /h/{slug}" },
+          "name": { "type": "string" },
+          "mode": { "type": "string", "enum": ["server", "browser"] },
+          "created_at": { "type": "string", "format": "date-time" },
+          "config": { "$ref": "#/components/schemas/EndpointConfig" }
+        }
+      },
+      "EndpointConfig": {
+        "type": "object",
+        "description": "Settings. On PATCH the whole object is replaced.",
+        "properties": {
+          "forward_url": { "type": "string", "format": "uri", "description": "Forward target" },
+          "forward_mode": { "type": "string", "enum": ["async", "sync"], "default": "async", "description": "With sync the sender gets the forward target's reply" },
+          "wasm_script": { "type": "string", "description": "JavaScript transform defining transform(req)" },
+          "transform_language": { "type": "string", "enum": ["javascript"] },
+          "transform_disabled": { "type": "boolean", "description": "Keep the transform saved but don't run it" },
+          "custom_response": {
+            "type": "object",
+            "properties": {
+              "enabled": { "type": "boolean" },
+              "script": { "type": "string", "description": "JavaScript defining handler(req)" },
+              "language": { "type": "string", "enum": ["javascript"] }
+            }
+          },
+          "persist_requests": { "type": "boolean", "description": "Store browser-mode requests in the database too" },
+          "signature": { "$ref": "#/components/schemas/SignatureConfig" }
+        }
+      },
+      "SignatureConfig": {
+        "type": "object",
+        "description": "Standard Webhooks signature verification (Svix, Sparrow and others), HMAC or Ed25519.",
+        "properties": {
+          "secret": { "type": "string", "writeOnly": true, "description": "HMAC secret. Omit to keep the stored one, send \"\" to remove it. Never returned." },
+          "secret_set": { "type": "boolean", "readOnly": true, "description": "True when a secret is stored" },
+          "public_key": { "type": "string", "description": "Hex Ed25519 public key" },
+          "enforce": { "type": "boolean", "description": "Reject invalid signatures with 401" },
+          "resign": { "type": "boolean", "description": "Sign forwarded requests again after the transform; needs secret" },
+          "id_header": { "type": "string", "default": "webhook-id" },
+          "timestamp_header": { "type": "string", "default": "webhook-timestamp" },
+          "signature_header": { "type": "string", "default": "webhook-signature" }
+        }
+      },
+      "CapturedRequest": {
+        "type": "object",
+        "required": ["id", "endpoint_id", "method", "path", "headers", "created_at"],
+        "properties": {
+          "id": { "type": "string" },
+          "endpoint_id": { "type": "string" },
+          "method": { "type": "string" },
+          "path": { "type": "string", "description": "The part after /h/{slug}" },
+          "headers": { "type": "object", "additionalProperties": { "type": "array", "items": { "type": "string" } } },
+          "query": { "type": "object", "additionalProperties": { "type": "array", "items": { "type": "string" } } },
+          "body": { "type": "string", "description": "Text, or base64 when body_encoding is base64" },
+          "body_encoding": { "type": "string", "enum": ["text", "base64"] },
+          "body_json": { "description": "The body parsed, when it is a JSON object or array" },
+          "content_type": { "type": "string" },
+          "ip": { "type": "string" },
+          "size": { "type": "integer" },
+          "created_at": { "type": "string", "format": "date-time" },
+          "hidden_headers": { "type": "integer", "description": "How many headers were left out as added by the hosting platform" },
+          "signature": {
+            "type": "object",
+            "description": "Only when signature verification is configured",
+            "properties": {
+              "status": { "type": "string", "enum": ["verified", "invalid", "missing"] },
+              "scheme": { "type": "string" },
+              "webhook_id": { "type": "string" },
+              "error": { "type": "string" }
+            }
+          },
+          "forward_result": { "$ref": "#/components/schemas/ForwardResult" },
+          "response_info": { "$ref": "#/components/schemas/ResponseInfo" }
+        }
+      },
+      "ForwardResult": {
+        "type": "object",
+        "description": "The forward target's reply. Only url and in_progress while an async forward runs.",
+        "properties": {
+          "request_id": { "type": "string" },
+          "url": { "type": "string" },
+          "in_progress": { "type": "boolean" },
+          "status_code": { "type": "integer" },
+          "ok": { "type": "boolean" },
+          "latency_ms": { "type": "integer" },
+          "error": { "type": "string" },
+          "response_body": { "type": "string" },
+          "response_body_truncated": { "type": "boolean" },
+          "response_headers": { "type": "object", "additionalProperties": { "type": "string" } },
+          "content_type": { "type": "string" },
+          "resigned": { "type": "boolean" },
+          "resign_error": { "type": "string" }
+        }
+      },
+      "ResponseInfo": {
+        "type": "object",
+        "description": "The response sent back to the sender.",
+        "properties": {
+          "request_id": { "type": "string" },
+          "status": { "type": "integer" },
+          "headers": { "type": "object", "additionalProperties": { "type": "string" } },
+          "body": { "type": "string" },
+          "body_truncated": { "type": "boolean" },
+          "content_type": { "type": "string" },
+          "source": { "type": "string", "enum": ["default", "handler", "forward_passthrough", "signature"] }
+        }
+      },
+      "ScriptInput": {
+        "type": "object",
+        "description": "The req a script gets, and the request as it would be forwarded.",
+        "properties": {
+          "method": { "type": "string" },
+          "path": { "type": "string" },
+          "headers": { "type": "object", "additionalProperties": { "type": "array", "items": { "type": "string" } } },
+          "query": { "type": "object", "additionalProperties": { "type": "array", "items": { "type": "string" } } },
+          "body": { "type": "string" },
+          "content_type": { "type": "string" }
+        }
+      },
+      "PreviewRequest": {
+        "type": "object",
+        "properties": {
+          "request_id": { "type": "string", "description": "A captured request of this endpoint to try the scripts on. One of request_id and request is required." },
+          "request": {
+            "type": "object",
+            "description": "A request to try instead, in the shape the API returns one",
+            "properties": {
+              "method": { "type": "string", "default": "POST" },
+              "path": { "type": "string", "default": "/" },
+              "headers": { "type": "object", "additionalProperties": { "type": "array", "items": { "type": "string" } } },
+              "query": { "type": "object", "additionalProperties": { "type": "array", "items": { "type": "string" } } },
+              "body": { "type": "string" },
+              "body_encoding": { "type": "string", "enum": ["text", "base64"] },
+              "content_type": { "type": "string" }
+            }
+          },
+          "transform": { "type": "string", "description": "A transform script. Left out, the endpoint's saved transform runs when it would on a real request; \"\" runs none." },
+          "reply": { "type": "string", "description": "A reply script, same rules" },
+          "forward_response": {
+            "type": "object",
+            "description": "Stands in for a sync forward target's reply, seen by the reply script as req.forward_response",
+            "properties": {
+              "status": { "type": "integer" },
+              "headers": { "type": "object", "additionalProperties": { "type": "string" } },
+              "body": { "type": "string" },
+              "content_type": { "type": "string" }
+            }
+          }
+        }
+      },
+      "PreviewResult": {
+        "type": "object",
+        "required": ["input", "transform", "reply"],
+        "properties": {
+          "input": { "$ref": "#/components/schemas/ScriptInput" },
+          "transform": {
+            "type": ["object", "null"],
+            "description": "Null when no transform ran",
+            "properties": {
+              "forwarded": { "oneOf": [{ "$ref": "#/components/schemas/ScriptInput" }, { "type": "null" }], "description": "The request after the transform; null when dropped or on error" },
+              "dropped": { "type": "boolean" },
+              "error": { "type": "string" }
+            }
+          },
+          "reply": {
+            "type": "object",
+            "description": "What the sender would get",
+            "properties": {
+              "status": { "type": "integer" },
+              "headers": { "type": "object", "additionalProperties": { "type": "string" } },
+              "body": { "type": "string" },
+              "content_type": { "type": "string" },
+              "source": { "type": "string", "enum": ["handler", "forward_passthrough", "default"] },
+              "error": { "type": "string", "description": "Set when the reply script threw; source is then default" }
+            }
+          }
+        }
+      },
+      "Limits": {
+        "type": "object",
+        "properties": {
+          "max_requests_per_endpoint": { "type": "integer" },
+          "max_endpoint_storage_bytes": { "type": "integer" },
+          "max_body_size": { "type": "integer" },
+          "upgrade_note": { "type": "string" },
+          "forward_private_addresses": { "type": "boolean" }
+        }
+      }
+    }
+  }
+}

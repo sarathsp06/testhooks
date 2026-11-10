@@ -5,7 +5,9 @@ description: Manage endpoints and captured requests over HTTP.
 
 The UI is built on this API, so anything it does you can script. All bodies are JSON. When [`AUTH_TOKEN`](../configuration/#security) is set, send `Authorization: Bearer <token>`.
 
-Errors look like `{"error": "endpoint not found"}`. A missing record is `404`; a database failure is `500`.
+Errors look like `{"error": "endpoint not found"}`. A missing record is `404`; a database failure is `500`; a [read-only token](../../deployment/production/#a-read-only-token) on a write is `403`.
+
+Every Testhooks also serves this API as an [OpenAPI 3.1 document](https://github.com/sarathsp06/testhooks/blob/main/internal/handler/openapi.json) at `GET /api/openapi.json`, without a token, for client generators and agents.
 
 ## Endpoints
 

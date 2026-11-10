@@ -54,6 +54,16 @@ Add this to `.cursor/mcp.json` (Cursor) or `claude_desktop_config.json` (Claude 
 
 If the app can't find `testhooks`, use its full path, for example `/usr/local/bin/testhooks`.
 
+## Teach the agent the workflow
+
+The tools say what each call does; [`skills/testhooks/SKILL.md`](https://github.com/sarathsp06/testhooks/blob/main/skills/testhooks/SKILL.md) says when to use which: create, wait, read, write the handler, preview a script before saving it, send or replay to check. Claude Code and other agents that read skills pick it up when it is in your project:
+
+```bash
+mkdir -p .claude/skills/testhooks && testhooks skill > .claude/skills/testhooks/SKILL.md
+```
+
+`testhooks skill` prints the file that matches the binary. Without the MCP server, the skill tells the agent to use the [CLI](#from-the-command-line) or the REST API, which every Testhooks describes at `/api/openapi.json`. The docs site has an [`llms.txt`](https://sarathsp06.github.io/testhooks/llms.txt) for agents that browse.
+
 ## Tools
 
 | Tool | What it does |
