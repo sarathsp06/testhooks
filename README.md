@@ -53,7 +53,8 @@ To receive real webhooks, run testhooks somewhere the sender can reach, with Pos
 - **Transform:** reshape a request with a few lines of JavaScript, or skip it.
 - **Forward and reply:** send requests on to another URL, and script what the sender gets back.
 - **Verify signatures:** Standard Webhooks (Svix, Sparrow and others), HMAC and Ed25519.
-- **Work with your AI agent:** `testhooks mcp` lets Claude Code or Cursor create an endpoint, read what the provider sent and write your handler from real traffic.
+- **Script it:** `testhooks endpoints create`, `testhooks requests wait`, `testhooks requests send`: the [command line](https://sarathsp06.github.io/testhooks/reference/cli/) does what the UI does and prints JSON when piped.
+- **Work with your AI agent:** `testhooks mcp` lets Claude Code or Cursor create an endpoint, wait for the provider's request, preview a script on it and write your handler from real traffic. A [SKILL.md](skills/testhooks/SKILL.md) teaches the workflow, the API describes itself at `/api/openapi.json`, and `READ_TOKEN` gives an agent a token that can only read.
 
 The [docs](https://sarathsp06.github.io/testhooks/) cover configuration, the API and how each mode works.
 

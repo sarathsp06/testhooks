@@ -41,6 +41,12 @@ type Config struct {
 	// When empty, auth is disabled (open access). For internal deployments.
 	AuthToken string `env:"AUTH_TOKEN" envDefault:""`
 
+	// ReadToken is an optional second token that may only read: GET on the
+	// API and the WebSocket. For handing to an agent or a dashboard that
+	// should watch endpoints without being able to change or delete them.
+	// Only meaningful when AuthToken is set.
+	ReadToken string `env:"READ_TOKEN" envDefault:""`
+
 	// Max body size in bytes for captured requests (default 512KB).
 	MaxBodySize int64 `env:"MAX_BODY_SIZE" envDefault:"524288"`
 

@@ -19,6 +19,7 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/sarathsp06/testhooks/internal/cleanup"
+	"github.com/sarathsp06/testhooks/internal/cli"
 	"github.com/sarathsp06/testhooks/internal/config"
 	"github.com/sarathsp06/testhooks/internal/crypto"
 	"github.com/sarathsp06/testhooks/internal/db"
@@ -36,9 +37,15 @@ import (
 var version = "dev"
 
 func main() {
-	if len(os.Args) > 1 && (os.Args[1] == "--version" || os.Args[1] == "version") {
+	if len(os.Args) > 1 && os.Args[1] == "--version" {
 		fmt.Println("testhooks", version)
 		return
+	}
+	if len(os.Args) > 1 && os.Args[1] != "mcp" {
+		// Anything with arguments is the command line; the server takes
+		// its settings from the environment and runs with none.
+		_ = godotenv.Load()
+		os.Exit(cli.Run(os.Args[1:], cli.Env{Version: version, IsTerminal: stdoutIsTerminal}))
 	}
 	if len(os.Args) > 1 && os.Args[1] == "mcp" {
 		// MCP server on stdin/stdout for AI agents; it talks to a running
@@ -176,6 +183,9 @@ func main() {
 	api := handler.NewAPI(store, h, log)
 	api.SetHideHeaders(hideHeaders)
 	api.SetEncryption(cryptoSvc)
+	if wasmRunner != nil {
+		api.SetScriptRunner(wasmRunner)
+	}
 	api.SetLimits(handler.Limits{
 		MaxRequestsPerEndpoint:  cfg.MaxRequestsPerEndpoint,
 		MaxEndpointStorageBytes: cfg.MaxEndpointStorageBytes,
@@ -242,11 +252,13 @@ func main() {
 	mux.Handle("PATCH /api/endpoints/{id}", wrapAPI(api.UpdateEndpoint))
 	mux.Handle("DELETE /api/endpoints/{id}", wrapAPI(api.DeleteEndpoint))
 	mux.Handle("POST /api/endpoints/{id}/resign", wrapAPI(api.ResignRequest))
+	mux.Handle("POST /api/endpoints/{id}/preview", wrapAPI(api.PreviewScript))
 	mux.Handle("GET /api/endpoints/{id}/requests", wrapAPI(api.ListRequests))
 	mux.Handle("DELETE /api/endpoints/{id}/requests", wrapAPI(api.DeleteAllRequests))
 	mux.Handle("GET /api/requests/{reqId}", wrapAPI(api.GetRequest))
 	mux.Handle("DELETE /api/requests/{reqId}", wrapAPI(api.DeleteRequest))
 	mux.Handle("GET /api/limits", wrapAPI(api.GetLimits))
+	mux.Handle("GET /api/openapi.json", wrapAPI(handler.OpenAPI))
 	mux.Handle("POST /api/upgrade-interest", wrapAPI(api.RecordUpgradeInterest))
 
 	// SPA serving: dev mode proxies to Vite, prod serves embedded static files.
@@ -278,7 +290,10 @@ func main() {
 	// C-01: Token auth middleware. When AUTH_TOKEN is set, all API and WS
 	// requests require a valid Bearer token. Capture endpoints (/h/) and
 	// /healthz remain public.
-	authHandler := middleware.TokenAuth(cfg.AuthToken, log, trustedProxies)(c.Handler(mux))
+	authHandler := middleware.TokenAuth(cfg.AuthToken, cfg.ReadToken, log, trustedProxies)(c.Handler(mux))
+	if cfg.ReadToken != "" && cfg.AuthToken == "" {
+		log.Warn().Msg("READ_TOKEN is set but AUTH_TOKEN is not, so nothing requires a token (set AUTH_TOKEN too)")
+	}
 
 	// LOW-001: Wrap with security headers middleware.
 	securityHandler := middleware.SecurityHeaders(authHandler)
@@ -419,4 +434,10 @@ func encryptionService(cfg *config.Config, log zerolog.Logger) (*crypto.Service,
 		log.Info().Msg("signature secrets encrypted with a per-process key (in-memory storage)")
 	}
 	return crypto.NewServiceFromKeyring(keyring)
+}
+
+// stdoutIsTerminal reports whether a person, not a pipe, is reading stdout.
+func stdoutIsTerminal() bool {
+	fi, err := os.Stdout.Stat()
+	return err == nil && fi.Mode()&os.ModeCharDevice != 0
 }

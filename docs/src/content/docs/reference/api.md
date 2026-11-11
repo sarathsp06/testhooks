@@ -3,9 +3,11 @@ title: REST API
 description: Manage endpoints and captured requests over HTTP.
 ---
 
-The UI is built on this API, so anything it does you can script. All bodies are JSON. When [`AUTH_TOKEN`](../configuration/#security) is set, send `Authorization: Bearer <token>`.
+The UI is built on this API, so anything it does you can script, with `curl`, the [command line](../cli/) or [`testhooks mcp`](../../guides/mcp/). All bodies are JSON. When [`AUTH_TOKEN`](../configuration/#security) is set, send `Authorization: Bearer <token>`.
 
-Errors look like `{"error": "endpoint not found"}`. A missing record is `404`; a database failure is `500`.
+Errors look like `{"error": "endpoint not found"}`. A missing record is `404`; a database failure is `500`; a [read-only token](../../deployment/production/#a-read-only-token) on a write is `403`.
+
+Every Testhooks also serves this API as an [OpenAPI 3.1 document](https://github.com/sarathsp06/testhooks/blob/main/internal/handler/openapi.json) at `GET /api/openapi.json`, without a token, for client generators and agents.
 
 ## Endpoints
 
@@ -122,6 +124,7 @@ In browser mode the request isn't stored, so it is taken from the live event ins
   "query": { "debug": ["1"] },
   "body": "{\"hello\":\"world\"}",
   "body_encoding": "text",
+  "body_json": {"hello": "world"},
   "content_type": "application/json",
   "ip": "203.0.113.7",
   "size": 17,
@@ -148,7 +151,7 @@ In browser mode the request isn't stored, so it is taken from the live event ins
 }
 ```
 
-- `body` is plain text when it looks like text (`body_encoding: "text"`), otherwise base64 (`body_encoding: "base64"`).
+- `body` is plain text when it looks like text (`body_encoding: "text"`), otherwise base64 (`body_encoding: "base64"`). When the body is a JSON object or array, `body_json` holds it parsed, so you don't decode the string again.
 - `signature` appears only when [signature verification](../../guides/signatures/) is configured.
 - `headers` leaves out headers the hosting platform added ([`HIDE_HEADERS`](../configuration/)); `hidden_headers` counts them. Add `?include_hidden=true` to `GET /api/requests/{reqId}` or `GET /api/endpoints/{id}/requests` to get them too.
 - `forward_result` is the forward target's reply and `response_info` the response sent back to the caller, in the same shape as the [`forward_result` and `response_info` WebSocket messages](../websocket/). They're stored for server-mode requests (and browser-mode ones with `persist_requests`). An async forward fills in `forward_result` when it finishes, so it can be missing just after capture. While it runs, `forward_result` holds only `url` and `in_progress: true`; if that is still there a minute after `created_at`, the server stopped before the forward finished. Bodies longer than [`MAX_STORED_RESPONSE_SIZE`](../configuration/) are cut, with `response_body_truncated` or `body_truncated` set. With `signature.resign` on, `forward_result.resigned` is `true` when the forward carried a fresh signature, and `resign_error` says why it didn't.
@@ -185,6 +188,46 @@ curl -X POST http://localhost:8080/api/endpoints/<id>/resign \
 ```
 
 Replace the request's three signature headers with these. They use the endpoint's [header names](#endpoint-config) (`signature.id_header` and the others), `webhook-*` by default. `422` with an `error` when `request` doesn't verify; `400` when re-signing is off.
+
+### Try a script on a request
+
+`POST /api/endpoints/{id}/preview`
+
+Runs a transform and a reply script on a request and reports what would be forwarded and what the sender would get. Nothing is sent and nothing is saved: it's the API form of the editor's live preview, so a script can be checked before `PATCH` saves it.
+
+```bash
+curl -X POST http://localhost:8080/api/endpoints/<id>/preview \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "request_id": "299e2e41-2c91-4baf-bc2d-9e38034667fe",
+    "transform": "function transform(req) { delete req.json.internal_id; return req; }",
+    "reply": "function handler(req) { return { status: 201, body: \"ok\" }; }"
+  }'
+```
+
+| Field | | |
+|---|---|---|
+| `request_id` | one of the two | A captured request of this endpoint to try the scripts on |
+| `request` | one of the two | A request to try instead: `method`, `path`, `headers`, `query`, `body`, `body_encoding` and `content_type`, as the API returns them |
+| `transform` | optional | A [transform](../../guides/scripts/#transforms) script. Left out, the endpoint's saved transform runs when it would on a real request; `""` runs none |
+| `reply` | optional | A [reply](../../guides/scripts/#custom-responses) script, same rules |
+| `forward_response` | optional | Stands in for a sync forward target's reply (`status`, `headers`, `body`, `content_type`), which the reply script sees as `req.forward_response` and which the sender gets when there is no reply script |
+
+Returns `200`:
+
+```json
+{
+  "input": { "method": "POST", "path": "/", "headers": {...}, "query": {...}, "body": "...", "content_type": "application/json" },
+  "transform": { "forwarded": { "method": "POST", "path": "/", "headers": {...}, "body": "...", "content_type": "application/json" }, "dropped": false },
+  "reply": { "status": 201, "headers": {}, "body": "ok", "content_type": "text/plain", "source": "handler" }
+}
+```
+
+- `input` is the `req` the scripts received, without [hidden headers](../configuration/).
+- `transform` is `null` when no transform ran. `forwarded` is the request after it; `null` with `dropped: true` when the script skipped the request, or with `error` when it threw. Either way the sender gets the default reply, as on a real request.
+- `reply.source` is `handler`, `forward_passthrough` or `default`, as in the [`response_info` event](../websocket/). A reply script that threw leaves `source: "default"` and sets `error`.
+
+A missing request is `404`; one from another endpoint, or neither `request_id` nor `request`, is `400`. A server that can't run scripts answers `503`.
 
 ### Delete requests
 

@@ -78,6 +78,7 @@ export default defineConfig({
 					items: [
 						{ label: 'Configuration', slug: 'reference/configuration' },
 						{ label: 'REST API', slug: 'reference/api' },
+						{ label: 'Command line', slug: 'reference/cli' },
 						{ label: 'WebSocket events', slug: 'reference/websocket' },
 						{ label: 'Status codes', slug: 'reference/status-codes' },
 					],

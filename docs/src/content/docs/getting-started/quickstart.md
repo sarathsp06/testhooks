@@ -66,7 +66,7 @@ curl -X POST http://localhost:8080/api/endpoints \
   -d '{"name":"my first endpoint","slug_name":"stripe","mode":"server"}'
 ```
 
-The response includes the `slug` used in the webhook URL.
+The response includes the `slug` used in the webhook URL. Or with the [command line](../../reference/cli/): `testhooks endpoints create --slug stripe`.
 
 ## 4. Send it a webhook
 

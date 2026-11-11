@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/sarathsp06/testhooks/internal/apiclient"
 )
 
 // fakeAPI is just enough of the Testhooks REST API and capture route for the tools.
@@ -65,6 +66,11 @@ func (f *fakeAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			"query":{"debug":["1"]},"body":"{\"hello\":\"world\"}","body_encoding":"text"}`)
 	case r.Method == "GET" && r.URL.Path == "/api/endpoints/ep1/requests":
 		io.WriteString(w, `{"requests":[{"id":"req1","method":"PUT"}],"total":1,"limit":`+r.URL.Query().Get("limit")+`,"offset":0}`)
+	case r.Method == "POST" && r.URL.Path == "/api/endpoints/ep1/preview":
+		var in map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&in)
+		f.patched = in
+		io.WriteString(w, `{"input":{"method":"PUT"},"transform":null,"reply":{"status":200,"source":"default"}}`)
 	case r.Method == "DELETE" && r.URL.Path == "/api/endpoints/ep1":
 		w.WriteHeader(204)
 	case r.Method == "GET" && r.URL.Path == "/api/requests/missing":
@@ -94,7 +100,7 @@ func connectTo(t *testing.T, base, token string) *mcp.ClientSession {
 	t.Helper()
 	ctx := context.Background()
 	ct, st := mcp.NewInMemoryTransports()
-	ss, err := NewServer(base, token, "test").Connect(ctx, st, nil)
+	ss, err := NewServer(apiclient.New(base, token), "test").Connect(ctx, st, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -253,7 +259,7 @@ func TestReplayRequestSendsToCaptureURL(t *testing.T) {
 
 func TestListAndGetRequestAndDelete(t *testing.T) {
 	f := &fakeAPI{config: map[string]any{}}
-	cs, _ := connect(t, f)
+	cs, api := connect(t, f)
 
 	var req map[string]any
 	if res := call(t, cs, "get_request", map[string]any{"id": "req1"}, &req); res.IsError {
@@ -269,24 +275,39 @@ func TestListAndGetRequestAndDelete(t *testing.T) {
 	if list.Total != 1 || len(list.Requests) != 1 || list.Requests[0]["id"] != "req1" {
 		t.Fatalf("got %+v", list)
 	}
+	var sent SendRequestOutput
+	if res := call(t, cs, "send_request", map[string]any{"endpoint_id": "ep1", "path": "/stripe/events", "query": map[string]any{"debug": "1"}, "body": `{"event":"x"}`, "headers": map[string]any{"X-Test": "yes"}}, &sent); res.IsError {
+		t.Fatal(errText(res))
+	}
+	if sent.Status != 202 || sent.URL != api+"/h/abc123/stripe/events?debug=1" || sent.Request["id"] != "req1" {
+		t.Fatalf("got %+v", sent)
+	}
+	if f.captured.Method != "POST" || f.captured.Header.Get("Content-Type") != "application/json" || f.captured.Header.Get("X-Test") != "yes" || f.body != `{"event":"x"}` {
+		t.Fatalf("sent %s %v body %q", f.captured.Method, f.captured.Header, f.body)
+	}
+	if !strings.HasPrefix(sent.Curl, "curl -X 'POST' '"+api+"/h/abc123/stripe/events?debug=1'") || !strings.Contains(sent.Curl, `-H 'X-Test: yes'`) || !strings.Contains(sent.Curl, `--data-raw '{"event":"x"}'`) {
+		t.Fatalf("curl = %q", sent.Curl)
+	}
+	var got map[string]any
+	if res := call(t, cs, "get_request", map[string]any{"id": "req1"}, &got); res.IsError {
+		t.Fatal(errText(res))
+	}
+	if got["capture_url"] != api+"/h/abc123" || !strings.Contains(got["curl"].(string), "-H 'Webhook-Id: msg_1'") || strings.Contains(got["curl"].(string), "Host:") {
+		t.Fatalf("get_request curl = %v %v", got["capture_url"], got["curl"])
+	}
+	var pv map[string]any
+	if res := call(t, cs, "preview_script", map[string]any{"endpoint_id": "ep1", "reply": "function handler(req) { return {status: 204}; }"}, &pv); res.IsError {
+		t.Fatal(errText(res))
+	}
+	if pv["request_id"] != "req1" || f.patched["request_id"] != "req1" || f.patched["reply"] == nil || f.patched["transform"] != nil {
+		t.Fatalf("preview sent %v, got %v", f.patched, pv)
+	}
 	var del DeleteEndpointOutput
 	if res := call(t, cs, "delete_endpoint", map[string]any{"id": "ep1"}, &del); res.IsError || del.Deleted != "ep1" {
 		t.Fatalf("got %q %+v", errText(res), del)
 	}
 	if res := call(t, cs, "delete_endpoint", map[string]any{"id": "nope"}, nil); !res.IsError || !strings.Contains(errText(res), "404") {
 		t.Fatalf("got %q", errText(res))
-	}
-}
-
-func TestMergeConfig(t *testing.T) {
-	base := map[string]any{"a": 1, "n": map[string]any{"x": 1, "y": 2}}
-	got := mergeConfig(base, map[string]any{"a": nil, "b": 2, "n": map[string]any{"y": nil, "z": 3}})
-	want := map[string]any{"b": 2, "n": map[string]any{"x": 1, "z": 3}}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("got %v", got)
-	}
-	if base["a"] != 1 || len(base["n"].(map[string]any)) != 2 {
-		t.Fatal("base was modified")
 	}
 }
 

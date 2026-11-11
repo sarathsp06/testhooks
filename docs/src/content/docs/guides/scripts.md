@@ -26,6 +26,8 @@ The editor has three columns:
 
 Below, **Check it against more traffic** runs the script on recent captured requests and points out any it throws on. Nothing is sent while you try a script, and nothing is saved until you click **Save**. Untick **Run on every request** to keep a script saved without running it.
 
+The same preview is available to scripts and agents as [`POST /api/endpoints/{id}/preview`](../../reference/api/#try-a-script-on-a-request), and as the `preview_script` tool of [`testhooks mcp`](../mcp/).
+
 ## What a script gets
 
 Both kinds of script receive the same `req`:
