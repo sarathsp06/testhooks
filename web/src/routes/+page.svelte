@@ -36,7 +36,7 @@
 	const steps = [
 		{ title: 'Create an endpoint', text: 'You get a unique URL like', code: '/h/acid-fable-gully' },
 		{ title: 'Send it a request', text: "Paste the URL into a service's webhook settings, or send a sample with one click." },
-		{ title: 'Inspect, then go further', text: 'See headers and body, then add a transform, a forward target or a custom reply.' }
+		{ title: 'Inspect, then go further', text: 'See headers and body, copy the payload as a type, then add a transform, a forward target or a custom reply.' }
 	];
 
 	const newSlugNameError = $derived(slugNameError(newSlugName));
@@ -366,7 +366,7 @@
 	<footer class="border-t border-line">
 		<div class="max-w-[1240px] mx-auto px-4 sm:px-6 py-5 flex justify-between gap-3 flex-wrap text-[13px] text-faint">
 			<p class="m-0 max-w-[760px] leading-relaxed">
-				<span class="text-soft">testhooks</span> is a free, open-source webhook tester: a webhook URL to capture and inspect webhooks from Stripe, GitHub, Shopify, Slack or any service, verify Standard Webhooks signatures, transform payloads, forward webhooks to localhost from this tab, and script the reply the sender gets. Self-host it with one binary.
+				<span class="text-soft">testhooks</span> is a free, open-source webhook tester: a webhook URL to capture and inspect webhooks from Stripe, GitHub, Shopify, Slack or any service, verify Standard Webhooks signatures, transform payloads, forward webhooks to localhost from this tab, script the reply the sender gets, and copy the payload as a type. Your AI agent gets the same through <code>testhooks mcp</code>. Self-host it with one binary.
 			</p>
 			<span class="flex gap-4">
 				<a href="https://sarathsp06.github.io/testhooks/" target="_blank" rel="noopener noreferrer" class="underline hover:text-accent transition-colors">Docs</a>

@@ -379,6 +379,55 @@ func (c *Client) PreviewScript(ctx context.Context, in PreviewScriptInput) (map[
 	return out, nil
 }
 
+// --- generate_types
+
+type GenerateTypesInput struct {
+	RequestID  string `json:"request_id,omitempty" jsonschema:"a captured request to infer the type from. Give this or endpoint_id"`
+	EndpointID string `json:"endpoint_id,omitempty" jsonschema:"an endpoint: the type is inferred from its last requests merged, so a field only some deliveries carry comes out optional"`
+	Lang       string `json:"lang,omitempty" jsonschema:"typescript (default), zod, jsonschema, go or pydantic"`
+	Name       string `json:"name,omitempty" jsonschema:"the type's name; default: from the body's event, e.g. InvoicePaidPayload"`
+	Last       int    `json:"last,omitempty" jsonschema:"with endpoint_id: how many recent requests to merge, 1 to 200 (default 20)"`
+}
+
+type GenerateTypesOutput struct {
+	Lang string `json:"lang"`
+	Name string `json:"name"`
+	From int    `json:"from" jsonschema:"how many request bodies the type was inferred from"`
+	Code string `json:"code" jsonschema:"the type, ready to paste; a best-effort guess from the bodies seen"`
+}
+
+func (c *Client) GenerateTypes(ctx context.Context, in GenerateTypesInput) (GenerateTypesOutput, error) {
+	q := url.Values{}
+	if in.Lang != "" {
+		q.Set("lang", in.Lang)
+	}
+	if in.Name != "" {
+		q.Set("name", in.Name)
+	}
+	var path string
+	switch {
+	case in.RequestID != "" && in.EndpointID != "":
+		return GenerateTypesOutput{}, errors.New("give request_id or endpoint_id, not both")
+	case in.RequestID != "":
+		path = "/api/requests/" + url.PathEscape(in.RequestID) + "/types"
+	case in.EndpointID != "":
+		path = "/api/endpoints/" + url.PathEscape(in.EndpointID) + "/types"
+		if in.Last > 0 {
+			q.Set("last", strconv.Itoa(in.Last))
+		}
+	default:
+		return GenerateTypesOutput{}, errors.New("give request_id or endpoint_id")
+	}
+	if len(q) > 0 {
+		path += "?" + q.Encode()
+	}
+	var out GenerateTypesOutput
+	if err := c.Do(ctx, http.MethodGet, path, nil, &out); err != nil {
+		return GenerateTypesOutput{}, err
+	}
+	return out, nil
+}
+
 // --- get_request
 
 type GetRequestInput struct {

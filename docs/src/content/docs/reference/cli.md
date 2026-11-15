@@ -8,7 +8,7 @@ The `testhooks` binary that runs the server is also a client for one. Each comma
 ```bash
 testhooks endpoints create --slug stripe
 testhooks requests wait <endpoint>
-testhooks requests get <request id>
+testhooks requests types <request id> --lang go
 ```
 
 ## Which Testhooks, which token
@@ -39,6 +39,7 @@ When stdout is a terminal the output is short text with the next step; when it i
 | `endpoints create [--name S] [--slug S] [--mode server\|browser] [--config JSON]` | A new endpoint. It only captures until settings say otherwise |
 | `endpoints get <id\|slug>` | One endpoint with its settings |
 | `endpoints update <id\|slug> [--name S] [--slug S] [--mode M] [--config JSON]` | Change it. `--config` changes only the settings given and keeps the rest; a `null` removes one. `--slug` gives it a new URL and the old one stops working |
+| `endpoints types <id\|slug> [--lang L] [--last N] [--name S]` | One type from the endpoint's last N requests merged (default 20): TypeScript, Zod, JSON Schema, Go or Pydantic. Prints the code; `--json` prints the API's reply |
 | `endpoints delete <id\|slug> [--yes]` | Delete it and every request it received. Asks first in a terminal; in a pipe, `--yes` is required |
 
 ## Requests
@@ -51,6 +52,7 @@ When stdout is a terminal the output is short text with the next step; when it i
 | `requests send <endpoint> [-X METHOD] [-p PATH] [-H 'Name: value']... [-d BODY\|@FILE\|-] [--content-type TYPE]` | Send a test request to the capture URL, as a provider would, and print what the sender got and what was captured. A JSON body gets `application/json` by default |
 | `requests replay <id>` | Send a captured request to its endpoint again |
 | `requests preview <endpoint> [--request ID] [--transform FILE] [--reply FILE]` | Run scripts on a captured request (the newest, or `--request`) without saving or sending anything, and print what would be forwarded and what the sender would get. `FILE` may be `-` for stdin; an empty value runs no such script; a flag left out runs the saved one |
+| `requests types <id> [--lang L] [--name S]` | A type for the request's JSON body, in TypeScript (default), Zod, JSON Schema, Go or Pydantic. Prints the code, so `testhooks requests types <id> --lang go > webhook.go` works; `--json` prints the API's reply |
 | `requests delete <id>` | Delete one request |
 
 A loop that waits for each request as it comes:

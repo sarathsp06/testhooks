@@ -1,0 +1,1 @@
+{"action":"opened","number":42,"pull_request":{"id":1,"number":42,"title":"Add retry on 5xx","state":"open","user":{"login":"grace"},"head":{"ref":"retry-5xx"},"base":{"ref":"main"}},"repository":{"full_name":"acme/shop"},"sender":{"login":"grace"}}

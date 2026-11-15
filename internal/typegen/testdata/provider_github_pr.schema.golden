@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$comment": "inferred from one request, best effort",
+  "title": "WebhookPayload",
+  "type": "object",
+  "properties": {
+    "action": {
+      "type": "string"
+    },
+    "number": {
+      "type": "integer"
+    },
+    "pull_request": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "integer"
+        },
+        "number": {
+          "type": "integer"
+        },
+        "title": {
+          "type": "string"
+        },
+        "state": {
+          "type": "string"
+        },
+        "user": {
+          "type": "object",
+          "properties": {
+            "login": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "login"
+          ]
+        },
+        "head": {
+          "type": "object",
+          "properties": {
+            "ref": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "ref"
+          ]
+        },
+        "base": {
+          "type": "object",
+          "properties": {
+            "ref": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "ref"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "number",
+        "title",
+        "state",
+        "user",
+        "head",
+        "base"
+      ]
+    },
+    "repository": {
+      "type": "object",
+      "properties": {
+        "full_name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "full_name"
+      ]
+    },
+    "sender": {
+      "type": "object",
+      "properties": {
+        "login": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "login"
+      ]
+    }
+  },
+  "required": [
+    "action",
+    "number",
+    "pull_request",
+    "repository",
+    "sender"
+  ]
+}

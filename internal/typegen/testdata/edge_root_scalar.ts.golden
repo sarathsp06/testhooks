@@ -1,0 +1,2 @@
+// inferred from one request, best effort
+export type RootScalar = string;

@@ -1,0 +1,7 @@
+// inferred from one request, best effort
+export type RootArray = RootArrayItem[];
+
+export interface RootArrayItem {
+  id: number;
+  name?: string;
+}

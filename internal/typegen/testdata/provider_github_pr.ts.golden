@@ -1,0 +1,38 @@
+// inferred from one request, best effort
+export interface WebhookPayload {
+  action: string;
+  number: number;
+  pull_request: WebhookPayloadPullRequest;
+  repository: WebhookPayloadRepository;
+  sender: WebhookPayloadSender;
+}
+
+export interface WebhookPayloadPullRequest {
+  id: number;
+  number: number;
+  title: string;
+  state: string;
+  user: WebhookPayloadPullRequestUser;
+  head: WebhookPayloadPullRequestHead;
+  base: WebhookPayloadPullRequestBase;
+}
+
+export interface WebhookPayloadPullRequestUser {
+  login: string;
+}
+
+export interface WebhookPayloadPullRequestHead {
+  ref: string;
+}
+
+export interface WebhookPayloadPullRequestBase {
+  ref: string;
+}
+
+export interface WebhookPayloadRepository {
+  full_name: string;
+}
+
+export interface WebhookPayloadSender {
+  login: string;
+}

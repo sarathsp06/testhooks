@@ -1,0 +1,17 @@
+// inferred from one request, best effort
+export interface WebhookPayload {
+  ref: string;
+  repository: WebhookPayloadRepository;
+  commits: WebhookPayloadCommitsItem[];
+}
+
+export interface WebhookPayloadRepository {
+  name: string;
+  owner: string;
+}
+
+export interface WebhookPayloadCommitsItem {
+  id: string;
+  message: string;
+  author: string;
+}

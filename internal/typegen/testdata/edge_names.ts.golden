@@ -1,0 +1,25 @@
+// inferred from one request, best effort
+export interface Names {
+  "first-name": string;
+  "2nd": number;
+  class: string;
+  from: string;
+  id: string;
+  url: string;
+  "$weird key": boolean;
+  Item: NamesItem;
+  ItemItem: NamesItemItem;
+  items: NamesItemsItem[];
+}
+
+export interface NamesItem {
+  x: number;
+}
+
+export interface NamesItemItem {
+  y: number;
+}
+
+export interface NamesItemsItem {
+  z: number;
+}

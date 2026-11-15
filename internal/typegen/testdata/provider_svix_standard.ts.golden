@@ -1,0 +1,12 @@
+// inferred from one request, best effort
+export interface WebhookPayload {
+  type: string;
+  timestamp: string;
+  data: WebhookPayloadData;
+}
+
+export interface WebhookPayloadData {
+  id: string;
+  email: string;
+  plan: string;
+}

@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$comment": "inferred from one request, best effort",
+  "title": "Nested",
+  "type": "object",
+  "properties": {
+    "a": {
+      "type": "object",
+      "properties": {
+        "b": {
+          "type": "object",
+          "properties": {
+            "c": {
+              "type": "array",
+              "items": {
+                "type": "integer"
+              }
+            }
+          },
+          "required": [
+            "c"
+          ]
+        }
+      },
+      "required": [
+        "b"
+      ]
+    },
+    "list": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "tag": {
+            "type": "string"
+          },
+          "extra": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      }
+    },
+    "empty": {
+      "type": "object",
+      "properties": {}
+    },
+    "emptyArr": {
+      "type": "array"
+    },
+    "mixed": {
+      "type": "array",
+      "items": {
+        "type": [
+          "string",
+          "integer",
+          "null"
+        ]
+      }
+    },
+    "nested": {
+      "type": "array",
+      "items": {
+        "type": "array",
+        "items": {
+          "type": "integer"
+        }
+      }
+    }
+  },
+  "required": [
+    "a",
+    "list",
+    "empty",
+    "emptyArr",
+    "mixed",
+    "nested"
+  ]
+}

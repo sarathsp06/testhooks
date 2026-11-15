@@ -1,0 +1,14 @@
+// inferred from one request, best effort
+export interface Nulls {
+  a: null;
+  b: (NullsBItem | null)[];
+  c: (NullsCItem | null)[];
+}
+
+export interface NullsBItem {
+  x: number;
+}
+
+export interface NullsCItem {
+  x: number;
+}

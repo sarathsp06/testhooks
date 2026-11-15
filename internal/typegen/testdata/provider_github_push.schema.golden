@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$comment": "inferred from one request, best effort",
+  "title": "WebhookPayload",
+  "type": "object",
+  "properties": {
+    "ref": {
+      "type": "string"
+    },
+    "before": {
+      "type": "string"
+    },
+    "after": {
+      "type": "string"
+    },
+    "repository": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "integer"
+        },
+        "name": {
+          "type": "string"
+        },
+        "full_name": {
+          "type": "string"
+        },
+        "private": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "full_name",
+        "private"
+      ]
+    },
+    "pusher": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "email": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "email"
+      ]
+    },
+    "commits": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "author": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "email": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "email"
+            ]
+          },
+          "added": {
+            "type": "array"
+          },
+          "modified": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "removed": {
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "message",
+          "author",
+          "added",
+          "modified",
+          "removed"
+        ]
+      }
+    }
+  },
+  "required": [
+    "ref",
+    "before",
+    "after",
+    "repository",
+    "pusher",
+    "commits"
+  ]
+}

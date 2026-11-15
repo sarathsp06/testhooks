@@ -89,7 +89,10 @@ func TokenAuth(token, readToken string, log zerolog.Logger, trustedProxies []*ne
 			case matches(candidate, token):
 				next.ServeHTTP(w, r)
 			case matches(candidate, readToken):
-				if r.Method == http.MethodGet || r.Method == http.MethodHead {
+				// POST /api/types only computes a type for a body the
+				// caller already has; it runs no user code and stores
+				// nothing, so a reader may use it.
+				if r.Method == http.MethodGet || r.Method == http.MethodHead || (r.Method == http.MethodPost && r.URL.Path == "/api/types") {
 					next.ServeHTTP(w, r)
 					return
 				}

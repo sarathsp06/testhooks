@@ -16,12 +16,13 @@ import (
 // fakeHooks is enough of a Testhooks for the commands: one endpoint, ep1 at
 // /h/abc123, with a request list that starts empty.
 type fakeHooks struct {
-	mu       sync.Mutex
-	requests []string // JSON, newest first
-	deleted  []string
-	patched  map[string]any
-	captured *http.Request
-	body     string
+	mu        sync.Mutex
+	requests  []string // JSON, newest first
+	deleted   []string
+	patched   map[string]any
+	captured  *http.Request
+	body      string
+	lastQuery map[string][]string
 }
 
 const ep1 = `{"id":"ep1","slug":"abc123","name":"stripe test","mode":"server","created_at":"2026-11-10T10:00:00Z","config":{"forward_url":"https://old.example"}}`
@@ -59,6 +60,11 @@ func (f *fakeHooks) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewDecoder(r.Body).Decode(&in)
 		f.patched = in
 		io.WriteString(w, `{"input":{"method":"POST","path":"/events"},"transform":{"forwarded":{"method":"POST","path":"/events","body":"changed"},"dropped":false},"reply":{"status":201,"body":"ok","content_type":"text/plain","source":"handler"}}`)
+	case r.Method == "GET" && r.URL.Path == "/api/requests/req1/types":
+		io.WriteString(w, `{"lang":"`+r.URL.Query().Get("lang")+`","name":"X","from":1,"code":"type X struct{}\n"}`)
+	case r.Method == "GET" && r.URL.Path == "/api/endpoints/ep1/types":
+		f.lastQuery = r.URL.Query()
+		io.WriteString(w, `{"lang":"zod","name":"X","from":3,"code":"export const X = z.object({});\n"}`)
 	case strings.HasPrefix(r.URL.Path, "/h/abc123"):
 		b, _ := io.ReadAll(r.Body)
 		f.captured, f.body = r, string(b)
@@ -219,5 +225,24 @@ func TestCLI_UsageAndMisc(t *testing.T) {
 	r = run(t, f, false, "", "requests", "send")
 	if r.code != 2 || !strings.Contains(r.errOut, "give the endpoint") {
 		t.Fatalf("missing arg: %d %s", r.code, r.errOut)
+	}
+}
+
+func TestCLI_Types(t *testing.T) {
+	f := &fakeHooks{}
+	r := run(t, f, false, "", "requests", "types", "req1", "--lang", "go")
+	if r.code != 0 || r.out != "type X struct{}\n" {
+		t.Fatalf("code is printed as is when piped: %d %q %s", r.code, r.out, r.errOut)
+	}
+	r = run(t, f, false, "", "requests", "types", "req1", "--json")
+	if r.code != 0 || !strings.Contains(r.out, `"code": "type X struct{}\n"`) {
+		t.Fatalf("--json: %q", r.out)
+	}
+	r = run(t, f, true, "", "endpoints", "types", "abc123", "--lang", "zod", "--last", "3")
+	if r.code != 0 || r.out != "export const X = z.object({});\n" || f.lastQuery["last"][0] != "3" || f.lastQuery["lang"][0] != "zod" {
+		t.Fatalf("endpoint types: %d %q %v", r.code, r.out, f.lastQuery)
+	}
+	if r := run(t, f, false, "", "requests", "types"); r.code != 2 {
+		t.Fatalf("missing id: %d", r.code)
 	}
 }

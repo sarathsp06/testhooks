@@ -1,0 +1,18 @@
+// inferred from one request, best effort
+export interface WebhookPayload {
+  token: string;
+  team_id: string;
+  api_app_id: string;
+  type: string;
+  event_id: string;
+  event_time: number;
+  event: WebhookPayloadEvent;
+}
+
+export interface WebhookPayloadEvent {
+  type: string;
+  channel: string;
+  user: string;
+  text: string;
+  ts: string;
+}

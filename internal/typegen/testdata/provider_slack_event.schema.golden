@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$comment": "inferred from one request, best effort",
+  "title": "WebhookPayload",
+  "type": "object",
+  "properties": {
+    "token": {
+      "type": "string"
+    },
+    "team_id": {
+      "type": "string"
+    },
+    "api_app_id": {
+      "type": "string"
+    },
+    "type": {
+      "type": "string"
+    },
+    "event_id": {
+      "type": "string"
+    },
+    "event_time": {
+      "type": "integer"
+    },
+    "event": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string"
+        },
+        "channel": {
+          "type": "string"
+        },
+        "user": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        },
+        "ts": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "channel",
+        "user",
+        "text",
+        "ts"
+      ]
+    }
+  },
+  "required": [
+    "token",
+    "team_id",
+    "api_app_id",
+    "type",
+    "event_id",
+    "event_time",
+    "event"
+  ]
+}

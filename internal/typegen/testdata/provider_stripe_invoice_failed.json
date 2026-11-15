@@ -1,0 +1,1 @@
+{"id":"evt_1Q2w3E2eZvKYlo2C9Z8Y7X6W","object":"event","type":"invoice.payment_failed","created":1760781727,"livemode":false,"data":{"object":{"id":"in_1Q2w3E2eZvKYlo2C","object":"invoice","amount_due":4999,"currency":"usd","attempt_count":2,"customer_email":"ada@example.com","status":"open"}}}

@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$comment": "inferred from one request, best effort",
+  "title": "InvoicePaymentFailedPayload",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "object": {
+      "type": "string"
+    },
+    "type": {
+      "type": "string"
+    },
+    "created": {
+      "type": "integer"
+    },
+    "livemode": {
+      "type": "boolean"
+    },
+    "data": {
+      "type": "object",
+      "properties": {
+        "object": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "object": {
+              "type": "string"
+            },
+            "amount_due": {
+              "type": "integer"
+            },
+            "currency": {
+              "type": "string"
+            },
+            "attempt_count": {
+              "type": "integer"
+            },
+            "customer_email": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "object",
+            "amount_due",
+            "currency",
+            "attempt_count",
+            "customer_email",
+            "status"
+          ]
+        }
+      },
+      "required": [
+        "object"
+      ]
+    }
+  },
+  "required": [
+    "id",
+    "object",
+    "type",
+    "created",
+    "livemode",
+    "data"
+  ]
+}

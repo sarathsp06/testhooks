@@ -79,6 +79,7 @@ func TestTokenAuth_ReadToken(t *testing.T) {
 		{"read token cannot write", "POST", "/api/endpoints", map[string]string{"Authorization": "Bearer readonly"}, 403},
 		{"read token cannot delete", "DELETE", "/api/endpoints/x", map[string]string{"Authorization": "Bearer readonly"}, 403},
 		{"read token cannot preview", "POST", "/api/endpoints/x/preview", map[string]string{"Authorization": "Bearer readonly"}, 403},
+		{"read token can get a type", "POST", "/api/types", map[string]string{"Authorization": "Bearer readonly"}, 200},
 		{"read token on ws", "GET", "/ws/abc", map[string]string{"Sec-WebSocket-Protocol": "auth.readonly"}, 200},
 		{"full token writes", "POST", "/api/endpoints", map[string]string{"Authorization": "Bearer full"}, 200},
 		{"wrong token", "GET", "/api/endpoints", map[string]string{"Authorization": "Bearer nope"}, 401},

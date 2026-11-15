@@ -1,0 +1,23 @@
+// inferred from one request, best effort
+export interface Nested {
+  a: NestedA;
+  list: NestedListItem[];
+  empty: Record<string, unknown>;
+  emptyArr: unknown[];
+  mixed: (string | number | null)[];
+  nested: number[][];
+}
+
+export interface NestedA {
+  b: NestedAB;
+}
+
+export interface NestedAB {
+  c: number[];
+}
+
+export interface NestedListItem {
+  id: number;
+  tag?: string;
+  extra?: boolean;
+}

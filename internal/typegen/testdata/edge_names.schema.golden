@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$comment": "inferred from one request, best effort",
+  "title": "Names",
+  "type": "object",
+  "properties": {
+    "first-name": {
+      "type": "string"
+    },
+    "2nd": {
+      "type": "integer"
+    },
+    "class": {
+      "type": "string"
+    },
+    "from": {
+      "type": "string"
+    },
+    "id": {
+      "type": "string"
+    },
+    "url": {
+      "type": "string"
+    },
+    "$weird key": {
+      "type": "boolean"
+    },
+    "Item": {
+      "type": "object",
+      "properties": {
+        "x": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "x"
+      ]
+    },
+    "ItemItem": {
+      "type": "object",
+      "properties": {
+        "y": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "y"
+      ]
+    },
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "z": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "z"
+        ]
+      }
+    }
+  },
+  "required": [
+    "first-name",
+    "2nd",
+    "class",
+    "from",
+    "id",
+    "url",
+    "$weird key",
+    "Item",
+    "ItemItem",
+    "items"
+  ]
+}

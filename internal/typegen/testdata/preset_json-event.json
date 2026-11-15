@@ -1,0 +1,15 @@
+{
+  "id": "evt_1Q2w3E",
+  "type": "invoice.paid",
+  "created": 1760781727,
+  "data": {
+    "invoice_id": "inv_42",
+    "amount": 4999,
+    "currency": "usd",
+    "customer": {
+      "id": "cus_7",
+      "email": "ada@example.com"
+    }
+  },
+  "internal_id": "tmp-2231"
+}

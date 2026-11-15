@@ -34,6 +34,9 @@ func newMux(api *API) *http.ServeMux {
 	mux.HandleFunc("GET /api/limits", api.GetLimits)
 	mux.HandleFunc("POST /api/upgrade-interest", api.RecordUpgradeInterest)
 	mux.HandleFunc("POST /api/endpoints/{id}/preview", api.PreviewScript)
+	mux.HandleFunc("POST /api/types", api.TypesForBody)
+	mux.HandleFunc("GET /api/requests/{reqId}/types", api.TypesForRequest)
+	mux.HandleFunc("GET /api/endpoints/{id}/types", api.TypesForEndpoint)
 	return mux
 }
 
