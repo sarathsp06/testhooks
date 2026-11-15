@@ -103,6 +103,11 @@ func EventOf(body []byte) string {
 	return ""
 }
 
+var validName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+
+// ValidName reports whether name can be a type name in every output language.
+func ValidName(name string) bool { return validName.MatchString(name) }
+
 // TypeName turns an event name into a type name: "invoice.paid" becomes
 // "InvoicePaidPayload"; anything unusable becomes "WebhookPayload".
 func TypeName(event string) string {

@@ -39,7 +39,7 @@ When stdout is a terminal the output is short text with the next step; when it i
 | `endpoints create [--name S] [--slug S] [--mode server\|browser] [--config JSON]` | A new endpoint. It only captures until settings say otherwise |
 | `endpoints get <id\|slug>` | One endpoint with its settings |
 | `endpoints update <id\|slug> [--name S] [--slug S] [--mode M] [--config JSON]` | Change it. `--config` changes only the settings given and keeps the rest; a `null` removes one. `--slug` gives it a new URL and the old one stops working |
-| `endpoints types <id\|slug> [--lang L] [--last N] [--name S]` | One type from the endpoint's last N requests merged (default 20): TypeScript, Zod, JSON Schema, Go or Pydantic. Prints the code; `--json` prints the API's reply |
+| `endpoints types <id\|slug> [--lang L] [--last N] [--name S]` | One type from the endpoint's last N requests with the same event merged (default 20): TypeScript, Zod, JSON Schema, Go or Pydantic. Prints the code; `--json` prints the API's reply |
 | `endpoints delete <id\|slug> [--yes]` | Delete it and every request it received. Asks first in a terminal; in a pipe, `--yes` is required |
 
 ## Requests

@@ -39,7 +39,7 @@ func toZod(root *shape, name, note string) string {
 			if len(s.obj.keys) > 0 {
 				parts = append(parts, object(hint, s.obj))
 			} else {
-				parts = append(parts, "z.record(z.unknown())")
+				parts = append(parts, "z.record(z.string(), z.unknown())")
 			}
 		}
 		if s.arr != nil {

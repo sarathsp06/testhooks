@@ -43,7 +43,8 @@ func pyField(k string) (name string, aliased bool) {
 }
 
 // toPydantic writes Pydantic v2 models, nested ones first since each must be
-// defined before the model that uses it.
+// defined before the model that uses it. No forward references, so the
+// module loads the same whether it is imported, exec'd or pasted.
 func toPydantic(root *shape, name, note string) string {
 	var blocks []string // parents first, reversed at the end
 	n := &namer{}
@@ -142,7 +143,6 @@ func toPydantic(root *shape, name, note string) string {
 
 	var b strings.Builder
 	b.WriteString("# " + note + "\n")
-	b.WriteString("from __future__ import annotations\n\n")
 	if needAny {
 		b.WriteString("from typing import Any\n\n")
 	}

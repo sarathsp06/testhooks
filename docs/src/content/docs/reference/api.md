@@ -241,13 +241,13 @@ curl "http://localhost:8080/api/endpoints/<id>/types?lang=zod&last=20"
 | Route | |
 |---|---|
 | `GET /api/requests/{reqId}/types` | A type for that request's JSON body |
-| `GET /api/endpoints/{id}/types` | One type from the endpoint's last `last` requests (default 20, up to 200) merged: a field only some deliveries carry comes out optional, which one request can't tell you. Requests whose body isn't JSON are skipped. `404` when none has a JSON body yet |
+| `GET /api/endpoints/{id}/types` | One type from the endpoint's last `last` requests (default 20, up to 200) merged: a field only some deliveries carry comes out optional, which one request can't tell you. One type is one event: only requests carrying the newest request's event (its `type`, `event`, `event_type`, `action` or `topic` field) are merged, so a `customer.created` never leaks into `InvoicePaidPayload`; when the newest has no event field, every JSON body is. Requests whose body isn't JSON are skipped. `404` when none has a JSON body yet |
 | `POST /api/types` | A type for a body you already hold, as `{"body": "..."}` or `{"bodies": ["...", ...]}` (up to 200). For browser-mode requests, which the server never stores. Runs no script and stores nothing, so a [read-only token](../../deployment/production/#a-read-only-token) may call it |
 
 | Parameter | | |
 |---|---|---|
 | `lang` | optional | `typescript` (default), `zod`, `jsonschema`, `go` or `pydantic`. `ts`, `schema`, `golang` and `py` work too |
-| `name` | optional | The type's name. Default: the body's `type`, `event`, `event_type`, `action` or `topic` field as a name, so `invoice.paid` gives `InvoicePaidPayload`; `WebhookPayload` when there is none |
+| `name` | optional | The type's name: letters, digits and underscores, not starting with a digit, or `400`. Words that are keywords in a language are escaped there. Default: the body's `type`, `event`, `event_type`, `action` or `topic` field as a name, so `invoice.paid` gives `InvoicePaidPayload`; `WebhookPayload` when there is none |
 
 Returns `200`:
 

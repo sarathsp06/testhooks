@@ -69,8 +69,9 @@ func (a *API) TypesForRequest(w http.ResponseWriter, r *http.Request) {
 
 // TypesForEndpoint handles GET /api/endpoints/{id}/types?lang=&last=20: one
 // type inferred from the endpoint's last N requests merged, so a field that
-// only some of them carry comes out optional. Requests whose body isn't JSON
-// are skipped; the type is named after the newest request's event.
+// only some of them carry comes out optional. Requests whose body isn't JSON,
+// or that carry a different event than the newest one, are skipped; the type
+// is named after that event.
 func (a *API) TypesForEndpoint(w http.ResponseWriter, r *http.Request) {
 	ep, err := a.db.GetEndpointByID(r.Context(), r.PathValue("id"))
 	if err != nil {
@@ -93,9 +94,20 @@ func (a *API) TypesForEndpoint(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
 		return
 	}
+	// One type is one event: with the stores listing newest first, merge
+	// only requests that carry the newest JSON request's event, so a
+	// customer.created never leaks into InvoicePaidPayload. A newest
+	// request without an event field merges with every JSON body.
 	var bodies [][]byte
+	event, eventKnown := "", false
 	for _, req := range reqs {
-		if json.Valid(req.Body) {
+		if !json.Valid(req.Body) {
+			continue
+		}
+		if !eventKnown {
+			event, eventKnown = typegen.EventOf(req.Body), true
+		}
+		if event == "" || typegen.EventOf(req.Body) == event {
 			bodies = append(bodies, req.Body)
 		}
 	}
@@ -119,6 +131,9 @@ func (a *API) writeTypes(w http.ResponseWriter, langName, name string, bodies []
 	}
 	if name == "" {
 		name = typegen.TypeName(typegen.EventOf(bodies[0]))
+	} else if !typegen.ValidName(name) {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "name must be a type name: letters, digits and underscores, not starting with a digit, e.g. InvoicePaidPayload"})
+		return
 	}
 	code, err := typegen.Generate(lang, name, bodies...)
 	if err != nil {

@@ -110,7 +110,7 @@ export const NestedA = z.object({
 export const Nested = z.object({
   a: NestedA,
   list: z.array(NestedListItem),
-  empty: z.record(z.unknown()),
+  empty: z.record(z.string(), z.unknown()),
   emptyArr: z.array(z.unknown()),
   mixed: z.array(z.union([z.string(), z.number(), z.null()])),
   nested: z.array(z.array(z.number())),
