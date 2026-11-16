@@ -1,0 +1,6 @@
+// inferred from one request, best effort
+export interface WebhookPayload {
+  token: string;
+  challenge: string;
+  type: string;
+}

@@ -1,0 +1,34 @@
+// inferred from one request, best effort
+export interface PaymentIntentSucceededPayload {
+  id: string;
+  object: string;
+  api_version: string;
+  created: number;
+  type: string;
+  livemode: boolean;
+  data: PaymentIntentSucceededPayloadData;
+  request: PaymentIntentSucceededPayloadRequest;
+}
+
+export interface PaymentIntentSucceededPayloadData {
+  object: PaymentIntentSucceededPayloadDataObject;
+}
+
+export interface PaymentIntentSucceededPayloadDataObject {
+  id: string;
+  object: string;
+  amount: number;
+  currency: string;
+  status: string;
+  customer: string;
+  metadata: PaymentIntentSucceededPayloadDataObjectMetadata;
+}
+
+export interface PaymentIntentSucceededPayloadDataObjectMetadata {
+  order_id: string;
+}
+
+export interface PaymentIntentSucceededPayloadRequest {
+  id: string;
+  idempotency_key: null;
+}

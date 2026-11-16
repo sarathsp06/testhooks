@@ -1,0 +1,24 @@
+// inferred from one request, best effort
+export interface WebhookPayload {
+  id: number;
+  email: string;
+  created_at: string;
+  total_price: string;
+  currency: string;
+  financial_status: string;
+  line_items: WebhookPayloadLineItemsItem[];
+  customer: WebhookPayloadCustomer;
+}
+
+export interface WebhookPayloadLineItemsItem {
+  id: number;
+  title: string;
+  quantity: number;
+  price: string;
+}
+
+export interface WebhookPayloadCustomer {
+  id: number;
+  first_name: string;
+  last_name: string;
+}

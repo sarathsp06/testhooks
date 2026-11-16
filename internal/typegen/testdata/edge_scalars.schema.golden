@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$comment": "inferred from one request, best effort",
+  "title": "Scalars",
+  "type": "object",
+  "properties": {
+    "s": {
+      "type": "string"
+    },
+    "i": {
+      "type": "integer"
+    },
+    "f": {
+      "type": "number"
+    },
+    "e": {
+      "type": "integer"
+    },
+    "one": {
+      "type": "integer"
+    },
+    "b": {
+      "type": "boolean"
+    },
+    "n": {
+      "type": "null"
+    },
+    "neg": {
+      "type": "integer"
+    }
+  },
+  "required": [
+    "s",
+    "i",
+    "f",
+    "e",
+    "one",
+    "b",
+    "n",
+    "neg"
+  ]
+}

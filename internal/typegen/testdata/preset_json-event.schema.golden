@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$comment": "inferred from one request, best effort",
+  "title": "WebhookPayload",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "type": {
+      "type": "string"
+    },
+    "created": {
+      "type": "integer"
+    },
+    "data": {
+      "type": "object",
+      "properties": {
+        "invoice_id": {
+          "type": "string"
+        },
+        "amount": {
+          "type": "integer"
+        },
+        "currency": {
+          "type": "string"
+        },
+        "customer": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "email": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "email"
+          ]
+        }
+      },
+      "required": [
+        "invoice_id",
+        "amount",
+        "currency",
+        "customer"
+      ]
+    },
+    "internal_id": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "id",
+    "type",
+    "created",
+    "data",
+    "internal_id"
+  ]
+}

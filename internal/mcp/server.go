@@ -25,7 +25,8 @@ func NewServer(api *apiclient.Client, version string) *mcp.Server {
 			"Create an endpoint, give its capture_url to a webhook provider (or send to it yourself), " +
 			"then wait_for_request until the provider sends something and read it to see exactly what it sends. " +
 			"Pass the id of the last request you saw as after to wait only for newer ones. " +
-			"send_request sends a test request yourself; replay_request sends a captured one again.",
+			"send_request sends a test request yourself; replay_request sends a captured one again. " +
+			"generate_types writes a TypeScript, Zod, JSON Schema, Go or Pydantic type from real requests.",
 	})
 
 	no := false
@@ -66,6 +67,11 @@ func NewServer(api *apiclient.Client, version string) *mcp.Server {
 		Description: "Wait until an endpoint receives a request and return it, instead of polling list_requests. Returns at once when the endpoint already has requests newer than after.",
 		Annotations: read,
 	}, c.waitForRequest)
+	mcp.AddTool(s, &mcp.Tool{
+		Name:        "generate_types",
+		Description: "Write a type for what a provider sends, from a captured request's body or from an endpoint's recent requests merged, in TypeScript, Zod, JSON Schema, Go or Pydantic. Use it to type the handler instead of guessing from the provider's docs.",
+		Annotations: read,
+	}, c.generateTypes)
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "get_request",
 		Description: "Show one received request in full: method, path, query, headers, body, and what was forwarded and replied.",

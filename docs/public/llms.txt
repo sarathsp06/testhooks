@@ -6,13 +6,14 @@ Every UI action is an API call, so anything a person can do in the browser, a sc
 
 ## For agents
 
-- [Use it from an AI agent (MCP)](https://sarathsp06.github.io/testhooks/guides/mcp/): `testhooks mcp` tools: create_endpoint, wait_for_request, get_request, preview_script, send_request, replay_request, update_endpoint_config, list/get/delete. Set-up for Claude Code, Cursor and Claude Desktop, and the SKILL.md that teaches the workflow.
+- [Use it from an AI agent (MCP)](https://sarathsp06.github.io/testhooks/guides/mcp/): `testhooks mcp` tools: create_endpoint, wait_for_request, get_request, generate_types (TypeScript, Zod, JSON Schema, Go, Pydantic from real traffic), preview_script, send_request, replay_request, update_endpoint_config, list/get/delete. Set-up for Claude Code, Cursor and Claude Desktop, and the SKILL.md that teaches the workflow.
 - [OpenAPI document](https://raw.githubusercontent.com/sarathsp06/testhooks/main/internal/handler/openapi.json): also served by every Testhooks at `/api/openapi.json`, without a token.
 - [AGENTS.md](https://github.com/sarathsp06/testhooks/blob/main/AGENTS.md): the product principles every change must keep.
 
 ## Reference
 
-- [REST API](https://sarathsp06.github.io/testhooks/reference/api/): endpoints, requests, waiting for the next request (`?after=&wait=`), previewing scripts, re-signing, limits, the endpoint config object.
+- [REST API](https://sarathsp06.github.io/testhooks/reference/api/): endpoints, requests, waiting for the next request (`?after=&wait=`), types from captured bodies (`/types`), previewing scripts, re-signing, limits, the endpoint config object.
+- [Command line](https://sarathsp06.github.io/testhooks/reference/cli/): `testhooks endpoints …` and `testhooks requests …`, JSON when piped, `requests wait` exits 3 on timeout.
 - [WebSocket events](https://sarathsp06.github.io/testhooks/reference/websocket/): the live stream at `/ws/{slug}`.
 - [Configuration](https://sarathsp06.github.io/testhooks/reference/configuration/): every environment variable, including AUTH_TOKEN and READ_TOKEN.
 - [Status codes](https://sarathsp06.github.io/testhooks/reference/status-codes/): what a sender gets back from a capture URL.

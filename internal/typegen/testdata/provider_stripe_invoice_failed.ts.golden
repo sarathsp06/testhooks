@@ -1,0 +1,23 @@
+// inferred from one request, best effort
+export interface InvoicePaymentFailedPayload {
+  id: string;
+  object: string;
+  type: string;
+  created: number;
+  livemode: boolean;
+  data: InvoicePaymentFailedPayloadData;
+}
+
+export interface InvoicePaymentFailedPayloadData {
+  object: InvoicePaymentFailedPayloadDataObject;
+}
+
+export interface InvoicePaymentFailedPayloadDataObject {
+  id: string;
+  object: string;
+  amount_due: number;
+  currency: string;
+  attempt_count: number;
+  customer_email: string;
+  status: string;
+}

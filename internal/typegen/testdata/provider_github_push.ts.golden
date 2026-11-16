@@ -1,0 +1,35 @@
+// inferred from one request, best effort
+export interface WebhookPayload {
+  ref: string;
+  before: string;
+  after: string;
+  repository: WebhookPayloadRepository;
+  pusher: WebhookPayloadPusher;
+  commits: WebhookPayloadCommitsItem[];
+}
+
+export interface WebhookPayloadRepository {
+  id: number;
+  name: string;
+  full_name: string;
+  private: boolean;
+}
+
+export interface WebhookPayloadPusher {
+  name: string;
+  email: string;
+}
+
+export interface WebhookPayloadCommitsItem {
+  id: string;
+  message: string;
+  author: WebhookPayloadCommitsItemAuthor;
+  added: unknown[];
+  modified: string[];
+  removed: unknown[];
+}
+
+export interface WebhookPayloadCommitsItemAuthor {
+  name: string;
+  email: string;
+}

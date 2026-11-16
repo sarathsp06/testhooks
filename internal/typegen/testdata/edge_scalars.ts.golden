@@ -1,0 +1,11 @@
+// inferred from one request, best effort
+export interface Scalars {
+  s: string;
+  i: number;
+  f: number;
+  e: number;
+  one: number;
+  b: boolean;
+  n: null;
+  neg: number;
+}

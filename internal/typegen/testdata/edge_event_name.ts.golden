@@ -1,0 +1,14 @@
+// inferred from one request, best effort
+export interface InvoicePaidPayload {
+  type: string;
+  data: InvoicePaidPayloadData;
+}
+
+export interface InvoicePaidPayloadData {
+  object: InvoicePaidPayloadDataObject;
+}
+
+export interface InvoicePaidPayloadDataObject {
+  id: string;
+  amount_due: number;
+}

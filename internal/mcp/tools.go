@@ -24,6 +24,8 @@ type (
 	WaitForRequestOutput = apiclient.WaitForRequestOutput
 	PreviewScriptInput   = apiclient.PreviewScriptInput
 	GetRequestInput      = apiclient.GetRequestInput
+	GenerateTypesInput   = apiclient.GenerateTypesInput
+	GenerateTypesOutput  = apiclient.GenerateTypesOutput
 	SendRequestInput     = apiclient.SendRequestInput
 	SendRequestOutput    = apiclient.SendRequestOutput
 	ReplayRequestInput   = apiclient.ReplayRequestInput
@@ -73,6 +75,11 @@ func (t tools) waitForRequest(ctx context.Context, _ *mcp.CallToolRequest, in Wa
 
 func (t tools) previewScript(ctx context.Context, _ *mcp.CallToolRequest, in PreviewScriptInput) (*mcp.CallToolResult, map[string]any, error) {
 	out, err := t.api.PreviewScript(ctx, in)
+	return nil, out, err
+}
+
+func (t tools) generateTypes(ctx context.Context, _ *mcp.CallToolRequest, in GenerateTypesInput) (*mcp.CallToolResult, GenerateTypesOutput, error) {
+	out, err := t.api.GenerateTypes(ctx, in)
 	return nil, out, err
 }
 

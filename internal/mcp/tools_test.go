@@ -71,6 +71,10 @@ func (f *fakeAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewDecoder(r.Body).Decode(&in)
 		f.patched = in
 		io.WriteString(w, `{"input":{"method":"PUT"},"transform":null,"reply":{"status":200,"source":"default"}}`)
+	case r.Method == "GET" && r.URL.Path == "/api/requests/req1/types":
+		io.WriteString(w, `{"lang":"`+r.URL.Query().Get("lang")+`","name":"X","from":1,"code":"type X struct{}"}`)
+	case r.Method == "GET" && r.URL.Path == "/api/endpoints/ep1/types":
+		io.WriteString(w, `{"lang":"typescript","name":"X","from":`+r.URL.Query().Get("last")+`,"code":"export interface X {}"}`)
 	case r.Method == "DELETE" && r.URL.Path == "/api/endpoints/ep1":
 		w.WriteHeader(204)
 	case r.Method == "GET" && r.URL.Path == "/api/requests/missing":
@@ -301,6 +305,16 @@ func TestListAndGetRequestAndDelete(t *testing.T) {
 	}
 	if pv["request_id"] != "req1" || f.patched["request_id"] != "req1" || f.patched["reply"] == nil || f.patched["transform"] != nil {
 		t.Fatalf("preview sent %v, got %v", f.patched, pv)
+	}
+	var gt GenerateTypesOutput
+	if res := call(t, cs, "generate_types", map[string]any{"request_id": "req1", "lang": "go"}, &gt); res.IsError || gt.Lang != "go" || gt.Code != "type X struct{}" {
+		t.Fatalf("got %q %+v", errText(res), gt)
+	}
+	if res := call(t, cs, "generate_types", map[string]any{"endpoint_id": "ep1", "last": 5}, &gt); res.IsError || gt.From != 5 {
+		t.Fatalf("got %q %+v", errText(res), gt)
+	}
+	if res := call(t, cs, "generate_types", map[string]any{}, nil); !res.IsError || !strings.Contains(errText(res), "request_id or endpoint_id") {
+		t.Fatalf("got %q", errText(res))
 	}
 	var del DeleteEndpointOutput
 	if res := call(t, cs, "delete_endpoint", map[string]any{"id": "ep1"}, &del); res.IsError || del.Deleted != "ep1" {

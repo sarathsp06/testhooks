@@ -13,7 +13,7 @@
   "tags": [
     { "name": "endpoints", "description": "Webhook URLs and their settings" },
     { "name": "requests", "description": "What the endpoints received" },
-    { "name": "scripts", "description": "Try a transform or reply script before saving it" },
+    { "name": "scripts", "description": "Try a transform or reply script before saving it, and get a type for a body" },
     { "name": "capture", "description": "Where providers send webhooks" },
     { "name": "server", "description": "Limits and health" }
   ],
@@ -172,6 +172,64 @@
           "400": { "$ref": "#/components/responses/BadRequest" },
           "404": { "$ref": "#/components/responses/NotFound" },
           "503": { "description": "This server can't run scripts", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      }
+    },
+    "/api/types": {
+      "post": {
+        "tags": ["scripts"],
+        "operationId": "typesForBody",
+        "summary": "Get a type for a JSON body",
+        "description": "Guesses a type for one body, or for several merged (a field some of them lack comes out optional), in TypeScript, Zod, JSON Schema, Go or Pydantic. For a body the server never stored, such as a browser-mode request; runs no user code and stores nothing, so READ_TOKEN may call it.",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": {
+          "type": "object",
+          "properties": {
+            "lang": { "$ref": "#/components/schemas/TypeLang" },
+            "name": { "type": "string", "description": "The type's name. Default: from the first body's type, event, event_type, action or topic field, as InvoicePaidPayload, else WebhookPayload" },
+            "body": { "type": "string", "description": "One JSON body, as text" },
+            "bodies": { "type": "array", "items": { "type": "string" }, "description": "Several JSON bodies, merged. At most 200" }
+          }
+        } } } },
+        "responses": {
+          "200": { "description": "The type", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/TypesResult" } } } },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "422": { "description": "A body is not JSON", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      }
+    },
+    "/api/requests/{reqId}/types": {
+      "parameters": [{ "name": "reqId", "in": "path", "required": true, "schema": { "type": "string" } }],
+      "get": {
+        "tags": ["scripts"],
+        "operationId": "typesForRequest",
+        "summary": "Get a type for a captured request's body",
+        "parameters": [
+          { "name": "lang", "in": "query", "schema": { "$ref": "#/components/schemas/TypeLang" } },
+          { "name": "name", "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "The type", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/TypesResult" } } } },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "422": { "description": "The body is not JSON", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      }
+    },
+    "/api/endpoints/{id}/types": {
+      "parameters": [{ "$ref": "#/components/parameters/endpointID" }],
+      "get": {
+        "tags": ["scripts"],
+        "operationId": "typesForEndpoint",
+        "summary": "Get one type from an endpoint's recent requests",
+        "description": "Merges the JSON bodies of the last N requests into one type, so a field only some deliveries carry comes out optional. Requests whose body isn't JSON are skipped. Named after the newest request's event unless name is given.",
+        "parameters": [
+          { "name": "lang", "in": "query", "schema": { "$ref": "#/components/schemas/TypeLang" } },
+          { "name": "last", "in": "query", "description": "How many recent requests to merge, 1 to 200", "schema": { "type": "integer", "minimum": 1, "maximum": 200, "default": 20 } },
+          { "name": "name", "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "The type", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/TypesResult" } } } },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "404": { "description": "No such endpoint, or it has no request with a JSON body yet", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
         }
       }
     },
@@ -481,6 +539,22 @@
               "error": { "type": "string", "description": "Set when the reply script threw; source is then default" }
             }
           }
+        }
+      },
+      "TypeLang": {
+        "type": "string",
+        "enum": ["typescript", "zod", "jsonschema", "go", "pydantic"],
+        "default": "typescript",
+        "description": "Aliases: ts, schema, golang, python, py"
+      },
+      "TypesResult": {
+        "type": "object",
+        "required": ["lang", "name", "from", "code"],
+        "properties": {
+          "lang": { "$ref": "#/components/schemas/TypeLang" },
+          "name": { "type": "string" },
+          "from": { "type": "integer", "description": "How many bodies the type was inferred from" },
+          "code": { "type": "string", "description": "The type, ready to paste. A guess from the bodies seen: a best-effort starting point" }
         }
       },
       "Limits": {

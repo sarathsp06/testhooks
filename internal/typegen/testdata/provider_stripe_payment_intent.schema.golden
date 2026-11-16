@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$comment": "inferred from one request, best effort",
+  "title": "PaymentIntentSucceededPayload",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "object": {
+      "type": "string"
+    },
+    "api_version": {
+      "type": "string"
+    },
+    "created": {
+      "type": "integer"
+    },
+    "type": {
+      "type": "string"
+    },
+    "livemode": {
+      "type": "boolean"
+    },
+    "data": {
+      "type": "object",
+      "properties": {
+        "object": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "object": {
+              "type": "string"
+            },
+            "amount": {
+              "type": "integer"
+            },
+            "currency": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string"
+            },
+            "customer": {
+              "type": "string"
+            },
+            "metadata": {
+              "type": "object",
+              "properties": {
+                "order_id": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "order_id"
+              ]
+            }
+          },
+          "required": [
+            "id",
+            "object",
+            "amount",
+            "currency",
+            "status",
+            "customer",
+            "metadata"
+          ]
+        }
+      },
+      "required": [
+        "object"
+      ]
+    },
+    "request": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "idempotency_key": {
+          "type": "null"
+        }
+      },
+      "required": [
+        "id",
+        "idempotency_key"
+      ]
+    }
+  },
+  "required": [
+    "id",
+    "object",
+    "api_version",
+    "created",
+    "type",
+    "livemode",
+    "data",
+    "request"
+  ]
+}

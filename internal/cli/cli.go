@@ -36,8 +36,8 @@ const usage = `testhooks: webhook URLs that record every request sent to them.
 
 Usage:
   testhooks                         run the server (see the docs for its environment)
-  testhooks endpoints list|create|get|update|delete
-  testhooks requests list|get|wait|send|replay|preview|delete
+  testhooks endpoints list|create|get|update|types|delete
+  testhooks requests list|get|wait|send|replay|preview|types|delete
   testhooks mcp                     MCP server for AI agents, on stdin/stdout
   testhooks skill                   print the agent skill file (SKILL.md)
   testhooks version
@@ -214,11 +214,21 @@ func (a *app) print(v any, text func(w io.Writer)) error {
 	return nil
 }
 
+// printCode prints generated code as it is, or the whole reply with --json.
+// Code is for pasting, so even in a pipe it is the code unless JSON is asked for.
+func (a *app) printCode(out apiclient.GenerateTypesOutput) error {
+	if a.json {
+		return a.print(out, nil)
+	}
+	_, err := io.WriteString(a.env.Stdout, out.Code)
+	return err
+}
+
 // --- endpoints
 
 func (a *app) endpoints(args []string) error {
 	if len(args) == 0 {
-		return usageError("endpoints: give list, create, get, update or delete")
+		return usageError("endpoints: give list, create, get, update, types or delete")
 	}
 	switch args[0] {
 	case "list", "ls":
@@ -339,6 +349,29 @@ func (a *app) endpoints(args []string) error {
 			a.client().WithURL(&ep)
 		}
 		return a.print(ep, func(w io.Writer) { printEndpoint(w, ep) })
+	case "types", "type":
+		fs := a.flags("endpoints types", "Usage: testhooks endpoints types <endpoint> [--lang typescript|zod|jsonschema|go|pydantic] [--last N] [--name S]\n\nOne type inferred from the endpoint's last N requests merged (default 20), so a field only some deliveries carry comes out optional. Prints the code; with --json, the API's reply.\n\n")
+		lang := fs.String("lang", "typescript", "typescript, zod, jsonschema, go or pydantic")
+		last := fs.Int("last", 0, "how many recent requests to merge, 1 to 200 (default 20)")
+		name := fs.String("name", "", "the type's name (default: from the newest request's event)")
+		pos, err := parse(fs, args[1:])
+		if err != nil {
+			return err
+		}
+		if len(pos) != 1 {
+			return usageError("endpoints types: give the endpoint id or slug")
+		}
+		ctx, stop := a.ctx()
+		defer stop()
+		ep, err := a.resolve(ctx, pos[0])
+		if err != nil {
+			return err
+		}
+		out, err := a.client().GenerateTypes(ctx, apiclient.GenerateTypesInput{EndpointID: ep.ID, Lang: *lang, Last: *last, Name: *name})
+		if err != nil {
+			return err
+		}
+		return a.printCode(out)
 	case "delete", "rm":
 		fs := a.flags("endpoints delete", "Usage: testhooks endpoints delete <id> [--yes]\n\nDeletes the endpoint and every request it received. Cannot be undone.\n\n")
 		yes := fs.Bool("yes", false, "don't ask")
@@ -400,7 +433,7 @@ func printEndpoint(w io.Writer, ep apiclient.Endpoint) {
 
 func (a *app) requests(args []string) error {
 	if len(args) == 0 {
-		return usageError("requests: give list, get, wait, send, replay, preview or delete")
+		return usageError("requests: give list, get, wait, send, replay, preview, types or delete")
 	}
 	switch args[0] {
 	case "list", "ls":
@@ -582,6 +615,24 @@ func (a *app) requests(args []string) error {
 			return err
 		}
 		return a.print(out, func(w io.Writer) { printPreview(w, out) })
+	case "types", "type":
+		fs := a.flags("requests types", "Usage: testhooks requests types <request id> [--lang typescript|zod|jsonschema|go|pydantic] [--name S]\n\nA type for the request's JSON body. Prints the code; with --json, the API's reply. For a type from several requests, see endpoints types.\n\n")
+		lang := fs.String("lang", "typescript", "typescript, zod, jsonschema, go or pydantic")
+		name := fs.String("name", "", "the type's name (default: from the body's event)")
+		pos, err := parse(fs, args[1:])
+		if err != nil {
+			return err
+		}
+		if len(pos) != 1 {
+			return usageError("requests types: give the request id")
+		}
+		ctx, stop := a.ctx()
+		defer stop()
+		out, err := a.client().GenerateTypes(ctx, apiclient.GenerateTypesInput{RequestID: pos[0], Lang: *lang, Name: *name})
+		if err != nil {
+			return err
+		}
+		return a.printCode(out)
 	case "delete", "rm":
 		fs := a.flags("requests delete", "Usage: testhooks requests delete <request id>\n\n")
 		pos, err := parse(fs, args[1:])

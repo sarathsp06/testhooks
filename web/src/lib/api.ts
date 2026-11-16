@@ -172,6 +172,31 @@ export function resignRequest(endpointId: string, captured: CapturedRequest, bod
 	});
 }
 
+// --- Types ---
+
+/** The languages a body's type can be written in, in menu order. */
+export const TYPE_LANGS = [
+	{ id: 'typescript', label: 'TypeScript' },
+	{ id: 'zod', label: 'Zod' },
+	{ id: 'jsonschema', label: 'JSON Schema' },
+	{ id: 'go', label: 'Go' },
+	{ id: 'pydantic', label: 'Pydantic' }
+] as const;
+export type TypeLang = (typeof TYPE_LANGS)[number]['id'];
+
+/**
+ * A type for a JSON body, guessed on the server so the UI, the API, the CLI
+ * and the MCP server all give the same answer. The body goes inline because
+ * a browser-mode request is never stored. The name defaults to the body's
+ * event, as InvoicePaidPayload.
+ */
+export function generateTypes(lang: TypeLang, body: string, name?: string) {
+	return request<{ lang: string; name: string; from: number; code: string }>('/types', {
+		method: 'POST',
+		body: JSON.stringify({ lang, body, ...(name ? { name } : {}) })
+	});
+}
+
 // --- Limits ---
 
 export function getLimits() {

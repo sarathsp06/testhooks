@@ -53,10 +53,19 @@ To receive real webhooks, run testhooks somewhere the sender can reach, with Pos
 - **Transform:** reshape a request with a few lines of JavaScript, or skip it.
 - **Forward and reply:** send requests on to another URL, and script what the sender gets back.
 - **Verify signatures:** Standard Webhooks (Svix, Sparrow and others), HMAC and Ed25519.
-- **Script it:** `testhooks endpoints create`, `testhooks requests wait`, `testhooks requests send`: the [command line](https://sarathsp06.github.io/testhooks/reference/cli/) does what the UI does and prints JSON when piped.
-- **Work with your AI agent:** `testhooks mcp` lets Claude Code or Cursor create an endpoint, wait for the provider's request, preview a script on it and write your handler from real traffic. A [SKILL.md](skills/testhooks/SKILL.md) teaches the workflow, the API describes itself at `/api/openapi.json`, and `READ_TOKEN` gives an agent a token that can only read.
+- **Types from real traffic:** copy a request's payload as a TypeScript, Zod, JSON Schema, Go or Pydantic type. The API, CLI and MCP server can also merge the last twenty deliveries of an event into one type, so fields that only some carry come out optional.
 
 The [docs](https://sarathsp06.github.io/testhooks/) cover configuration, the API and how each mode works.
+
+## Made for machines too
+
+Everything above is an API call, and the same calls are packaged for scripts and for AI agents:
+
+- **MCP server:** `testhooks mcp` gives Claude Code, Cursor or any MCP client the same tools you use: create an endpoint, wait for the provider's request (no polling), read it, get a type for it, preview a transform or reply script before saving it, send a test request, replay. [Set it up](https://sarathsp06.github.io/testhooks/guides/mcp/).
+- **Command line:** `testhooks endpoints create`, `testhooks requests wait`, `testhooks requests types --lang go`, and the rest. JSON when piped, text in a terminal. [Reference](https://sarathsp06.github.io/testhooks/reference/cli/).
+- **A skill that teaches the workflow:** `testhooks skill > .claude/skills/testhooks/SKILL.md`, or read [SKILL.md](skills/testhooks/SKILL.md).
+- **The API describes itself** at `/api/openapi.json` on every server, and the docs site has an [`llms.txt`](https://sarathsp06.github.io/testhooks/llms.txt).
+- **A token that can only read:** set `READ_TOKEN` for an agent or dashboard that should watch endpoints but never change, delete or send anything.
 
 ## Development
 

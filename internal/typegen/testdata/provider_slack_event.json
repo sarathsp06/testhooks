@@ -1,0 +1,1 @@
+{"token":"sample","team_id":"T0001","api_app_id":"A0001","type":"event_callback","event_id":"Ev0001","event_time":1760781727,"event":{"type":"message","channel":"C2147483705","user":"U2147483697","text":"Hello, world","ts":"1760781727.000200"}}

@@ -229,6 +229,39 @@ Returns `200`:
 
 A missing request is `404`; one from another endpoint, or neither `request_id` nor `request`, is `400`. A server that can't run scripts answers `503`.
 
+### Get a type for a body
+
+Testhooks guesses a type for what a provider sends, from one captured request or from several merged, and writes it in TypeScript, Zod, JSON Schema, Go or Pydantic. It is the same guess the UI's **Copy as type** button makes, from the same code, so an agent, a script and a person get the same answer.
+
+```bash
+curl "http://localhost:8080/api/requests/<reqId>/types?lang=go"
+curl "http://localhost:8080/api/endpoints/<id>/types?lang=zod&last=20"
+```
+
+| Route | |
+|---|---|
+| `GET /api/requests/{reqId}/types` | A type for that request's JSON body |
+| `GET /api/endpoints/{id}/types` | One type from the endpoint's last `last` requests (default 20, up to 200) merged: a field only some deliveries carry comes out optional, which one request can't tell you. One type is one event: only requests carrying the newest request's event (its `type`, `event`, `event_type`, `action` or `topic` field) are merged, so a `customer.created` never leaks into `InvoicePaidPayload`; when the newest has no event field, every JSON body is. Requests whose body isn't JSON are skipped. `404` when none has a JSON body yet |
+| `POST /api/types` | A type for a body you already hold, as `{"body": "..."}` or `{"bodies": ["...", ...]}` (up to 200). For browser-mode requests, which the server never stores. Runs no script and stores nothing, so a [read-only token](../../deployment/production/#a-read-only-token) may call it |
+
+| Parameter | | |
+|---|---|---|
+| `lang` | optional | `typescript` (default), `zod`, `jsonschema`, `go` or `pydantic`. `ts`, `schema`, `golang` and `py` work too |
+| `name` | optional | The type's name: letters, digits and underscores, not starting with a digit, or `400`. Words that are keywords in a language are escaped there. Default: the body's `type`, `event`, `event_type`, `action` or `topic` field as a name, so `invoice.paid` gives `InvoicePaidPayload`; `WebhookPayload` when there is none |
+
+Returns `200`:
+
+```json
+{
+  "lang": "go",
+  "name": "InvoicePaidPayload",
+  "from": 1,
+  "code": "// Inferred from one request, best effort.\ntype InvoicePaidPayload struct {\n\tType string `json:\"type\"`\n\t...\n}\n"
+}
+```
+
+`from` is how many bodies the type came from. The code starts with a note saying so: it is a guess from the bodies seen, a starting point to edit, not the provider's schema. A body that isn't JSON is `422`.
+
 ### Delete requests
 
 - `DELETE /api/requests/{reqId}` deletes one request.

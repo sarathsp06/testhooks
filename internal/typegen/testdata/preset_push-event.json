@@ -1,0 +1,19 @@
+{
+  "ref": "refs/heads/main",
+  "repository": {
+    "name": "shop",
+    "owner": "acme"
+  },
+  "commits": [
+    {
+      "id": "a1b2c3",
+      "message": "Fix checkout total",
+      "author": "ada"
+    },
+    {
+      "id": "d4e5f6",
+      "message": "Bump deps",
+      "author": "grace"
+    }
+  ]
+}

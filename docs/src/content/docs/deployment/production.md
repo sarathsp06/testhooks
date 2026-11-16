@@ -52,6 +52,7 @@ When the UI gets a `401`, it asks for the token, checks it against the server an
 | With `READ_TOKEN` | |
 |---|---|
 | `GET` and `HEAD` on `/api/*`, including [waiting for requests](../../reference/api/#wait-for-the-next-request) | Allowed |
+| `POST /api/types`, which only [writes a type](../../reference/api/#get-a-type-for-a-body) for a body the caller sends | Allowed |
 | `/ws/*` | Allowed |
 | Anything else on `/api/*`: creating, changing or deleting endpoints and requests, re-signing, [previewing a script](../../reference/api/#try-a-script-on-a-request) | `403 Forbidden` with `{"error": "this token can only read; …"}` |
 

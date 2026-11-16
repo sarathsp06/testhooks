@@ -1,9 +1,9 @@
 <script lang="ts">
 	import { initWasm, runTransform } from '$lib/wasm';
 	import { copyToClipboard, formatBytes } from '$lib/utils';
-	import { ago, bodyKind, bodyText, curlFor, eventLabel, forwardMayBeRunning, highlightJSON, hostOf, parseJSON, queryString, replay, statusLine, when } from '$lib/requestutil';
+	import { ago, bodyKind, bodyText, curlFor, forwardMayBeRunning, highlightJSON, hostOf, parseJSON, queryString, replay, statusLine, when } from '$lib/requestutil';
 	import { diffLines, fieldChanges, pretty } from '$lib/scriptdiff';
-	import { toJSONSchema, toTypeScript, typeName } from '$lib/typegen';
+	import { generateTypes, TYPE_LANGS, type TypeLang } from '$lib/api';
 	import { getRequestsStore } from '$lib/stores/requests.svelte';
 	import type { CapturedRequest, CapturedResponse, Endpoint, ForwardResultData } from '$lib/types';
 	import { signatureHeaders } from '$lib/types';
@@ -63,18 +63,43 @@
 		return { binary, same: before === after, lines: binary ? [] : diffLines(before, after) };
 	});
 
-	// Copy the body's shape as a TypeScript type or a JSON Schema.
+	// Copy the body's shape as a type. The server guesses it, so the result is
+	// the same one the API, the CLI and the MCP server give. The menu starts
+	// fetching every language when it opens, so the click can copy at once:
+	// browsers refuse a clipboard write that comes long after the click.
 	let typeMenu = $state(false);
 	let typeMenuEl = $state<HTMLElement>();
 	let typeCopied = $state(false);
-	async function copyType(kind: 'ts' | 'schema') {
+	let typeError = $state('');
+	let typeCache: Partial<Record<TypeLang, Promise<string>>> = {};
+	$effect(() => {
+		request.id; // a different request: forget what was fetched
+		typeCache = {};
+	});
+	function fetchType(lang: TypeLang): Promise<string> {
+		return (typeCache[lang] ??= generateTypes(lang, text).then((r) => r.code));
+	}
+	function toggleTypeMenu() {
+		typeMenu = !typeMenu;
+		typeError = '';
+		if (typeMenu) for (const l of TYPE_LANGS) fetchType(l.id).catch(() => {});
+	}
+	async function copyType(lang: TypeLang) {
 		typeMenu = false;
-		const event = eventLabel(request);
-		const name = typeName(event === 'JSON body' ? '' : event);
-		const value = parseJSON(text);
-		if (await copyToClipboard(kind === 'ts' ? toTypeScript(value, name) : toJSONSchema(value, name))) {
+		typeError = '';
+		let code: string;
+		try {
+			code = await fetchType(lang);
+		} catch (e) {
+			delete typeCache[lang];
+			typeError = `Couldn't get the type: ${e instanceof Error ? e.message : String(e)}`;
+			return;
+		}
+		if (await copyToClipboard(code)) {
 			typeCopied = true;
 			setTimeout(() => (typeCopied = false), 2000);
+		} else {
+			typeError = 'The browser refused to copy. Click again.';
 		}
 	}
 
@@ -210,18 +235,19 @@
 				<div class="relative" bind:this={typeMenuEl}>
 					<button
 						type="button"
-						onclick={() => (typeMenu = !typeMenu)}
+						onclick={toggleTypeMenu}
 						aria-haspopup="menu"
 						aria-expanded={typeMenu}
 						title="Copy the shape of this body as a type, guessed from this one request"
-						class="text-[13px] font-medium text-ink bg-surface border border-line-strong rounded-[9px] px-3.5 min-h-10 cursor-pointer hover:bg-chip"
+						class="text-[13px] font-medium text-ink bg-surface border border-line-strong rounded-[9px] px-3.5 min-h-10 cursor-pointer hover:bg-chip {typeError ? 'text-danger' : ''}"
 					>
-						{typeCopied ? 'Copied' : 'Copy as type'}
+						{typeCopied ? 'Copied' : typeError ? typeError : 'Copy as type'}
 					</button>
 					{#if typeMenu}
 						<div role="menu" class="absolute right-0 top-[calc(100%+4px)] z-10 bg-surface border border-line-strong rounded-[9px] p-1 flex flex-col min-w-[190px] shadow-sm">
-							<button type="button" role="menuitem" onclick={() => copyType('ts')} class="text-left text-[13px] font-medium text-ink rounded-[7px] px-3 min-h-9 cursor-pointer hover:bg-chip">Copy TypeScript type</button>
-							<button type="button" role="menuitem" onclick={() => copyType('schema')} class="text-left text-[13px] font-medium text-ink rounded-[7px] px-3 min-h-9 cursor-pointer hover:bg-chip">Copy JSON Schema</button>
+							{#each TYPE_LANGS as l (l.id)}
+								<button type="button" role="menuitem" onclick={() => copyType(l.id)} class="text-left text-[13px] font-medium text-ink rounded-[7px] px-3 min-h-9 cursor-pointer hover:bg-chip">Copy {l.label}</button>
+							{/each}
 						</div>
 					{/if}
 				</div>

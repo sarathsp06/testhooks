@@ -1,0 +1,1 @@
+{"id":820982911946154500,"email":"ada@example.com","created_at":"2026-10-18T09:42:07+00:00","total_price":"49.99","currency":"USD","financial_status":"paid","line_items":[{"id":866550311766439000,"title":"Webhook Tester Mug","quantity":1,"price":"49.99"}],"customer":{"id":115310627314723950,"first_name":"Ada","last_name":"Lovelace"}}
