@@ -20,18 +20,18 @@ You need the `testhooks` binary on your machine (see [Installation](../../gettin
 
 | Variable | | |
 |---|---|---|
-| `TESTHOOKS_URL` | optional | Address of the Testhooks to use. Defaults to `http://localhost:8080` |
+| `TESTHOOKS_URL` | optional | Address of the Testhooks to use: the [live demo](https://testhooks.vercel.app/) is `https://testhooks.vercel.app`. Defaults to `http://localhost:8080`, your own |
 | `TESTHOOKS_AUTH_TOKEN` | optional | The server's [`AUTH_TOKEN`](../../reference/configuration/#security), when it has one. Sent as `Authorization: Bearer <token>`. Give it the server's [`READ_TOKEN`](../../deployment/production/#a-read-only-token) instead to let the agent list, read and wait but not create, change, delete or send |
 
-The capture URLs the agent hands out start with `TESTHOOKS_URL`, so a provider on the internet can only reach them when that address is public.
+The capture URLs the agent hands out start with `TESTHOOKS_URL`, so a provider on the internet can only reach them when that address is public. The live demo is; `localhost` is not.
 
 ### Claude Code
 
 ```bash
-claude mcp add testhooks -e TESTHOOKS_URL=http://localhost:8080 -- testhooks mcp
+claude mcp add testhooks -e TESTHOOKS_URL=https://testhooks.vercel.app -- testhooks mcp
 ```
 
-Add `-e TESTHOOKS_AUTH_TOKEN=<token>` when the server needs one.
+That uses the live demo, which needs no token. For your own Testhooks, pass its address instead, and add `-e TESTHOOKS_AUTH_TOKEN=<token>` when it has one.
 
 ### Cursor and Claude Desktop
 
@@ -44,15 +44,14 @@ Add this to `.cursor/mcp.json` (Cursor) or `claude_desktop_config.json` (Claude 
       "command": "testhooks",
       "args": ["mcp"],
       "env": {
-        "TESTHOOKS_URL": "http://localhost:8080",
-        "TESTHOOKS_AUTH_TOKEN": ""
+        "TESTHOOKS_URL": "https://testhooks.vercel.app"
       }
     }
   }
 }
 ```
 
-If the app can't find `testhooks`, use its full path, for example `/usr/local/bin/testhooks`.
+For your own Testhooks, set `TESTHOOKS_URL` to its address and add `"TESTHOOKS_AUTH_TOKEN": "<token>"` when it has one. If the app can't find `testhooks`, use its full path, for example `/usr/local/bin/testhooks`.
 
 ## Teach the agent the workflow
 
