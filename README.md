@@ -61,7 +61,7 @@ Everything above is an API call, and the same calls are packaged for scripts and
 - **MCP server:** `testhooks mcp` gives Claude Code, Cursor or any MCP client the same tools you use: create an endpoint, wait for the provider's request (no polling), read it, get a type for it, preview a transform or reply script before saving it, send a test request, replay. [Set it up](https://sarathsp06.github.io/testhooks/guides/mcp/).
 - **Command line:** `testhooks endpoints create`, `testhooks requests wait`, `testhooks requests types --lang go`, and the rest. JSON when piped, text in a terminal. [Reference](https://sarathsp06.github.io/testhooks/reference/cli/).
 - **A skill that teaches the workflow:** `testhooks skill > .claude/skills/testhooks/SKILL.md`, or read [SKILL.md](skills/testhooks/SKILL.md).
-- **The API describes itself** at `/api/openapi.json` on every server, and the docs site has an [`llms.txt`](https://sarathsp06.github.io/testhooks/llms.txt).
+- **The API describes itself** at `/api/openapi.json` on every server. Every server also answers `/llms.txt` with the agent workflow, and the docs site has an [`llms.txt`](https://sarathsp06.github.io/testhooks/llms.txt) that indexes the docs.
 - **A token that can only read:** set `READ_TOKEN` for an agent or dashboard that should watch endpoints but never change, delete or send anything.
 
 ## Development

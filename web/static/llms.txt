@@ -1,0 +1,31 @@
+# Testhooks
+
+> A tool to test webhooks: catch one, change its payload, reply with any status, watch the sender react. Everything the UI does is an API call, so a script or an AI agent can do it too, with the same words and defaults.
+
+This file is served by every Testhooks, including this one. Paths below are on this server.
+
+## On this server
+
+- [OpenAPI document](/api/openapi.json): every REST call, served without a token.
+- Capture URLs are `/h/{slug}`. Send any HTTP request there and it is captured.
+- If the server has an `AUTH_TOKEN`, send it as `Authorization: Bearer <token>` on `/api/` calls. A `READ_TOKEN` can list, read and wait but not create, change, delete or send.
+
+## The typical agent session
+
+1. Create an endpoint: `POST /api/endpoints`. Give its capture URL to the webhook provider.
+2. Wait for the request instead of polling: `GET /api/endpoints/{id}/requests?after={lastRequestId}&wait=30`. A timed-out wait is a normal 200 with an empty list, so call again.
+3. Read exactly what the provider sent, and get a type for the payload from `/api/requests/{reqId}/types` or `/api/endpoints/{id}/types` (TypeScript, Zod, JSON Schema, Go, Pydantic).
+4. Write the handler to match. Preview any transform or reply script on that request before saving it.
+5. Send a test request, or replay the captured one, to check the handler.
+
+## Easier ways in
+
+- [MCP server](https://sarathsp06.github.io/testhooks/guides/mcp/): `testhooks mcp` gives Claude Code, Cursor or any MCP client these steps as tools.
+- [Command line](https://sarathsp06.github.io/testhooks/reference/cli/): `testhooks endpoints create`, `testhooks requests wait`, `testhooks requests types`.
+- [SKILL.md](https://github.com/sarathsp06/testhooks/blob/main/skills/testhooks/SKILL.md): when to use which call.
+
+## Full docs
+
+- [Docs index for agents](https://sarathsp06.github.io/testhooks/llms.txt)
+- [REST API reference](https://sarathsp06.github.io/testhooks/reference/api/)
+- [Source](https://github.com/sarathsp06/testhooks)
